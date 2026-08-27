@@ -1,13 +1,20 @@
-# love-exemplar
+# ball-game
 
-A minimal Love2D project demonstrating clean architecture patterns. Intended as a reference, not a game.
+A level-based game built on a minimal Love2D architecture. You are a fish-like ball that swims by flipping its tail: **A**/**D** flip left/right, and each flip must alternate from the last one (like a real tail beat) to add forward speed and nudge your heading, producing a natural side-to-side wiggle as you swim. Hitting a wall reflects your heading off it. Each level is a single fixed screen bounded by walls, with one gap to find and pass through; the next level's entry is the mirrored opposite wall at the same position, so the levels feel physically connected.
+
+See [`docs/archive/design/orbit-levels.md`](docs/archive/design/orbit-levels.md) for the full mechanic/level design.
 
 ## Structure
 
 ```
-core/lua/       Engine classes — no game knowledge (Camera, Drawer, Input, Scene,
+lua/core/       Engine classes — no game knowledge (Camera, Drawer, Input, Scene,
                 SceneManager, Sprite, SpriteSet, Timer, Fonts)
-game/           Game-specific code (Player, GameScene)
+game/           Game-specific code:
+                  player.lua          — orbit-ball entity and physics
+                  level.lua           — wall generation, mirrored-entry, spawn transforms
+                  levels/level_N.lua  — per-level data (exit side/position, obstacles)
+                  scenes/level_scene.lua — generic scene: builds a level, handles
+                                           collision and level-to-level transitions
 lua/headless/   Headless test infrastructure (stubs, HeadlessInput, runner)
 tests/          Test files — run with: love . --headless
 assets/         Images and other assets

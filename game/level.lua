@@ -7,10 +7,9 @@ local ROOM_W = 1280
 local ROOM_H = 720
 local WALL_THICKNESS = 40
 
--- Reuse the ball's tuning constants without requiring game/player.lua
+-- Reuse the ball's tuning constant without requiring game/player.lua
 -- (avoids a hard dependency/ordering problem between parallel modules).
 local BALL_RADIUS = 10
-local MIN_RADIUS = 50
 
 local OPPOSITE_SIDE = {
     top    = "bottom",
@@ -113,7 +112,8 @@ function Level.mirrored_entry(level_def)
     }
 end
 
--- Level.spawn(entry) -> { x, y, center_x, center_y, direction = 1 }
+-- Level.spawn(entry) -> { x, y, heading } — the fish enters facing straight
+-- into the room along the wall's inward normal.
 function Level.spawn(entry)
     local normal = INWARD_NORMAL[entry.side]
     local ball_offset = BALL_RADIUS + 4
@@ -127,15 +127,10 @@ function Level.spawn(entry)
         x = (entry.side == "left") and ball_offset or (ROOM_W - ball_offset)
     end
 
-    local center_x = x + normal.x * MIN_RADIUS
-    local center_y = y + normal.y * MIN_RADIUS
-
     return {
         x = x,
         y = y,
-        center_x = center_x,
-        center_y = center_y,
-        direction = 1,
+        heading = math.atan2(normal.y, normal.x),
     }
 end
 
@@ -144,15 +139,10 @@ end
 -- placed against a wall side via Level.spawn(), since a level's non-exit
 -- sides are solid (no gap) and would embed the ball in a wall.
 function Level.default_spawn()
-    local x = ROOM_W / 2
-    local y = ROOM_H - WALL_THICKNESS - 60
-
     return {
-        x = x,
-        y = y,
-        center_x = x,
-        center_y = y - MIN_RADIUS,
-        direction = 1,
+        x = ROOM_W / 2,
+        y = ROOM_H - WALL_THICKNESS - 60,
+        heading = -math.pi / 2, -- facing up, into the room
     }
 end
 

@@ -1,3 +1,5 @@
+> **Superseded.** The orbit-radius movement described below shipped but played poorly (no direct control over direction, and the drifting pivot made the path hard to predict). It was replaced with a fish-flip mechanic — see "Movement mechanic v2" at the bottom of this doc. Levels, wall geometry, mirrored entry/exit, and the overall scene/file architecture are unchanged; only `game/player.lua`'s physics and `game/level.lua`'s spawn shape changed.
+
 ## Goal
 
 Replace the placeholder exemplar demo (WASD sprite, ground, blinking coins) with the real game: a level-based game where the player is a ball that moves by orbiting a point in space. Growing/shrinking the orbit radius while spinning is the *only* way to translate across the screen. Levels are fixed screens bounded by walls with one gap (the exit); passing through the gap loads the next level, entering through the mirrored opposite wall so the levels feel physically connected.
@@ -77,3 +79,30 @@ return {
 ## Open questions
 
 None outstanding — demo-replacement and exit-side variation were confirmed with the user before writing this doc.
+
+## Movement mechanic v2 (fish-flip)
+
+Replaces the "Core mechanic" section above. The ball's state is `{ x, y, heading, speed, last_flip }`. Two inputs, bound to **A** (`flip_left`) and **D** (`flip_right`), read as discrete presses (rising edge, not held) since a flip is a one-shot event.
+
+Each frame, in `game/player.lua`'s `Player:update(dt, flip_left, flip_right, walls)`:
+
+1. **Flip.** A flip only registers if it alternates from `last_flip` — pressing the same side twice in a row is a no-op, mirroring a fish needing to beat its tail the *other* way each stroke. A valid flip turns `heading` by `∓FLIP_TURN` and adds `FLIP_BOOST` to `speed` (clamped to `MAX_SPEED`), then records `last_flip`.
+2. **Drag.** `speed = max(0, speed - DRAG * dt)` — every frame, flip or not, so momentum decays without continued flipping.
+3. **Move.** `x, y += (cos(heading), sin(heading)) * speed * dt`.
+4. **Collision.** Same circle-vs-AABB test as v1, but instead of flipping a cw/ccw direction, it reflects the heading off the wall normal: `v' = v - 2(v·n)n` where `v` is the heading's unit vector and `n` is the collision normal.
+
+Net effect: alternating A/D taps builds forward speed while producing a natural side-to-side wiggle (the heading nudges a few degrees each flip); stopping input lets drag coast the fish to a stop; hitting a wall bounces the heading off it instead of just reversing a spin direction.
+
+Tuning constants (in `game/player.lua`):
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `BALL_RADIUS` | 10 px | visual/collision size |
+| `MAX_SPEED` | 260 px/s | forward speed ceiling |
+| `FLIP_BOOST` | 70 px/s | speed added per valid (alternating) flip |
+| `FLIP_TURN` | 0.35 rad (~20°) | heading change per valid flip |
+| `DRAG` | 90 px/s² | speed decay per second |
+
+`game/level.lua`'s `Level.spawn(entry)` and `Level.default_spawn()` now return `{ x, y, heading }` (heading = the wall's inward normal as an angle) instead of `{ x, y, center_x, center_y, direction }` — everything else in `game/level.lua` (wall generation, mirrored-entry calculation) is unchanged. `game/scenes/level_scene.lua` binds `Input.new({ flip_left = {"a"}, flip_right = {"d"} })` and reads `input:pressed(...)` (not `is_down`) each frame.
+
+Also fixed alongside this: `LevelScene` now pins the scene's camera to the room's center (`camera.x, camera.y = 640, 360`) in `LevelScene.new`. `Scene`'s default camera centers world `(0,0)` on screen, but the room's content lives in world coords `(0,0)`–`(1280,720)` with a top-left origin, so leaving the camera at its default shifted everything by half a screen — only the room's bottom-right corner was ever visible.

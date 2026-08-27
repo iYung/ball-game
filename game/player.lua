@@ -1,8 +1,8 @@
-local BALL_RADIUS   = 10
-local MIN_RADIUS    = 50
-local MAX_RADIUS    = 300
-local RADIUS_RATE   = 140
-local ANGULAR_SPEED = 2.4
+local BALL_RADIUS = 10
+local MAX_SPEED    = 260
+local FLIP_BOOST   = 70
+local FLIP_TURN    = 0.35
+local DRAG         = 90
 
 local function clamp(v, lo, hi)
     if v < lo then return lo end
@@ -13,39 +13,33 @@ end
 local Player = {}
 Player.__index = Player
 
-function Player.new(x, y, center_x, center_y, direction)
-    local self      = setmetatable({}, Player)
-    self.x          = x
-    self.y          = y
-    self.center_x   = center_x
-    self.center_y   = center_y
-    self.direction  = direction or 1
-    local dx, dy    = x - center_x, y - center_y
-    self.radius     = math.sqrt(dx * dx + dy * dy)
-    self.angle      = math.atan2(y - center_y, x - center_x)
+function Player.new(x, y, heading)
+    local self       = setmetatable({}, Player)
+    self.x           = x
+    self.y           = y
+    self.heading     = heading or 0
+    self.speed       = 0
+    self.last_flip   = nil -- nil, "left", or "right" — tracks the alternation requirement
     return self
 end
 
-function Player:update(dt, space_held, walls)
-    local desired_radius = clamp(self.radius + RADIUS_RATE * dt * (space_held and 1 or -1), MIN_RADIUS, MAX_RADIUS)
-
-    -- Re-pivot around the fixed ball: the ball doesn't move here, only the
-    -- center slides along the ball-to-center line to the new radius.
-    local ux, uy = self.center_x - self.x, self.center_y - self.y
-    local ulen = math.sqrt(ux * ux + uy * uy)
-    if ulen > 0 then
-        ux, uy = ux / ulen, uy / ulen
-    else
-        ux, uy = 1, 0
+function Player:update(dt, flip_left, flip_right, walls)
+    -- A flip only counts if it alternates from the last one — mirrors a fish
+    -- needing to beat its tail the *other* way each stroke to swim forward.
+    if flip_left and self.last_flip ~= "left" then
+        self.heading   = self.heading - FLIP_TURN
+        self.speed     = clamp(self.speed + FLIP_BOOST, 0, MAX_SPEED)
+        self.last_flip = "left"
+    elseif flip_right and self.last_flip ~= "right" then
+        self.heading   = self.heading + FLIP_TURN
+        self.speed     = clamp(self.speed + FLIP_BOOST, 0, MAX_SPEED)
+        self.last_flip = "right"
     end
-    self.center_x = self.x + ux * desired_radius
-    self.center_y = self.y + uy * desired_radius
-    self.radius   = desired_radius
 
-    self.angle = math.atan2(self.y - self.center_y, self.x - self.center_x)
-    self.angle = self.angle + self.direction * ANGULAR_SPEED * dt
-    local new_x = self.center_x + self.radius * math.cos(self.angle)
-    local new_y = self.center_y + self.radius * math.sin(self.angle)
+    self.speed = math.max(0, self.speed - DRAG * dt)
+
+    local new_x = self.x + math.cos(self.heading) * self.speed * dt
+    local new_y = self.y + math.sin(self.heading) * self.speed * dt
 
     if walls then
         for _, rect in ipairs(walls) do
@@ -54,20 +48,28 @@ function Player:update(dt, space_held, walls)
             local dx, dy = new_x - closest_x, new_y - closest_y
             local dist = math.sqrt(dx * dx + dy * dy)
             if dist < BALL_RADIUS then
+                local nx, ny
                 if dist > 0 then
-                    new_x = closest_x + dx / dist * BALL_RADIUS
-                    new_y = closest_y + dy / dist * BALL_RADIUS
+                    nx, ny = dx / dist, dy / dist
+                    new_x = closest_x + nx * BALL_RADIUS
+                    new_y = closest_y + ny * BALL_RADIUS
                 else
                     local pen_x = math.min(new_x - rect.x, rect.x + rect.w - new_x)
                     local pen_y = math.min(new_y - rect.y, rect.y + rect.h - new_y)
                     if pen_x < pen_y then
-                        new_x = (new_x < rect.x + rect.w / 2) and (rect.x - BALL_RADIUS) or (rect.x + rect.w + BALL_RADIUS)
+                        nx, ny = (new_x < rect.x + rect.w / 2) and -1 or 1, 0
+                        new_x  = (new_x < rect.x + rect.w / 2) and (rect.x - BALL_RADIUS) or (rect.x + rect.w + BALL_RADIUS)
                     else
-                        new_y = (new_y < rect.y + rect.h / 2) and (rect.y - BALL_RADIUS) or (rect.y + rect.h + BALL_RADIUS)
+                        nx, ny = 0, (new_y < rect.y + rect.h / 2) and -1 or 1
+                        new_y  = (new_y < rect.y + rect.h / 2) and (rect.y - BALL_RADIUS) or (rect.y + rect.h + BALL_RADIUS)
                     end
                 end
-                self.direction = -self.direction
-                self.angle = math.atan2(new_y - self.center_y, new_x - self.center_x)
+
+                -- Reflect the heading off the wall normal: v' = v - 2(v.n)n
+                local vx, vy = math.cos(self.heading), math.sin(self.heading)
+                local vdotn  = vx * nx + vy * ny
+                local rx, ry = vx - 2 * vdotn * nx, vy - 2 * vdotn * ny
+                self.heading = math.atan2(ry, rx)
                 break
             end
         end
@@ -79,6 +81,13 @@ end
 function Player:draw()
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.circle("fill", self.x, self.y, BALL_RADIUS)
+
+    -- Heading indicator, so the swim direction is readable on screen.
+    love.graphics.line(
+        self.x, self.y,
+        self.x + math.cos(self.heading) * BALL_RADIUS * 1.8,
+        self.y + math.sin(self.heading) * BALL_RADIUS * 1.8
+    )
 end
 
 return Player

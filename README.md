@@ -1,6 +1,6 @@
 # ball-game
 
-A level-based game built on a minimal Love2D architecture. You are a ball that orbits a pivot point; holding **space** grows the orbit radius, releasing shrinks it back down toward a minimum — since growing/shrinking re-pivots the orbit around your (fixed) current position, this is how you translate across the screen. Hitting a wall reverses your spin direction. Each level is a single fixed screen bounded by walls, with one gap to find and pass through; the next level's entry is the mirrored opposite wall at the same position, so the levels feel physically connected.
+A level-based game built on a minimal Love2D architecture. You are a fish-like ball that swims by flipping its tail: **A**/**D** flip left/right, and each flip must alternate from the last one (like a real tail beat) to add forward speed and nudge your heading, producing a natural side-to-side wiggle as you swim. Hitting a wall reflects your heading off it. Each level is a single fixed screen bounded by walls, with one gap to find and pass through; the next level's entry is the mirrored opposite wall at the same position, so the levels feel physically connected.
 
 See [`docs/archive/design/orbit-levels.md`](docs/archive/design/orbit-levels.md) for the full mechanic/level design.
 

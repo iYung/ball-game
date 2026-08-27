@@ -26,9 +26,9 @@ function LevelScene.new(level_id, entry, sm)
     self.walls = Level.walls(level_def)
 
     local spawn = entry and Level.spawn(entry) or Level.default_spawn()
-    self.player = Player.new(spawn.x, spawn.y, spawn.center_x, spawn.center_y, spawn.direction)
+    self.player = Player.new(spawn.x, spawn.y, spawn.heading)
 
-    self.input = Input.new({ space = { "space" } })
+    self.input = Input.new({ flip_left = { "a" }, flip_right = { "d" } })
 
     return self
 end
@@ -47,8 +47,9 @@ function LevelScene:update(dt)
     if self._exited then return end
 
     self.input:update()
-    local space_held = self.input:is_down("space")
-    self.player:update(dt, space_held, self.walls)
+    local flip_left  = self.input:pressed("flip_left")
+    local flip_right = self.input:pressed("flip_right")
+    self.player:update(dt, flip_left, flip_right, self.walls)
 
     local p = self.player
     if p.x < 0 or p.x > 1280 or p.y < 0 or p.y > 720 then
@@ -69,7 +70,7 @@ function LevelScene:draw()
 
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.print("Level " .. self.level_id, 16, 16)
-    love.graphics.print("HOLD SPACE: grow orbit  /  RELEASE: shrink orbit", 16, 36)
+    love.graphics.print("A / D: flip tail left / right, alternating, to swim forward", 16, 36)
 end
 
 return LevelScene

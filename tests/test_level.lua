@@ -65,29 +65,28 @@ do
     print("PASS: level: mirrored_entry() returns opposite side with unchanged pos for all 4 sides")
 end
 
--- Test 4: spawn placement for a bottom entry (vertical side)
+-- Test 4: spawn placement for a bottom entry (vertical side) — fish should
+-- face straight up (into the room) along the inward normal
 do
     local entry = { side = "bottom", pos = 640 }
     local spawn = Level.spawn(entry)
 
     assert(spawn.x == 640, "spawn x should be 640, got " .. tostring(spawn.x))
     assert(math.abs(spawn.y - 706) < 0.01, "spawn y should be ~706, got " .. tostring(spawn.y))
-    assert(spawn.center_x == 640, "spawn center_x should be 640, got " .. tostring(spawn.center_x))
-    assert(math.abs(spawn.center_y - 656) < 0.01, "spawn center_y should be ~656, got " .. tostring(spawn.center_y))
-    assert(spawn.direction == 1, "spawn direction should be 1, got " .. tostring(spawn.direction))
+    assert(math.abs(spawn.heading - (-math.pi / 2)) < 0.01,
+        "spawn heading for a bottom entry should face up (-pi/2), got " .. tostring(spawn.heading))
     print("PASS: level: spawn() places ball correctly for bottom entry")
 end
 
--- Test 5: spawn placement for a left entry (non-vertical side)
+-- Test 5: spawn placement for a left entry (non-vertical side) — should face right
 do
     local entry = { side = "left", pos = 300 }
     local spawn = Level.spawn(entry)
 
     assert(math.abs(spawn.x - 14) < 0.01, "spawn x should be ~14, got " .. tostring(spawn.x))
     assert(spawn.y == 300, "spawn y should be 300, got " .. tostring(spawn.y))
-    assert(math.abs(spawn.center_x - 64) < 0.01, "spawn center_x should be ~64, got " .. tostring(spawn.center_x))
-    assert(spawn.center_y == 300, "spawn center_y should be 300, got " .. tostring(spawn.center_y))
-    assert(spawn.direction == 1, "spawn direction should be 1, got " .. tostring(spawn.direction))
+    assert(math.abs(spawn.heading - 0) < 0.01,
+        "spawn heading for a left entry should face right (0), got " .. tostring(spawn.heading))
     print("PASS: level: spawn() places ball correctly for left entry")
 end
 
@@ -111,7 +110,8 @@ do
     end
     assert(spawn.x > 0 and spawn.x < 1280 and spawn.y > 0 and spawn.y < 720,
         "default_spawn() should be within the room bounds")
-    assert(spawn.direction == 1, "default_spawn direction should be 1, got " .. tostring(spawn.direction))
+    assert(math.abs(spawn.heading - (-math.pi / 2)) < 0.01,
+        "default_spawn heading should face up (-pi/2), got " .. tostring(spawn.heading))
     print("PASS: level: default_spawn() lands clear of walls and inside the room")
 end
 

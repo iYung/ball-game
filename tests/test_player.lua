@@ -1,100 +1,89 @@
 local Player = require("game/player")
 
--- Constants documented in game/player.lua (not exported, so hardcoded here).
-local BALL_RADIUS   = 10
-local MIN_RADIUS    = 50
-local MAX_RADIUS    = 300
-local RADIUS_RATE   = 140
-local ANGULAR_SPEED = 2.4
+-- These mirror the constants in game/player.lua (not exported, so hardcoded
+-- here per the values documented there).
+local MAX_SPEED  = 260
+local FLIP_BOOST = 70
+local FLIP_TURN  = 0.35
+local DRAG       = 90
+local BALL_RADIUS = 10
 
--- Test 1: re-pivot keeps the ball's motion consistent with orbital arc
--- length at the NEW radius, not a jump equal to the radius growth.
+-- Test 1: alternating flips build speed and turn the heading
 do
-    local x, y = 100, 100
-    local p = Player.new(x, y, x, y - MIN_RADIUS, 1)
-    assert(math.abs(p.radius - MIN_RADIUS) < 0.01, "initial radius should be MIN_RADIUS")
-
+    local p = Player.new(100, 100, 0) -- facing along +x
     local dt = 0.01
-    local old_x, old_y = p.x, p.y
-    p:update(dt, true, nil)
-
-    assert(p.radius > MIN_RADIUS, "radius should have grown, got " .. tostring(p.radius))
-
-    local moved = math.sqrt((p.x - old_x)^2 + (p.y - old_y)^2)
-    local expected_arc = p.radius * ANGULAR_SPEED * dt
-    local radius_jump = RADIUS_RATE * dt
-
-    assert(math.abs(moved - expected_arc) < expected_arc * 0.2,
-        "ball displacement (" .. moved .. ") should match arc length (" .. expected_arc .. ")")
-    -- Make sure it's noticeably smaller than a "teleport by the radius
-    -- delta" bug would produce (arc length is always < radius growth here
-    -- since ANGULAR_SPEED * MIN_RADIUS < RADIUS_RATE).
-    assert(moved < radius_jump * 0.95,
-        "ball displacement (" .. moved .. ") should be clearly less than the raw radius growth (" .. radius_jump .. ")")
-
-    print("PASS: player: re-pivot keeps ball fixed, motion matches new-radius arc length")
+    p:update(dt, true, false, nil)    -- flip left
+    -- drag is applied the same frame, right after the flip's boost
+    local expected_speed = FLIP_BOOST - DRAG * dt
+    assert(math.abs(p.speed - expected_speed) < 0.01,
+        "speed after one valid flip should be ~" .. expected_speed .. ", got " .. p.speed)
+    assert(math.abs(p.heading - (-FLIP_TURN)) < 0.01,
+        "heading after a left flip should turn by -FLIP_TURN, got " .. p.heading)
+    print("PASS: player: a flip boosts speed and turns the heading")
 end
 
--- Test 2: angle progresses clockwise (direction = 1) at ANGULAR_SPEED,
--- and radius stays pinned at MIN_RADIUS when already at the floor.
+-- Test 2: repeating the same side without alternating does nothing
 do
-    local p = Player.new(MIN_RADIUS, 0, 0, 0, 1)
-    assert(math.abs(p.radius - MIN_RADIUS) < 0.01, "initial radius should be MIN_RADIUS")
-    assert(math.abs(p.angle - 0) < 0.01, "initial angle should be 0")
-
-    local dt = 0.01
-    p:update(dt, false, nil)
-
-    assert(math.abs(p.radius - MIN_RADIUS) < 0.01,
-        "radius should remain pinned at MIN_RADIUS, got " .. tostring(p.radius))
-
-    local expected_angle = ANGULAR_SPEED * dt
-    local expected_x = MIN_RADIUS * math.cos(expected_angle)
-    local expected_y = MIN_RADIUS * math.sin(expected_angle)
-
-    assert(math.abs(p.x - expected_x) < 0.01, "x should match expected orbital position")
-    assert(math.abs(p.y - expected_y) < 0.01, "y should match expected orbital position")
-
-    print("PASS: player: angle progresses clockwise at ANGULAR_SPEED")
+    local p = Player.new(100, 100, 0)
+    p:update(0.01, true, false, nil)         -- valid left flip
+    local speed_after_first = p.speed
+    local heading_after_first = p.heading
+    p:update(0.01, true, false, nil)         -- left again, not alternating: ignored
+    assert(math.abs(p.speed - (speed_after_first - DRAG * 0.01)) < 0.5,
+        "repeating the same flip side should not add another boost")
+    assert(math.abs(p.heading - heading_after_first) < 0.01,
+        "repeating the same flip side should not turn the heading again")
+    print("PASS: player: repeating the same flip side is a no-op")
 end
 
--- Test 3: radius clamps at MIN_RADIUS and MAX_RADIUS.
+-- Test 3: alternating left/right keeps boosting speed up to MAX_SPEED
 do
-    local p = Player.new(150, 100, 100, 100, 1)
-
-    for _ = 1, 100 do
-        p:update(0.1, true, nil)
+    local p = Player.new(100, 100, 0)
+    for i = 1, 20 do
+        if i % 2 == 1 then
+            p:update(0.01, true, false, nil)
+        else
+            p:update(0.01, false, true, nil)
+        end
     end
-    assert(p.radius <= MAX_RADIUS + 0.01,
-        "radius should clamp at MAX_RADIUS, got " .. tostring(p.radius))
-    assert(p.radius > MAX_RADIUS - 1,
-        "radius should have grown to near MAX_RADIUS, got " .. tostring(p.radius))
-
-    for _ = 1, 100 do
-        p:update(0.1, false, nil)
-    end
-    assert(p.radius >= MIN_RADIUS - 0.01,
-        "radius should clamp at MIN_RADIUS, got " .. tostring(p.radius))
-    assert(p.radius < MIN_RADIUS + 1,
-        "radius should have shrunk to near MIN_RADIUS, got " .. tostring(p.radius))
-
-    print("PASS: player: radius clamps at MIN_RADIUS and MAX_RADIUS")
+    assert(p.speed <= MAX_SPEED + 0.01, "speed should clamp at MAX_SPEED, got " .. p.speed)
+    assert(p.speed > 0, "speed should be well above zero after repeated alternating flips")
+    print("PASS: player: alternating flips clamp speed at MAX_SPEED")
 end
 
--- Test 4: collision with a wall flips direction and pushes the ball out.
+-- Test 4: with no flips, drag brings speed to a stop and position doesn't drift after that
 do
-    local p = Player.new(MIN_RADIUS, 0, 0, 0, 1)
-    local walls = { { x = 40, y = 5, w = 20, h = 20 } }
+    local p = Player.new(100, 100, 0)
+    p:update(0.01, true, false, nil) -- get some speed going
+    for _ = 1, 200 do
+        p:update(0.1, false, false, nil) -- long enough for drag to zero it out
+    end
+    assert(p.speed == 0, "speed should decay to exactly 0 under drag, got " .. p.speed)
+    local x_before, y_before = p.x, p.y
+    p:update(0.1, false, false, nil)
+    assert(math.abs(p.x - x_before) < 0.001 and math.abs(p.y - y_before) < 0.001,
+        "position should not move once speed has decayed to 0")
+    print("PASS: player: drag decays speed to 0 and motion stops")
+end
 
-    p:update(0.1, false, walls)
+-- Test 5: collision reflects heading off the wall normal and pushes the ball out
+do
+    local p = Player.new(50, 50, 0) -- facing directly along +x (toward the wall)
+    p.speed = 200
+    -- Positioned so the ball approaches the wall's left face from outside
+    -- (not already embedded in it), giving an unambiguous horizontal normal.
+    local walls = { { x = 75, y = 0, w = 50, h = 100 } }
+    p:update(0.1, false, false, walls)
 
-    assert(p.direction == -1, "direction should flip to -1 on collision, got " .. tostring(p.direction))
+    -- heading should have flipped roughly 180 degrees (reflecting off a
+    -- vertical-ish wall face hit head-on along +x)
+    local hx, hy = math.cos(p.heading), math.sin(p.heading)
+    assert(hx < 0, "heading x-component should reverse after a head-on bounce, got " .. hx)
 
     local rect = walls[1]
-    local inside = p.x > rect.x and p.x < rect.x + rect.w and p.y > rect.y and p.y < rect.y + rect.h
-    assert(not inside, "ball should be pushed out of the wall rect, got x=" .. p.x .. " y=" .. p.y)
-
-    print("PASS: player: collision flips direction and pushes ball out of wall")
+    local inside = p.x >= rect.x and p.x <= rect.x + rect.w and p.y >= rect.y and p.y <= rect.y + rect.h
+    assert(not inside, "player should be pushed out of the wall rect after collision")
+    print("PASS: player: collision reflects heading and pushes the ball out of the wall")
 end
 
 print("ALL TESTS PASSED")

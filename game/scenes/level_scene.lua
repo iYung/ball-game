@@ -11,6 +11,12 @@ function LevelScene.new(level_id, entry, sm)
     local self = Scene.new(1280, 720)
     setmetatable(self, LevelScene)
 
+    -- The camera defaults to centering world (0,0) on screen; since the room
+    -- occupies world (0,0)-(1280,720) with a top-left origin, park the camera
+    -- at the room's center so world coords map 1:1 onto the screen.
+    self.camera.x = 640
+    self.camera.y = 360
+
     self.sm = sm
     self.level_id = level_id
 

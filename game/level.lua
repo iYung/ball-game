@@ -80,14 +80,22 @@ local function split_rect(side, pos, gap)
     end
 end
 
--- Level.walls(level_def) -> array of {x, y, w, h} rects to collide against.
-function Level.walls(level_def)
+-- Level.walls(level_def, entry) -> array of {x, y, w, h} rects to collide
+-- against. `entry` is optional: a level's own exit always gets a gap, but a
+-- level entered from a previous one (mirrored entry, see below) also needs a
+-- gap on its entry side, or the ball spawns right into a solid wall.
+function Level.walls(level_def, entry)
     local walls = {}
     local exit = level_def.exit
 
     for _, side in ipairs({ "top", "bottom", "left", "right" }) do
         if side == exit.side then
             local rects = split_rect(side, exit.pos, exit.gap)
+            for _, r in ipairs(rects) do
+                table.insert(walls, r)
+            end
+        elseif entry and side == entry.side then
+            local rects = split_rect(side, entry.pos, entry.gap)
             for _, r in ipairs(rects) do
                 table.insert(walls, r)
             end
@@ -103,12 +111,14 @@ function Level.walls(level_def)
     return walls
 end
 
--- Level.mirrored_entry(level_def) -> { side, pos } opposite the exit.
+-- Level.mirrored_entry(level_def) -> { side, pos, gap } opposite the exit,
+-- same gap width, so the next level can carve a matching opening.
 function Level.mirrored_entry(level_def)
     local exit = level_def.exit
     return {
         side = OPPOSITE_SIDE[exit.side],
         pos = exit.pos,
+        gap = exit.gap,
     }
 end
 

@@ -41,7 +41,7 @@ do
     print("PASS: level: walls() passes obstacles through unchanged")
 end
 
--- Test 3: mirrored_entry returns the opposite side for all 4 sides, pos unchanged
+-- Test 3: mirrored_entry returns the opposite side for all 4 sides, pos/gap unchanged
 do
     local expected_opposite = {
         top = "bottom",
@@ -61,8 +61,34 @@ do
             "mirrored_entry side for exit=" .. side .. " should be " .. opposite .. ", got " .. tostring(entry.side))
         assert(entry.pos == 333,
             "mirrored_entry pos should be unchanged at 333, got " .. tostring(entry.pos))
+        assert(entry.gap == 100,
+            "mirrored_entry gap should match the exit gap (100), got " .. tostring(entry.gap))
     end
-    print("PASS: level: mirrored_entry() returns opposite side with unchanged pos for all 4 sides")
+    print("PASS: level: mirrored_entry() returns opposite side with unchanged pos/gap for all 4 sides")
+end
+
+-- Test 3b: walls() also carves a gap on the entry side when one is passed,
+-- distinct from the exit side — regression test for a bug where a level
+-- entered via a mirrored entry had no opening on its entry wall at all
+do
+    local def = {
+        id = 4,
+        exit = { side = "right", pos = 300, gap = 160 },
+        obstacles = {},
+    }
+    local entry = { side = "bottom", pos = 640, gap = 160 }
+    local walls = Level.walls(def, entry)
+
+    assert(#walls == 6, "expected 6 rects (top + left + 2 right segments + 2 bottom segments), got " .. #walls)
+
+    for _, r in ipairs(walls) do
+        if r.h == 40 and r.y == 680 then -- bottom wall segments
+            local covers_gap = (r.x + r.w > 560) and (r.x < 720)
+            assert(not covers_gap,
+                "bottom (entry) wall rect should not overlap gap span [560,720]: got x=" .. r.x .. " w=" .. r.w)
+        end
+    end
+    print("PASS: level: walls() carves a gap on the entry side too")
 end
 
 -- Test 4: spawn placement for a bottom entry (vertical side) — fish should

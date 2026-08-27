@@ -23,7 +23,7 @@ function LevelScene.new(level_id, entry, sm)
     local level_def = require("game/levels/level_" .. level_id)
 
     self.level_def = level_def
-    self.walls = Level.walls(level_def)
+    self.walls = Level.walls(level_def, entry)
 
     local spawn = entry and Level.spawn(entry) or Level.default_spawn()
     self.player = Player.new(spawn.x, spawn.y, spawn.heading)
@@ -70,7 +70,7 @@ function LevelScene:draw()
 
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.print("Level " .. self.level_id, 16, 16)
-    love.graphics.print("A / D: flip tail left / right, alternating, to swim forward", 16, 36)
+    love.graphics.print("A / D: flip tail left / right  -  alternate sides to swim forward", 16, 36)
 end
 
 return LevelScene

@@ -22,18 +22,19 @@ do
     print("PASS: player: a flip boosts speed and turns the heading")
 end
 
--- Test 2: repeating the same side without alternating does nothing
+-- Test 2: repeating the same side keeps turning (sharp in-place steering) but
+-- doesn't add another speed boost — only an alternating flip propels forward
 do
     local p = Player.new(100, 100, 0)
-    p:update(0.01, true, false, nil)         -- valid left flip
+    p:update(0.01, true, false, nil)         -- valid left flip: turns + boosts
     local speed_after_first = p.speed
     local heading_after_first = p.heading
-    p:update(0.01, true, false, nil)         -- left again, not alternating: ignored
-    assert(math.abs(p.speed - (speed_after_first - DRAG * 0.01)) < 0.5,
-        "repeating the same flip side should not add another boost")
-    assert(math.abs(p.heading - heading_after_first) < 0.01,
-        "repeating the same flip side should not turn the heading again")
-    print("PASS: player: repeating the same flip side is a no-op")
+    p:update(0.01, true, false, nil)         -- left again, not alternating: turns, no boost
+    assert(math.abs(p.speed - (speed_after_first - DRAG * 0.01)) < 0.01,
+        "repeating the same flip side should not add another speed boost")
+    assert(math.abs(p.heading - (heading_after_first - FLIP_TURN)) < 0.01,
+        "repeating the same flip side should still turn the heading")
+    print("PASS: player: repeating the same flip side turns without re-boosting speed")
 end
 
 -- Test 3: alternating left/right keeps boosting speed up to MAX_SPEED

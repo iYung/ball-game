@@ -24,15 +24,23 @@ function Player.new(x, y, heading)
 end
 
 function Player:update(dt, flip_left, flip_right, walls)
-    -- A flip only counts if it alternates from the last one — mirrors a fish
-    -- needing to beat its tail the *other* way each stroke to swim forward.
-    if flip_left and self.last_flip ~= "left" then
-        self.heading   = self.heading - FLIP_TURN
-        self.speed     = clamp(self.speed + FLIP_BOOST, 0, MAX_SPEED)
+    -- Every flip turns the heading, so steering is always direct and
+    -- responsive. The speed boost — the actual forward propulsion — only
+    -- comes from an *alternating* flip, mirroring a fish needing to beat its
+    -- tail the other way each stroke to swim forward; flipping the same side
+    -- repeatedly turns you sharply in place without adding speed, like
+    -- paddling one side of a canoe.
+    if flip_left then
+        self.heading = self.heading - FLIP_TURN
+        if self.last_flip ~= "left" then
+            self.speed = clamp(self.speed + FLIP_BOOST, 0, MAX_SPEED)
+        end
         self.last_flip = "left"
-    elseif flip_right and self.last_flip ~= "right" then
-        self.heading   = self.heading + FLIP_TURN
-        self.speed     = clamp(self.speed + FLIP_BOOST, 0, MAX_SPEED)
+    elseif flip_right then
+        self.heading = self.heading + FLIP_TURN
+        if self.last_flip ~= "right" then
+            self.speed = clamp(self.speed + FLIP_BOOST, 0, MAX_SPEED)
+        end
         self.last_flip = "right"
     end
 

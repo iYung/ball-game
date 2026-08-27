@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(lua|json|txt|md\\)$\")",
+      "Bash(git -C /Users/ivan/Development/love-exemplar log --oneline)",
+      "Bash(git -C /Users/ivan/Development/love-exemplar show HEAD --stat)",
+      "Bash(git -C /Users/ivan/Development/love-exemplar log --all --stat)",
+      "Bash(git -C /Users/ivan/Development/love-exemplar ls-files)",
+      "Bash(git -C /Users/ivan/Development/love-exemplar show 0f7a6dec:lua/core/render/sprite.lua)",
+      "Bash(git -C /Users/ivan/Development/love-exemplar show 0f7a6dec:main.lua)",
+      "Bash(git -C /Users/ivan/Development/love-exemplar show 0f7a6dec:lua/core/scene/scene.lua)",
+      "Bash(git -C /Users/ivan/Development/love-exemplar show 0f7a6dec:lua/core/scene/sceneManager.lua)"
+    ]
+  }
+}

@@ -1,0 +1,109 @@
+name: Web Build & Deploy
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+
+jobs:
+  build:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build web
+        run: bash scripts/build_web.sh
+        env:
+          APP_TITLE: ${{ vars.APP_TITLE || 'Love Exemplar' }}
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: web/
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-build
+          path: web/
+
+      - name: Deploy to Cloudflare Pages (production)
+        run: npx wrangler pages deploy ./web --project-name=${{ vars.CLOUDFLARE_PROJECT_NAME }} --branch=master
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-pr:
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-build
+          path: web/
+
+      - name: Deploy PR preview to Cloudflare Pages
+        run: npx wrangler pages deploy ./web --project-name=${{ vars.CLOUDFLARE_PROJECT_NAME }} --branch=pr-${{ github.event.pull_request.number }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Find existing preview comment
+        id: find-comment
+        uses: peter-evans/find-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: 'Web preview'
+
+      - name: Post or update PR preview comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            🌐 **Web preview:** https://pr-${{ github.event.pull_request.number }}.${{ vars.CLOUDFLARE_PROJECT_NAME }}.pages.dev
+          edit-mode: replace
+
+  cleanup-pr:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete Cloudflare Pages preview deployments
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CF_PROJECT: ${{ vars.CLOUDFLARE_PROJECT_NAME }}
+        run: |
+          DEPLOYMENTS=$(curl -s \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CF_PROJECT/deployments" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | jq -r --arg branch "pr-$PR_NUMBER" '.result[] | select(.deployment_trigger.metadata.branch == $branch) | .id')
+          for id in $DEPLOYMENTS; do
+            curl -s -X DELETE \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CF_PROJECT/deployments/$id?force=true" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+          done

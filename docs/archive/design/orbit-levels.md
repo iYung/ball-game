@@ -51,8 +51,8 @@ return {
 
 - Exit **sides vary per level** so the mirroring is visible instead of trivial:
   - **Level 1** — empty room. Exit: `top`, `pos = 640`. (Level 1 has no predecessor; its own spawn is a fixed default — bottom wall, `pos = 640` — using the same spawn transform as every other level.)
-  - **Level 2** — one obstacle wall roughly across the middle of the room, forcing a route around it. Entry (mirrored from level 1): `bottom, 640`. Exit: `right, 300`.
-  - **Level 3** — a corridor formed by two jutting walls that narrow to a choke point the player must be at low radius to fit through. Entry (mirrored from level 2): `left, 300`. Exit: `top, 200`.
+  - **Level 2** — one obstacle wall roughly across the middle of the room, forcing a route around it. Entry (mirrored from level 1): `bottom, 640`. Exit: `right, 300`. (Redesigned for the fish-flip mechanic's wider turning radius — see "Level redesign for fish-flip movement" below.)
+  - **Level 3** — a corridor formed by two jutting walls that narrow to a choke point. Entry (mirrored from level 2): `left, 300`. Exit: `top, 200`. (Redesigned; see below.)
   - Reaching level 3's exit loops back to level 1's own fixed spawn (there's no level 4 to mirror into yet).
 
 ## Affected files
@@ -106,3 +106,16 @@ Tuning constants (in `game/player.lua`):
 `game/level.lua`'s `Level.spawn(entry)` and `Level.default_spawn()` now return `{ x, y, heading }` (heading = the wall's inward normal as an angle) instead of `{ x, y, center_x, center_y, direction }` — everything else in `game/level.lua` (wall generation, mirrored-entry calculation) is unchanged. `game/scenes/level_scene.lua` binds `Input.new({ flip_left = {"a"}, flip_right = {"d"} })` and reads `input:pressed(...)` (not `is_down`) each frame.
 
 Also fixed alongside this: `LevelScene` now pins the scene's camera to the room's center (`camera.x, camera.y = 640, 360`) in `LevelScene.new`. `Scene`'s default camera centers world `(0,0)` on screen, but the room's content lives in world coords `(0,0)`–`(1280,720)` with a top-left origin, so leaving the camera at its default shifted everything by half a screen — only the room's bottom-right corner was ever visible.
+
+Two follow-up fixes after the mechanic first shipped:
+
+- **Turning was ineffective.** Every flip's turn was equal-and-opposite, so alternating flips — required to keep any speed — canceled each other's net turn over every pair. Fixed by decoupling turning from the alternation gate: every flip now turns the heading directly regardless of side; only an *alternating* flip also grants the `FLIP_BOOST` speed. Repeating one side turns sharply in place without propelling (like paddling one side of a canoe); alternating swims forward with the wiggle.
+- **A level entered via a mirrored entry had no gap on its entry wall.** `Level.walls()` only ever carved a gap for a level's own configured `exit`; a level's entry side (mirrored from the previous level's exit) was left solid unless it happened to coincide with that level's own exit. `Level.mirrored_entry()` now also carries `gap` (copied from the exit it mirrors), and `Level.walls(level_def, entry)` takes an optional `entry` to carve a matching opening there too. `LevelScene` passes its `entry` through.
+- **Crash on level transition**: `LevelScene`'s metatable wasn't chained to `Scene` (`setmetatable(self, LevelScene)` replaced it outright), so `Scene:on_exit()` — never overridden by `LevelScene` — was unreachable; `SceneManager` calls it once a scene's fade-out completes, which crashed on every real level exit. Fixed with `setmetatable(LevelScene, { __index = Scene })`. Never caught earlier because the placeholder demo this replaced only ever called `sm:switch()` once, at boot.
+
+## Level redesign for fish-flip movement
+
+The fish-flip mechanic has a much wider effective turning radius than the old orbit mechanic — sharp, close-quarters maneuvers are uncomfortable. Levels 2 and 3's obstacle geometry (not their exit/entry sides, positions, or gap widths, which the chaining logic already depends on) were reworked accordingly; level 1 (empty room) was left untouched.
+
+- **Level 2** — the obstacle bar shifted from `x=400..880` (centered) to `x=280..760`, biasing the wide-open route (480px clear) toward the exit side (right) instead of offering two roughly-equal, narrower options. A single gentle sweep clears it.
+- **Level 3** — the choke point moved from `x=560..600` (room-center) to `x=150..190`. The room-center placement put the obstacle outside the corridor the entry (`x≈14`) and exit (`x=120..280`) actually share — it didn't gate the direct path at all once the fish curved toward the exit, and testing an obstacle-aware bot against it caused 79 wall bounces as it hunted for a gap in the wrong place. The new placement genuinely sits between entry and exit, so passing through it is required, not optional. Its gap was also widened from 60px to 100px (40px of clearance per side around the 20px-diameter ball, versus 20px before) and centered at the entry's own height (`y=300`), so the fish can thread it close to its entry heading and lands already inside the exit's x-range — no lateral correction needed afterward, unlike the old placement, which required a near-reversal turn back across the room to reach the exit after squeezing through.

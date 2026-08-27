@@ -6,6 +6,9 @@ local Sprite = require("lua/core/sprite")
 
 local LevelScene = {}
 LevelScene.__index = LevelScene
+-- Chain to Scene so inherited methods LevelScene doesn't override (notably
+-- on_exit, which clears the drawer) still resolve on instances.
+setmetatable(LevelScene, { __index = Scene })
 
 function LevelScene.new(level_id, entry, sm)
     local self = Scene.new(1280, 720)

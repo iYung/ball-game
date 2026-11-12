@@ -49,37 +49,44 @@ function Station:get_color()
 end
 
 -- Draw the station — Mini Metro style.
+-- A white ring always visible; inner fill grows from transparent to colored as crowd builds.
 -- mx, my: mouse position in world/canvas coords for hover detection.
 function Station:draw(mx, my)
-    local base_r = 5
+    local outer_r = 8
+    local inner_r = math.min(outer_r - 1, math.max(0, math.sqrt(self.crowd) * 0.18))
+    local r, g, b = self:get_color()
 
-    -- Crowd glow: a soft colored halo that grows with crowd
-    if self.crowd > 50 then
-        local r, g, b = self:get_color()
-        local glow_r = math.max(base_r + 1, math.min(28, base_r + math.sqrt(self.crowd) * 0.12))
-        local alpha = math.min(0.45, 0.1 + self.crowd / 4000)
-        love.graphics.setColor(r, g, b, alpha)
-        love.graphics.circle("fill", self.x, self.y, glow_r)
+    -- Outer soft glow when overcrowded
+    if self.crowd > 300 then
+        local glow_alpha = math.min(0.35, (self.crowd - 300) / 3000)
+        love.graphics.setColor(r, g, b, glow_alpha)
+        love.graphics.circle("fill", self.x, self.y, outer_r + 6)
     end
 
-    -- White filled station dot
+    -- Dark fill inside the ring (background)
+    love.graphics.setColor(0.07, 0.08, 0.13, 1)
+    love.graphics.circle("fill", self.x, self.y, outer_r - 1)
+
+    -- Crowd fill: colored inner circle that grows with crowd
+    if inner_r > 0.5 then
+        love.graphics.setColor(r, g, b, 0.9)
+        love.graphics.circle("fill", self.x, self.y, inner_r)
+    end
+
+    -- White ring outline — always visible
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.circle("fill", self.x, self.y, base_r)
+    love.graphics.setLineWidth(1.5)
+    love.graphics.circle("line", self.x, self.y, outer_r)
 
-    -- Thin dark outline so dots pop off colored lines
-    love.graphics.setColor(0.08, 0.09, 0.14, 1)
-    love.graphics.setLineWidth(1)
-    love.graphics.circle("line", self.x, self.y, base_r)
-
-    -- Hover: draw station name
+    -- Hover: station name
     local mouse_x = mx or love.mouse.getX()
     local mouse_y = my or love.mouse.getY()
     local dx = mouse_x - self.x
     local dy = mouse_y - self.y
-    if dx * dx + dy * dy <= (base_r + 4) * (base_r + 4) then
-        love.graphics.setColor(1, 1, 1, 0.9)
+    if dx * dx + dy * dy <= (outer_r + 6) * (outer_r + 6) then
+        love.graphics.setColor(1, 1, 1, 0.95)
         love.graphics.push()
-        love.graphics.translate(self.x + base_r + 3, self.y - 6)
+        love.graphics.translate(self.x + outer_r + 4, self.y - 6)
         love.graphics.scale(0.75, 0.75)
         love.graphics.print(self.name, 0, 0)
         love.graphics.pop()

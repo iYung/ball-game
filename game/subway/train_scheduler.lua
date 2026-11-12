@@ -8,7 +8,7 @@ function Scheduler.new(network)
   local self = setmetatable({}, Scheduler)
   self.network = network
   self.sim_time = 0        -- sim-seconds since midnight (0 = 00:00:00)
-  self.sim_speed = 60      -- sim-seconds per real-second; 60x = 1 real sec = 1 sim min
+  self.sim_speed = 300     -- sim-seconds per real-second; 300x = 1 real sec = 5 sim min
   self.active_trains = {}  -- list of Train objects currently running
   self._spawned_trips = {} -- set of trip_ids already spawned this day; reset at midnight
   self._custom_state = {}  -- per custom line_id: {forward_count, reverse_count}

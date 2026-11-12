@@ -155,7 +155,7 @@ function Map:draw_lines(network, stations)
   if not network or not network.lines then return end
 
   love.graphics.setLineWidth(3)
-  love.graphics.setLineJoin("round")
+  love.graphics.setLineJoin("bevel")
 
   for _, line in pairs(network.lines) do
     if line.active and not line.deleted and line.stops and #line.stops >= 2 then

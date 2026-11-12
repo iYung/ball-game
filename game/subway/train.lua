@@ -8,7 +8,11 @@ Train.__index = Train
 function Train.new(route_id, color, stop_sequence, offset_seconds)
   local self = setmetatable({}, Train)
   self.route_id = route_id
-  self.color = {color[1] / 255, color[2] / 255, color[3] / 255}
+  self.color = {
+    (color.r or color[1]) / 255,
+    (color.g or color[2]) / 255,
+    (color.b or color[3]) / 255,
+  }
   self.stop_sequence = stop_sequence
   self.leg = 1
   self.progress = 0.0
@@ -105,14 +109,12 @@ function Train:update(dt_sim, stations)
 end
 
 function Train:draw()
-  -- White outline circle (radius 5, line width 1)
-  love.graphics.setColor(1, 1, 1, 1)
-  love.graphics.setLineWidth(1)
-  love.graphics.circle("line", self.x, self.y, 5)
-
-  -- Filled circle in train color (radius 4)
+  -- Filled circle in line color
   love.graphics.setColor(self.color[1], self.color[2], self.color[3], 1)
-  love.graphics.circle("fill", self.x, self.y, 4)
+  love.graphics.circle("fill", self.x, self.y, 5)
+  -- Bright white highlight dot to make trains readable on colored lines
+  love.graphics.setColor(1, 1, 1, 0.7)
+  love.graphics.circle("fill", self.x - 1, self.y - 1, 2)
 end
 
 return Train

@@ -131,7 +131,10 @@ local MANHATTAN_POLY = {
 
 -- Draw the Manhattan borough outline as a dim filled polygon.
 function Map:draw_background()
-  -- Build flat vertex list for love.graphics.polygon
+  -- Clear to near-black first
+  love.graphics.setColor(0.03, 0.04, 0.07, 1.0)
+  love.graphics.rectangle("fill", -2000, -2000, 6000, 6000)
+
   local verts = {}
   for _, pt in ipairs(MANHATTAN_POLY) do
     local x, y = self:project(pt[1], pt[2])
@@ -139,12 +142,10 @@ function Map:draw_background()
     verts[#verts + 1] = y
   end
 
-  -- Filled polygon
-  love.graphics.setColor(0.12, 0.12, 0.18, 1.0)
+  love.graphics.setColor(0.07, 0.08, 0.13, 1.0)
   love.graphics.polygon("fill", verts)
 
-  -- Outline (slightly lighter)
-  love.graphics.setColor(0.2, 0.2, 0.28, 1.0)
+  love.graphics.setColor(0.14, 0.15, 0.22, 1.0)
   love.graphics.setLineWidth(1)
   love.graphics.polygon("line", verts)
 end
@@ -153,15 +154,15 @@ end
 function Map:draw_lines(network, stations)
   if not network or not network.lines then return end
 
-  love.graphics.setLineWidth(2)
+  love.graphics.setLineWidth(3)
+  love.graphics.setLineJoin("round")
 
   for _, line in pairs(network.lines) do
-    -- Skip inactive or deleted lines, or lines with fewer than 2 stops
     if line.active and not line.deleted and line.stops and #line.stops >= 2 then
-      local c = line.color or {r = 1, g = 1, b = 1}
-      love.graphics.setColor(c.r, c.g, c.b, 0.5)
+      local c = line.color or {r = 200, g = 200, b = 200}
+      -- color values are 0-255 integers; convert to 0-1 for love.graphics
+      love.graphics.setColor(c.r / 255, c.g / 255, c.b / 255, 1.0)
 
-      -- Collect valid screen positions
       local verts = {}
       for _, sid in ipairs(line.stops) do
         local st = stations[sid]
@@ -171,7 +172,6 @@ function Map:draw_lines(network, stations)
         end
       end
 
-      -- Need at least 2 points (4 numbers) to draw a line
       if #verts >= 4 then
         love.graphics.line(verts)
       end
@@ -182,10 +182,10 @@ function Map:draw_lines(network, stations)
 end
 
 -- Call station:draw(mx, my) for each station in the list.
--- mx, my = mouse position in canvas coords (already adjusted for camera).
+-- station_list may be an array or a string-keyed table; uses pairs().
 function Map:draw_stations(station_list, mx, my)
   if not station_list then return end
-  for _, station in ipairs(station_list) do
+  for _, station in pairs(station_list) do
     station:draw(mx, my)
   end
 end

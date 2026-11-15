@@ -57,6 +57,11 @@ local function screen_to_cell(mx, my)
     return cx, cy
 end
 
+local function cell_center(cx, cy)
+    return GRID_X + (cx - 1) * CELL_SIZE + CELL_SIZE / 2,
+           GRID_Y + (cy - 1) * CELL_SIZE + CELL_SIZE / 2
+end
+
 local function cell_to_screen(cx, cy)
     return GRID_X + (cx - 1) * CELL_SIZE, GRID_Y + (cy - 1) * CELL_SIZE
 end
@@ -65,6 +70,8 @@ local function in_grid_panel(mx, my)
     return mx >= GRID_X and mx < GRID_X + 10 * CELL_SIZE
        and my >= GRID_Y and my < GRID_Y + 10 * CELL_SIZE
 end
+
+local function lerp(a, b, t) return a + (b - a) * t end
 
 -- ── Constructor ────────────────────────────────────────────────────────────
 
@@ -85,8 +92,14 @@ function MatrixScene:on_enter()
     self.font_ui      = love.graphics.newFont(12)
     self.font_key     = love.graphics.newFont(11)
     self.pending_spec = nil   -- spec waiting for params before placement
-    self.run_timer    = 0
-    self.run_speed    = 0.18
+    self.run_speed    = 0.22  -- seconds per step (animation duration)
+    -- Visual position of the travelling matrix panel (screen pixels, cell center)
+    self.anim_from_x  = 0
+    self.anim_from_y  = 0
+    self.anim_to_x    = 0
+    self.anim_to_y    = 0
+    self.anim_t       = 1    -- 1 = at destination, not animating
+    self.anim_ready   = false -- true when anim finished and next step should fire
 
     -- Compute palette button positions once
     self._btn_rects = {}
@@ -146,7 +159,17 @@ function MatrixScene:do_reset()
     self.status         = nil
     self.running        = false
     self.cursor         = nil
-    self.run_timer      = 0
+    self.anim_t         = 1
+    self.anim_ready     = false
+end
+
+function MatrixScene:_snap_anim_to_cursor()
+    if self.cursor then
+        local px, py = cell_center(self.cursor.x, self.cursor.y)
+        self.anim_from_x = px; self.anim_from_y = py
+        self.anim_to_x   = px; self.anim_to_y   = py
+        self.anim_t      = 1
+    end
 end
 
 function MatrixScene:start_run()
@@ -156,7 +179,9 @@ function MatrixScene:start_run()
                                      p.sink.x, p.sink.y)
     self.status         = "running"
     self.running        = true
-    self.run_timer      = 0
+    self.anim_t         = 1
+    self.anim_ready     = true  -- fire first step immediately
+    self:_snap_anim_to_cursor()
 end
 
 function MatrixScene:do_step()
@@ -164,8 +189,17 @@ function MatrixScene:do_step()
         self:start_run()
         return
     end
-    local st, new_mat   = self.cursor:step(self.current_matrix)
-    self.current_matrix = new_mat
+    local from_x, from_y = cell_center(self.cursor.x, self.cursor.y)
+    local st, new_mat    = self.cursor:step(self.current_matrix)
+    self.current_matrix  = new_mat
+    local to_x, to_y     = cell_center(self.cursor.x, self.cursor.y)
+
+    -- Kick off animation from old position to new
+    self.anim_from_x = from_x; self.anim_from_y = from_y
+    self.anim_to_x   = to_x;   self.anim_to_y   = to_y
+    self.anim_t      = 0
+    self.anim_ready  = false
+
     if st == "sink" then
         self.running = false
         if new_mat:equals(self.target_matrix) then
@@ -182,12 +216,17 @@ end
 -- ── Update ─────────────────────────────────────────────────────────────────
 
 function MatrixScene:update(dt)
-    if self.running then
-        self.run_timer = self.run_timer + dt
-        while self.run_timer >= self.run_speed and self.running do
-            self.run_timer = self.run_timer - self.run_speed
-            self:do_step()
+    -- Advance animation
+    if self.anim_t < 1 then
+        self.anim_t = math.min(1, self.anim_t + dt / self.run_speed)
+        if self.anim_t >= 1 and self.running then
+            self.anim_ready = true
         end
+    end
+    -- Fire next step once animation completes
+    if self.running and self.anim_ready then
+        self.anim_ready = false
+        self:do_step()
     end
 end
 
@@ -221,15 +260,6 @@ function MatrixScene:draw_grid()
                 self:draw_tile(tile, sx, sy)
             end
         end
-    end
-
-    -- Cursor highlight
-    if self.cursor then
-        local sx, sy = cell_to_screen(self.cursor.x, self.cursor.y)
-        love.graphics.setColor(1, 0.9, 0.2, 1)
-        love.graphics.setLineWidth(3)
-        love.graphics.rectangle("line", sx + 1, sy + 1, CELL_SIZE - 2, CELL_SIZE - 2)
-        love.graphics.setLineWidth(1)
     end
 
     love.graphics.setColor(1, 1, 1, 1)
@@ -288,6 +318,57 @@ function MatrixScene:draw_tile(tile, sx, sy)
         love.graphics.circle("fill", lx, ly + 4, 3)
         love.graphics.rectangle("fill", lx - 2, ly + 4, 4, 5)
     end
+end
+
+function MatrixScene:draw_travelling_matrix()
+    local mat = self.current_matrix
+    if not mat then return end
+
+    -- Interpolated pixel position
+    local t  = self.anim_t
+    -- ease: smooth-step so it feels snappy not robotic
+    local et = t * t * (3 - 2 * t)
+    local px = lerp(self.anim_from_x, self.anim_to_x, et)
+    local py = lerp(self.anim_from_y, self.anim_to_y, et)
+
+    local n       = math.max(mat.rows, mat.cols)
+    local cell_px = math.min(18, math.floor(60 / n))  -- px per matrix cell
+    local pad     = 5
+    local pw      = mat.cols * cell_px + pad * 2
+    local ph      = mat.rows * cell_px + pad * 2
+
+    -- Centre panel on px,py
+    local bx = px - pw / 2
+    local by = py - ph / 2
+
+    -- Panel background + border
+    love.graphics.setColor(0.08, 0.08, 0.14, 0.93)
+    love.graphics.rectangle("fill", bx, by, pw, ph, 3, 3)
+    love.graphics.setColor(1, 0.85, 0.2, 1)
+    love.graphics.setLineWidth(2)
+    love.graphics.rectangle("line", bx, by, pw, ph, 3, 3)
+    love.graphics.setLineWidth(1)
+
+    -- Matrix values
+    local num_font = self.font_cell
+    love.graphics.setFont(num_font)
+    for r = 1, mat.rows do
+        for c = 1, mat.cols do
+            local v  = mat.values[r][c]
+            local vx = bx + pad + (c - 1) * cell_px
+            local vy = by + pad + (r - 1) * cell_px
+            local s
+            if v == math.floor(v) then
+                s = tostring(math.floor(v))
+            else
+                s = string.format("%.1f", v)
+            end
+            love.graphics.setColor(0.95, 0.95, 1.0, 1)
+            love.graphics.printf(s, vx, vy + cell_px * 0.15, cell_px, "center")
+        end
+    end
+
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 function MatrixScene:draw_palette()
@@ -351,8 +432,9 @@ end
 
 function MatrixScene:draw()
     self:draw_grid()
+    self:draw_travelling_matrix()
     self:draw_palette()
-    self.hud:draw(self.input_matrix, self.target_matrix, self.current_matrix,
+    self.hud:draw(self.input_matrix, self.target_matrix, nil,
                   self.puzzle.name, self.status)
     self.popup:draw()
 end
@@ -442,12 +524,17 @@ function MatrixScene:key_pressed(key)
     end
 
     if key == "r" then
-        if not self.running and self.status ~= "win" then
+        if not self.running and (self.status == nil or self.status == "fail"
+                              or self.status == "loop" or self.status == "out_of_bounds") then
             self:start_run()
         end
     elseif key == "space" then
         if not self.running and (self.status == nil or self.status == "running") then
+            -- snap any in-progress animation before stepping
+            self.anim_t = 1
             self:do_step()
+            -- for single-step, complete animation instantly
+            self.anim_t = 1
         end
     elseif key == "backspace" then
         self:do_reset()

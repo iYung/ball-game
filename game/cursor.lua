@@ -31,11 +31,12 @@ local function visited_key(x, y, dir)
     return x .. "," .. y .. "," .. dir
 end
 
-local function apply_op(tile, matrix)
+-- Exported so matrix_scene can apply ops from footprint cells.
+function Cursor.apply_op(tile, matrix)
     if tile.kind ~= "op" then return matrix end
     local op = tile.op
     local p  = tile.params or {}
-    if op == "transpose"  then return matrix:transpose()
+    if     op == "transpose"  then return matrix:transpose()
     elseif op == "negate"     then return matrix:negate()
     elseif op == "scale_row"  then return matrix:scale_row(p.row, p.scalar)
     elseif op == "add_rows"   then return matrix:add_rows(p.src, p.dst, p.scalar)
@@ -45,45 +46,36 @@ local function apply_op(tile, matrix)
     return matrix
 end
 
-function Cursor:step(matrix)
-    -- Apply op at current cell (if any).
-    local current_tile = self._grid:in_bounds(self.x, self.y) and self._grid:get(self.x, self.y)
-    if current_tile then
-        matrix = apply_op(current_tile, matrix)
-    end
-
-    -- Advance position.
-    local d = DIRS[self.dir]
+-- Advance the anchor one step. Picks up arrow direction at the new cell.
+-- Returns "ok" | "sink" | "loop" | "out_of_bounds". Does NOT apply any op.
+function Cursor:move()
+    local d  = DIRS[self.dir]
     local nx = self.x + d.dx
     local ny = self.y + d.dy
 
-    -- Out-of-bounds check.
     if not self._grid:in_bounds(nx, ny) then
-        return "out_of_bounds", matrix
+        return "out_of_bounds"
     end
 
     self.x = nx
     self.y = ny
 
-    -- Sink check.
     if self.x == self._sink_x and self.y == self._sink_y then
-        return "sink", matrix
+        return "sink"
     end
 
-    -- Update direction from arrow tile at new position.
-    local new_tile = self._grid:get(self.x, self.y)
-    if new_tile and new_tile.kind == "arrow" then
-        self.dir = new_tile.dir
+    local tile = self._grid:get(self.x, self.y)
+    if tile and tile.kind == "arrow" then
+        self.dir = tile.dir
     end
 
-    -- Loop detection (after direction update).
     local key = visited_key(self.x, self.y, self.dir)
     if self._visited[key] then
-        return "loop", matrix
+        return "loop"
     end
     self._visited[key] = true
 
-    return "ok", matrix
+    return "ok"
 end
 
 return Cursor

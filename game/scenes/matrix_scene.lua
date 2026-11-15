@@ -6,6 +6,8 @@ local Palette      = require("game/palette")
 local HUD          = require("game/hud")
 local PuzzleLoader = require("game/puzzle_loader")
 
+local function cell_key(x, y) return x .. "," .. y end
+
 local MatrixScene = {}
 MatrixScene.__index = MatrixScene
 
@@ -202,8 +204,24 @@ function MatrixScene:do_reset()
     self.status         = nil
     self.running        = false
     self.cursor         = nil
+    self.occupied_ops   = {}
     self.anim_t         = 1
     self.anim_ready     = false
+end
+
+-- Returns a table keyed by cell_key for every board cell the matrix currently covers.
+function MatrixScene:get_footprint()
+    local mat  = self.current_matrix
+    if not mat or not self.cursor then return {} end
+    local cx, cy = self.cursor.x, self.cursor.y
+    local fp = {}
+    for r = 0, mat.rows - 1 do
+        for c = 0, mat.cols - 1 do
+            local x, y = cx + c, cy + r
+            fp[cell_key(x, y)] = {x=x, y=y}
+        end
+    end
+    return fp
 end
 
 function MatrixScene:_snap_anim_to_cursor()
@@ -223,6 +241,7 @@ function MatrixScene:start_run()
     self.status         = "running"
     self.running        = true
     self.editing        = nil
+    self.occupied_ops   = {}
     self.anim_t         = 1
     self.anim_ready     = true
     self:_snap_anim_to_cursor()
@@ -230,22 +249,53 @@ end
 
 function MatrixScene:do_step()
     if not self.cursor then self:start_run(); return end
+
+    local old_fp         = self:get_footprint()
     local from_x, from_y = cell_top_left(self.cursor.x, self.cursor.y)
-    local st, new_mat    = self.cursor:step(self.current_matrix)
-    self.current_matrix  = new_mat
-    local to_x, to_y     = cell_top_left(self.cursor.x, self.cursor.y)
+
+    local status = self.cursor:move()
+
+    local to_x, to_y = cell_top_left(self.cursor.x, self.cursor.y)
+    local new_fp     = self:get_footprint()
+
+    -- Deactivate op tiles whose cells the matrix has fully left.
+    for key in pairs(self.occupied_ops) do
+        if not new_fp[key] then self.occupied_ops[key] = nil end
+    end
+
+    -- Collect newly entered cells (not in old footprint, not already occupied).
+    local entered = {}
+    for key, cell in pairs(new_fp) do
+        if not old_fp[key] and not self.occupied_ops[key] then
+            entered[#entered+1] = cell
+        end
+    end
+    -- Fire in top-to-bottom, left-to-right order.
+    table.sort(entered, function(a, b)
+        return a.y ~= b.y and a.y < b.y or a.x < b.x
+    end)
+
+    local mat = self.current_matrix
+    for _, cell in ipairs(entered) do
+        local tile = self.grid:get(cell.x, cell.y)
+        if tile and tile.kind == "op" then
+            mat = Cursor.apply_op(tile, mat)
+            self.occupied_ops[cell_key(cell.x, cell.y)] = true
+        end
+    end
+    self.current_matrix = mat
 
     self.anim_from_x=from_x; self.anim_from_y=from_y
     self.anim_to_x=to_x;     self.anim_to_y=to_y
     self.anim_t     = 0
     self.anim_ready = false
 
-    if st == "sink" then
+    if status == "sink" then
         self.running = false
-        self.status  = new_mat:equals(self.target_matrix) and "win" or "fail"
-    elseif st ~= "ok" then
+        self.status  = mat:equals(self.target_matrix) and "win" or "fail"
+    elseif status ~= "ok" then
         self.running = false
-        self.status  = st
+        self.status  = status
     end
 end
 

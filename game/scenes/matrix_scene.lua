@@ -3,7 +3,6 @@ local Matrix       = require("game/matrix_math")
 local Grid         = require("game/grid")
 local Cursor       = require("game/cursor")
 local Palette      = require("game/palette")
-local ParamPopup   = require("game/param_popup")
 local HUD          = require("game/hud")
 local PuzzleLoader = require("game/puzzle_loader")
 
@@ -11,16 +10,31 @@ local MatrixScene = {}
 MatrixScene.__index = MatrixScene
 
 -- Layout constants
-local GRID_X     = 95   -- left margin so 10*63 = 630 is centered in 820px panel
+local GRID_X     = 95
 local GRID_Y     = 20
 local CELL_SIZE  = 63
 local PALETTE_Y  = 660
 local HUD_X      = 820
 
--- Ops that require a param popup before placement
-local NEEDS_PARAMS = { scale_row=true, add_rows=true, swap_rows=true, scalar_mul=true }
+-- Ops that expose editable parameters
+local PARAM_DEFS = {
+    scale_row  = { {key="row",    label="row", min=1, max=4},
+                   {key="scalar", label="x",   min=-9, max=9} },
+    add_rows   = { {key="src",    label="src", min=1, max=4},
+                   {key="dst",    label="dst", min=1, max=4},
+                   {key="scalar", label="x",   min=-9, max=9} },
+    swap_rows  = { {key="row_a",  label="r1",  min=1, max=4},
+                   {key="row_b",  label="r2",  min=1, max=4} },
+    scalar_mul = { {key="scalar", label="x",   min=-9, max=9} },
+}
 
--- Display labels for op tiles
+local DEFAULT_PARAMS = {
+    scale_row  = {row=1,  scalar=2},
+    add_rows   = {src=1,  dst=2,   scalar=1},
+    swap_rows  = {row_a=1, row_b=2},
+    scalar_mul = {scalar=2},
+}
+
 local OP_SYMBOLS = {
     transpose  = "T",
     scale_row  = "xRn",
@@ -32,7 +46,6 @@ local OP_SYMBOLS = {
 
 local DIR_ARROWS = { right="->", left="<-", up="^", down="v" }
 
--- Palette button definitions
 local PALETTE_BUTTONS = {
     { kind="arrow", dir="right",  label="->" },
     { kind="arrow", dir="left",   label="<-" },
@@ -57,13 +70,14 @@ local function screen_to_cell(mx, my)
     return cx, cy
 end
 
+local function cell_top_left(cx, cy)
+    return GRID_X + (cx - 1) * CELL_SIZE,
+           GRID_Y + (cy - 1) * CELL_SIZE
+end
+
 local function cell_center(cx, cy)
     return GRID_X + (cx - 1) * CELL_SIZE + CELL_SIZE / 2,
            GRID_Y + (cy - 1) * CELL_SIZE + CELL_SIZE / 2
-end
-
-local function cell_to_screen(cx, cy)
-    return GRID_X + (cx - 1) * CELL_SIZE, GRID_Y + (cy - 1) * CELL_SIZE
 end
 
 local function in_grid_panel(mx, my)
@@ -72,6 +86,45 @@ local function in_grid_panel(mx, my)
 end
 
 local function lerp(a, b, t) return a + (b - a) * t end
+
+-- Returns the layout rects for the edit widget anchored to cell (cx,cy).
+-- Each entry: { kind="btn", key, delta, x, y, w, h }
+local function edit_widget_rects(cx, cy, defs)
+    local row_h  = 22
+    local btn_w  = 18
+    local val_w  = 28
+    local lbl_w  = 30
+    local pad    = 6
+    local ww     = lbl_w + btn_w + val_w + btn_w + pad * 2
+    local wh     = #defs * row_h + pad * 2
+
+    local sx, sy = cell_top_left(cx, cy)
+    -- prefer below the cell, clamp to grid area
+    local wy = sy + CELL_SIZE + 4
+    if wy + wh > GRID_Y + 10 * CELL_SIZE then
+        wy = sy - wh - 4
+    end
+    local wx = sx + CELL_SIZE / 2 - ww / 2
+    -- clamp horizontally
+    wx = math.max(GRID_X, math.min(wx, GRID_X + 10 * CELL_SIZE - ww))
+
+    local rects = { wx=wx, wy=wy, ww=ww, wh=wh }
+    for i, def in ipairs(defs) do
+        local ry = wy + pad + (i - 1) * row_h
+        local rx = wx + pad
+        rects[i] = {
+            key    = def.key,
+            label  = def.label,
+            min    = def.min,
+            max    = def.max,
+            lbl    = { x=rx,            y=ry, w=lbl_w, h=row_h },
+            dec    = { x=rx+lbl_w,      y=ry, w=btn_w, h=row_h },
+            val    = { x=rx+lbl_w+btn_w,y=ry, w=val_w, h=row_h },
+            inc    = { x=rx+lbl_w+btn_w+val_w, y=ry, w=btn_w, h=row_h },
+        }
+    end
+    return rects
+end
 
 -- ── Constructor ────────────────────────────────────────────────────────────
 
@@ -86,22 +139,18 @@ end
 
 function MatrixScene:on_enter()
     self.palette      = Palette.new()
-    self.popup        = ParamPopup.new()
     self.hud          = HUD.new(HUD_X, 0, 460, 720)
     self.font_cell    = love.graphics.newFont(14)
-    self.font_ui      = love.graphics.newFont(12)
+    self.font_ui      = love.graphics.newFont(11)
     self.font_key     = love.graphics.newFont(11)
-    self.pending_spec = nil   -- spec waiting for params before placement
-    self.run_speed    = 0.22  -- seconds per step (animation duration)
-    -- Visual position of the travelling matrix panel (screen pixels, cell center)
-    self.anim_from_x  = 0
-    self.anim_from_y  = 0
-    self.anim_to_x    = 0
-    self.anim_to_y    = 0
-    self.anim_t       = 1    -- 1 = at destination, not animating
-    self.anim_ready   = false -- true when anim finished and next step should fire
+    self.font_val     = love.graphics.newFont(13)
+    self.run_speed    = 0.22
+    self.anim_from_x  = 0;  self.anim_from_y = 0
+    self.anim_to_x    = 0;  self.anim_to_y   = 0
+    self.anim_t       = 1
+    self.anim_ready   = false
+    self.editing      = nil  -- {cx, cy} of tile being edited, or nil
 
-    -- Compute palette button positions once
     self._btn_rects = {}
     local bx, by = 10, PALETTE_Y + 6
     local bw, bh, gap = 48, 48, 56
@@ -118,7 +167,6 @@ function MatrixScene:on_enter()
 end
 
 function MatrixScene:on_exit()
-    -- base clears drawer (unused here, but call it anyway)
     self.drawer:clear()
 end
 
@@ -134,24 +182,19 @@ function MatrixScene:load_puzzle(n)
     self.status         = nil
     self.running        = false
     self.cursor         = nil
+    self.editing        = nil
     self.grid           = Grid.new(p.grid_w, p.grid_h)
 
-    -- Locked tiles from puzzle definition
     if p.locked then
         for _, t in ipairs(p.locked) do
             self.grid:set(t.x, t.y, {
-                kind   = t.kind,
-                dir    = t.dir,
-                op     = t.op,
-                params = t.params or {},
-                locked = true,
+                kind=t.kind, dir=t.dir, op=t.op,
+                params=t.params or {}, locked=true,
             })
         end
     end
-
-    -- Source and sink (always locked)
-    self.grid:set(p.source.x, p.source.y, { kind="source", dir=p.source.dir, locked=true })
-    self.grid:set(p.sink.x,   p.sink.y,   { kind="sink",   locked=true })
+    self.grid:set(p.source.x, p.source.y, {kind="source", dir=p.source.dir, locked=true})
+    self.grid:set(p.sink.x,   p.sink.y,   {kind="sink",   locked=true})
 end
 
 function MatrixScene:do_reset()
@@ -166,9 +209,9 @@ end
 function MatrixScene:_snap_anim_to_cursor()
     if self.cursor then
         local px, py = cell_center(self.cursor.x, self.cursor.y)
-        self.anim_from_x = px; self.anim_from_y = py
-        self.anim_to_x   = px; self.anim_to_y   = py
-        self.anim_t      = 1
+        self.anim_from_x=px; self.anim_from_y=py
+        self.anim_to_x=px;   self.anim_to_y=py
+        self.anim_t = 1
     end
 end
 
@@ -179,34 +222,27 @@ function MatrixScene:start_run()
                                      p.sink.x, p.sink.y)
     self.status         = "running"
     self.running        = true
+    self.editing        = nil
     self.anim_t         = 1
-    self.anim_ready     = true  -- fire first step immediately
+    self.anim_ready     = true
     self:_snap_anim_to_cursor()
 end
 
 function MatrixScene:do_step()
-    if not self.cursor then
-        self:start_run()
-        return
-    end
+    if not self.cursor then self:start_run(); return end
     local from_x, from_y = cell_center(self.cursor.x, self.cursor.y)
     local st, new_mat    = self.cursor:step(self.current_matrix)
     self.current_matrix  = new_mat
     local to_x, to_y     = cell_center(self.cursor.x, self.cursor.y)
 
-    -- Kick off animation from old position to new
-    self.anim_from_x = from_x; self.anim_from_y = from_y
-    self.anim_to_x   = to_x;   self.anim_to_y   = to_y
-    self.anim_t      = 0
-    self.anim_ready  = false
+    self.anim_from_x=from_x; self.anim_from_y=from_y
+    self.anim_to_x=to_x;     self.anim_to_y=to_y
+    self.anim_t     = 0
+    self.anim_ready = false
 
     if st == "sink" then
         self.running = false
-        if new_mat:equals(self.target_matrix) then
-            self.status = "win"
-        else
-            self.status = "fail"
-        end
+        self.status  = new_mat:equals(self.target_matrix) and "win" or "fail"
     elseif st ~= "ok" then
         self.running = false
         self.status  = st
@@ -216,14 +252,12 @@ end
 -- ── Update ─────────────────────────────────────────────────────────────────
 
 function MatrixScene:update(dt)
-    -- Advance animation
     if self.anim_t < 1 then
         self.anim_t = math.min(1, self.anim_t + dt / self.run_speed)
         if self.anim_t >= 1 and self.running then
             self.anim_ready = true
         end
     end
-    -- Fire next step once animation completes
     if self.running and self.anim_ready then
         self.anim_ready = false
         self:do_step()
@@ -232,42 +266,45 @@ end
 
 -- ── Draw helpers ───────────────────────────────────────────────────────────
 
-local function set_color(t) love.graphics.setColor(t[1], t[2], t[3], t[4] or 1) end
-
 function MatrixScene:draw_grid()
-    -- Background for grid panel
     love.graphics.setColor(0.08, 0.08, 0.13, 1)
     love.graphics.rectangle("fill", 0, 0, HUD_X, PALETTE_Y)
 
     for cy = 1, 10 do
         for cx = 1, 10 do
-            local sx, sy = cell_to_screen(cx, cy)
+            local sx, sy = cell_top_left(cx, cy)
             local tile   = self.grid:get(cx, cy)
 
-            -- Checkerboard background
             if (cx + cy) % 2 == 0 then
                 love.graphics.setColor(0.10, 0.10, 0.15, 1)
             else
                 love.graphics.setColor(0.11, 0.11, 0.17, 1)
             end
             love.graphics.rectangle("fill", sx, sy, CELL_SIZE, CELL_SIZE)
-
-            -- Cell border
             love.graphics.setColor(0.20, 0.20, 0.30, 1)
             love.graphics.rectangle("line", sx, sy, CELL_SIZE, CELL_SIZE)
 
-            if tile then
-                self:draw_tile(tile, sx, sy)
-            end
+            if tile then self:draw_tile(tile, sx, sy) end
         end
+    end
+
+    -- Highlight editing cell
+    if self.editing then
+        local sx, sy = cell_top_left(self.editing.cx, self.editing.cy)
+        love.graphics.setColor(0.4, 0.8, 1.0, 0.25)
+        love.graphics.rectangle("fill", sx, sy, CELL_SIZE, CELL_SIZE)
+        love.graphics.setColor(0.4, 0.8, 1.0, 1)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", sx+1, sy+1, CELL_SIZE-2, CELL_SIZE-2)
+        love.graphics.setLineWidth(1)
+        self:draw_edit_widget()
     end
 
     love.graphics.setColor(1, 1, 1, 1)
 end
 
 function MatrixScene:draw_tile(tile, sx, sy)
-    local cs = CELL_SIZE
-    local mid_x = sx + cs / 2
+    local cs    = CELL_SIZE
     local mid_y = sy + cs / 2
 
     if tile.kind == "source" then
@@ -287,36 +324,79 @@ function MatrixScene:draw_tile(tile, sx, sy)
     elseif tile.kind == "arrow" then
         love.graphics.setColor(0.7, 0.8, 0.5, 1)
         love.graphics.setFont(self.font_cell)
-        local sym = DIR_ARROWS[tile.dir] or "?"
-        love.graphics.printf(sym, sx, mid_y - 7, cs, "center")
+        love.graphics.printf(DIR_ARROWS[tile.dir] or "?", sx, mid_y - 7, cs, "center")
 
     elseif tile.kind == "op" then
         love.graphics.setColor(0.9, 0.7, 0.3, 1)
         love.graphics.setFont(self.font_cell)
-        local sym = OP_SYMBOLS[tile.op] or tile.op or "?"
-        love.graphics.printf(sym, sx, mid_y - 12, cs, "center")
-        -- Small param summary
-        local p = tile.params or {}
+        love.graphics.printf(OP_SYMBOLS[tile.op] or "?", sx, sy + 6, cs, "center")
+        -- Compact param summary below the symbol
+        local p  = tile.params or {}
         local detail = ""
-        if tile.op == "scale_row"  then detail = "r"..tostring(p.row or "?").."x"..tostring(p.scalar or "?")
-        elseif tile.op == "add_rows"   then detail = "r"..tostring(p.src or "?").."->"..tostring(p.dst or "?")
+        if     tile.op == "scale_row"  then detail = "r"..tostring(p.row or "?").." x"..tostring(p.scalar or "?")
+        elseif tile.op == "add_rows"   then detail = "r"..tostring(p.src or "?").."+r"..tostring(p.dst or "?").." x"..tostring(p.scalar or "?")
         elseif tile.op == "swap_rows"  then detail = "r"..tostring(p.row_a or "?").."/"..tostring(p.row_b or "?")
         elseif tile.op == "scalar_mul" then detail = "x"..tostring(p.scalar or "?")
         end
         if detail ~= "" then
             love.graphics.setColor(0.7, 0.55, 0.2, 1)
             love.graphics.setFont(self.font_ui)
-            love.graphics.printf(detail, sx, mid_y + 4, cs, "center")
+            love.graphics.printf(detail, sx, sy + cs - 22, cs, "center")
         end
     end
 
-    -- Lock badge (small dot + line in top-right)
     if tile.locked then
-        local lx = sx + cs - 10
-        local ly = sy + 4
         love.graphics.setColor(0.7, 0.7, 0.7, 0.7)
-        love.graphics.circle("fill", lx, ly + 4, 3)
-        love.graphics.rectangle("fill", lx - 2, ly + 4, 4, 5)
+        love.graphics.circle("fill", sx + cs - 8, sy + 7, 3)
+        love.graphics.rectangle("fill", sx + cs - 10, sy + 7, 4, 5)
+    end
+end
+
+-- Draw the in-board +/− editor widget for self.editing
+function MatrixScene:draw_edit_widget()
+    local e    = self.editing
+    local tile = self.grid:get(e.cx, e.cy)
+    if not tile then return end
+    local defs = PARAM_DEFS[tile.op]
+    if not defs then return end
+
+    local wr = edit_widget_rects(e.cx, e.cy, defs)
+    local p  = tile.params
+
+    -- Background
+    love.graphics.setColor(0.10, 0.12, 0.20, 0.97)
+    love.graphics.rectangle("fill", wr.wx, wr.wy, wr.ww, wr.wh, 4, 4)
+    love.graphics.setColor(0.4, 0.8, 1.0, 1)
+    love.graphics.setLineWidth(1.5)
+    love.graphics.rectangle("line", wr.wx, wr.wy, wr.ww, wr.wh, 4, 4)
+    love.graphics.setLineWidth(1)
+
+    for _, row in ipairs(wr) do
+        local val = tostring(p[row.key] or 0)
+
+        -- Label
+        love.graphics.setColor(0.6, 0.75, 1.0, 1)
+        love.graphics.setFont(self.font_ui)
+        love.graphics.printf(row.label, row.lbl.x, row.lbl.y + 4, row.lbl.w, "right")
+
+        -- [−] button
+        love.graphics.setColor(0.25, 0.25, 0.4, 1)
+        love.graphics.rectangle("fill", row.dec.x, row.dec.y+2, row.dec.w, row.dec.h-4, 2,2)
+        love.graphics.setColor(0.8, 0.8, 0.9, 1)
+        love.graphics.setFont(self.font_val)
+        love.graphics.printf("-", row.dec.x, row.dec.y + 2, row.dec.w, "center")
+
+        -- value
+        love.graphics.setColor(0.95, 0.95, 1.0, 1)
+        love.graphics.setFont(self.font_val)
+        love.graphics.printf(val, row.val.x, row.val.y + 3, row.val.w, "center")
+
+        -- [+] button
+        love.graphics.setColor(0.25, 0.25, 0.4, 1)
+        love.graphics.rectangle("fill", row.inc.x, row.inc.y+2, row.inc.w, row.inc.h-4, 2,2)
+        love.graphics.setColor(0.8, 0.8, 0.9, 1)
+        love.graphics.setFont(self.font_val)
+        love.graphics.printf("+", row.inc.x, row.inc.y + 2, row.inc.w, "center")
     end
 end
 
@@ -324,47 +404,43 @@ function MatrixScene:draw_travelling_matrix()
     local mat = self.current_matrix
     if not mat then return end
 
-    -- Interpolated pixel position
     local t  = self.anim_t
-    -- ease: smooth-step so it feels snappy not robotic
-    local et = t * t * (3 - 2 * t)
+    local et = t * t * (3 - 2 * t)  -- smooth-step
     local px = lerp(self.anim_from_x, self.anim_to_x, et)
     local py = lerp(self.anim_from_y, self.anim_to_y, et)
 
-    local n       = math.max(mat.rows, mat.cols)
-    local cell_px = math.min(18, math.floor(60 / n))  -- px per matrix cell
-    local pad     = 5
-    local pw      = mat.cols * cell_px + pad * 2
-    local ph      = mat.rows * cell_px + pad * 2
+    -- Each matrix element = one board cell
+    local pw = mat.cols * CELL_SIZE
+    local ph = mat.rows * CELL_SIZE
 
-    -- Centre panel on px,py
+    -- Centre panel on cursor position
     local bx = px - pw / 2
     local by = py - ph / 2
 
-    -- Panel background + border
-    love.graphics.setColor(0.08, 0.08, 0.14, 0.93)
-    love.graphics.rectangle("fill", bx, by, pw, ph, 3, 3)
-    love.graphics.setColor(1, 0.85, 0.2, 1)
-    love.graphics.setLineWidth(2)
-    love.graphics.rectangle("line", bx, by, pw, ph, 3, 3)
-    love.graphics.setLineWidth(1)
-
-    -- Matrix values
-    local num_font = self.font_cell
-    love.graphics.setFont(num_font)
+    -- Draw each cell of the matrix
     for r = 1, mat.rows do
         for c = 1, mat.cols do
+            local cx = bx + (c - 1) * CELL_SIZE
+            local cy = by + (r - 1) * CELL_SIZE
             local v  = mat.values[r][c]
-            local vx = bx + pad + (c - 1) * cell_px
-            local vy = by + pad + (r - 1) * cell_px
+
+            -- Cell background
+            love.graphics.setColor(0.08, 0.08, 0.16, 0.92)
+            love.graphics.rectangle("fill", cx, cy, CELL_SIZE, CELL_SIZE)
+
+            -- Golden border per cell
+            love.graphics.setColor(1, 0.80, 0.15, 0.9)
+            love.graphics.setLineWidth(2)
+            love.graphics.rectangle("line", cx+1, cy+1, CELL_SIZE-2, CELL_SIZE-2)
+            love.graphics.setLineWidth(1)
+
+            -- Value
             local s
-            if v == math.floor(v) then
-                s = tostring(math.floor(v))
-            else
-                s = string.format("%.1f", v)
-            end
+            if v == math.floor(v) then s = tostring(math.floor(v))
+            else s = string.format("%.1f", v) end
             love.graphics.setColor(0.95, 0.95, 1.0, 1)
-            love.graphics.printf(s, vx, vy + cell_px * 0.15, cell_px, "center")
+            love.graphics.setFont(self.font_cell)
+            love.graphics.printf(s, cx, cy + CELL_SIZE / 2 - 9, CELL_SIZE, "center")
         end
     end
 
@@ -372,59 +448,40 @@ function MatrixScene:draw_travelling_matrix()
 end
 
 function MatrixScene:draw_palette()
-    -- Bar background
     love.graphics.setColor(0.06, 0.06, 0.10, 1)
     love.graphics.rectangle("fill", 0, PALETTE_Y, HUD_X, 60)
 
     local sel = self.palette:selected()
-
     for _, rect in pairs(self._btn_rects) do
-        local btn = rect.btn
+        local btn    = rect.btn
         local is_sel = false
         if sel == nil and btn.erase then
             is_sel = true
         elseif sel and btn.kind == sel.kind then
-            if btn.kind == "arrow" then
-                is_sel = (btn.dir == sel.dir)
-            elseif btn.kind == "op" then
-                is_sel = (btn.op == sel.op)
-            end
+            if btn.kind == "arrow" then is_sel = (btn.dir == sel.dir)
+            elseif btn.kind == "op" then is_sel = (btn.op == sel.op) end
         end
 
         love.graphics.setColor(0.12, 0.12, 0.20, 1)
         love.graphics.rectangle("fill", rect.x, rect.y, rect.w, rect.h, 4, 4)
-        if is_sel then
-            love.graphics.setColor(0.8, 0.9, 1.0, 1)
-        else
-            love.graphics.setColor(0.3, 0.3, 0.45, 1)
-        end
+        love.graphics.setColor(is_sel and {0.8,0.9,1.0,1} or {0.3,0.3,0.45,1})
         love.graphics.setLineWidth(is_sel and 2 or 1)
         love.graphics.rectangle("line", rect.x, rect.y, rect.w, rect.h, 4, 4)
         love.graphics.setLineWidth(1)
-
         love.graphics.setColor(0.85, 0.85, 0.9, 1)
         love.graphics.setFont(self.font_ui)
         love.graphics.printf(btn.label, rect.x, rect.y + 17, rect.w, "center")
     end
 
-    -- Control buttons on the right side
-    local controls = {
-        { label="[R] Run",   x=620, key="r" },
-        { label="[Spc] Step",x=680, key="space" },
-        { label="[Bsp] Reset",x=745, key="backspace" },
-    }
-    for _, c in ipairs(controls) do
-        love.graphics.setColor(0.5, 0.5, 0.65, 1)
-        love.graphics.setFont(self.font_key)
-        love.graphics.print(c.label, c.x, PALETTE_Y + 22)
-    end
-
-    -- Puzzle nav
-    love.graphics.setColor(0.5, 0.65, 0.5, 1)
+    love.graphics.setColor(0.5, 0.5, 0.65, 1)
     love.graphics.setFont(self.font_key)
+    love.graphics.print("[R] Run", 620, PALETTE_Y + 22)
+    love.graphics.print("[Spc] Step", 685, PALETTE_Y + 22)
+    love.graphics.print("[Bsp] Reset", 755, PALETTE_Y + 22)
+
+    love.graphics.setColor(0.5, 0.65, 0.5, 1)
     local nav = string.format("< [<-] Puzzle %d/%d [->] >", self.puzzle_index, PuzzleLoader.count())
     love.graphics.printf(nav, 0, PALETTE_Y + 6, HUD_X, "right")
-
     love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -434,9 +491,7 @@ function MatrixScene:draw()
     self:draw_grid()
     self:draw_travelling_matrix()
     self:draw_palette()
-    self.hud:draw(self.input_matrix, self.target_matrix, nil,
-                  self.puzzle.name, self.status)
-    self.popup:draw()
+    self.hud:draw(self.input_matrix, self.target_matrix, nil, self.puzzle.name, self.status)
 end
 
 -- ── Input ──────────────────────────────────────────────────────────────────
@@ -445,20 +500,64 @@ function MatrixScene:_place_tile_at(cx, cy, spec)
     if not self.grid:in_bounds(cx, cy) then return end
     local existing = self.grid:get(cx, cy)
     if existing and existing.locked then return end
-    local tile = {
-        kind   = spec.kind,
-        dir    = spec.dir,
-        op     = spec.op,
-        params = spec.params or {},
-        locked = false,
-    }
-    self.grid:set(cx, cy, tile)
+    -- Copy default params then overwrite with any spec params
+    local params = {}
+    if DEFAULT_PARAMS[spec.op] then
+        for k, v in pairs(DEFAULT_PARAMS[spec.op]) do params[k] = v end
+    end
+    if spec.params then
+        for k, v in pairs(spec.params) do params[k] = v end
+    end
+    self.grid:set(cx, cy, {
+        kind=spec.kind, dir=spec.dir, op=spec.op,
+        params=params, locked=false,
+    })
+end
+
+-- Check if (mx,my) hits a +/- button in the edit widget; apply and return true.
+function MatrixScene:_try_edit_widget_click(mx, my)
+    local e = self.editing
+    if not e then return false end
+    local tile = self.grid:get(e.cx, e.cy)
+    if not tile then return false end
+    local defs = PARAM_DEFS[tile.op]
+    if not defs then return false end
+
+    local wr = edit_widget_rects(e.cx, e.cy, defs)
+
+    -- Check if inside widget background at all
+    if mx < wr.wx or mx > wr.wx + wr.ww or my < wr.wy or my > wr.wy + wr.wh then
+        return false
+    end
+
+    for _, row in ipairs(wr) do
+        local function in_rect(r)
+            return mx >= r.x and mx < r.x + r.w and my >= r.y and my < r.y + r.h
+        end
+        if in_rect(row.dec) then
+            local cur = tile.params[row.key] or 0
+            tile.params[row.key] = math.max(row.min, cur - 1)
+            return true
+        end
+        if in_rect(row.inc) then
+            local cur = tile.params[row.key] or 0
+            tile.params[row.key] = math.min(row.max, cur + 1)
+            return true
+        end
+    end
+    -- Clicked inside widget but not on a button — keep editing open
+    return true
 end
 
 function MatrixScene:mouse_pressed(mx, my, btn)
-    if self.popup:is_open() then return end
+    -- Edit widget gets first crack
+    if self.editing then
+        if self:_try_edit_widget_click(mx, my) then return end
+        -- Click outside widget → close editor
+        self.editing = nil
+    end
 
-    -- Check palette bar
+    -- Palette bar
     if my >= PALETTE_Y then
         for _, rect in pairs(self._btn_rects) do
             if mx >= rect.x and mx < rect.x + rect.w
@@ -467,15 +566,9 @@ function MatrixScene:mouse_pressed(mx, my, btn)
                 if b.erase then
                     self.palette:select(nil)
                 elseif b.kind == "arrow" then
-                    self.palette:select({ kind="arrow", dir=b.dir })
+                    self.palette:select({kind="arrow", dir=b.dir})
                 elseif b.kind == "op" then
-                    local spec = { kind="op", op=b.op }
-                    if NEEDS_PARAMS[b.op] then
-                        -- Select the op in palette and remember we need params on next placement
-                        self.palette:select(spec)
-                    else
-                        self.palette:select(spec)
-                    end
+                    self.palette:select({kind="op", op=b.op})
                 end
                 return
             end
@@ -483,44 +576,46 @@ function MatrixScene:mouse_pressed(mx, my, btn)
         return
     end
 
-    -- Check grid panel
     if not in_grid_panel(mx, my) then return end
     local cx, cy = screen_to_cell(mx, my)
     if not self.grid:in_bounds(cx, cy) then return end
 
     if btn == 2 then
-        -- Right-click: erase
         self.grid:clear(cx, cy)
         return
     end
 
     if btn == 1 then
-        local spec = self.palette:selected()
+        local spec    = self.palette:selected()
+        local existing = self.grid:get(cx, cy)
+
         if spec == nil then
-            -- Eraser
             self.grid:clear(cx, cy)
+
         elseif spec.kind == "arrow" then
             self:_place_tile_at(cx, cy, spec)
+
         elseif spec.kind == "op" then
-            if NEEDS_PARAMS[spec.op] then
-                -- Open popup; on confirm place tile at (cx, cy)
-                local existing = self.grid:get(cx, cy)
-                local cur_params = (existing and existing.op == spec.op) and existing.params or nil
-                self.popup:open(spec.op, cur_params, function(params)
-                    local full_spec = { kind="op", op=spec.op, params=params }
-                    self:_place_tile_at(cx, cy, full_spec)
-                end)
-            else
-                self:_place_tile_at(cx, cy, spec)
+            self:_place_tile_at(cx, cy, spec)
+            -- If this op has params, open the in-board editor
+            if PARAM_DEFS[spec.op] then
+                self.editing = {cx=cx, cy=cy}
+            end
+        end
+
+        -- Also: clicking an already-placed op tile (with no tool or same tool) opens editor
+        if spec == nil or (existing and existing.kind == "op" and existing.op == spec.op) then
+            local t = self.grid:get(cx, cy)
+            if t and t.kind == "op" and PARAM_DEFS[t.op] then
+                self.editing = {cx=cx, cy=cy}
             end
         end
     end
 end
 
 function MatrixScene:key_pressed(key)
-    if self.popup:is_open() then
-        self.popup:key_pressed(key)
-        return
+    if key == "escape" then
+        if self.editing then self.editing = nil; return end
     end
 
     if key == "r" then
@@ -530,25 +625,19 @@ function MatrixScene:key_pressed(key)
         end
     elseif key == "space" then
         if not self.running and (self.status == nil or self.status == "running") then
-            -- snap any in-progress animation before stepping
             self.anim_t = 1
             self:do_step()
-            -- for single-step, complete animation instantly
             self.anim_t = 1
         end
     elseif key == "backspace" then
         self:do_reset()
     elseif key == "left" then
-        self.grid:clear_all()
-        self:load_puzzle(self.puzzle_index - 1)
+        self.grid:clear_all(); self:load_puzzle(self.puzzle_index - 1)
     elseif key == "right" then
-        self.grid:clear_all()
-        self:load_puzzle(self.puzzle_index + 1)
+        self.grid:clear_all(); self:load_puzzle(self.puzzle_index + 1)
     end
 end
 
-function MatrixScene:text_input(text)
-    self.popup:text_input(text)
-end
+function MatrixScene:text_input(_) end
 
 return MatrixScene

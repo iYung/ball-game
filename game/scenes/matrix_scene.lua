@@ -208,7 +208,7 @@ end
 
 function MatrixScene:_snap_anim_to_cursor()
     if self.cursor then
-        local px, py = cell_center(self.cursor.x, self.cursor.y)
+        local px, py = cell_top_left(self.cursor.x, self.cursor.y)
         self.anim_from_x=px; self.anim_from_y=py
         self.anim_to_x=px;   self.anim_to_y=py
         self.anim_t = 1
@@ -230,10 +230,10 @@ end
 
 function MatrixScene:do_step()
     if not self.cursor then self:start_run(); return end
-    local from_x, from_y = cell_center(self.cursor.x, self.cursor.y)
+    local from_x, from_y = cell_top_left(self.cursor.x, self.cursor.y)
     local st, new_mat    = self.cursor:step(self.current_matrix)
     self.current_matrix  = new_mat
-    local to_x, to_y     = cell_center(self.cursor.x, self.cursor.y)
+    local to_x, to_y     = cell_top_left(self.cursor.x, self.cursor.y)
 
     self.anim_from_x=from_x; self.anim_from_y=from_y
     self.anim_to_x=to_x;     self.anim_to_y=to_y
@@ -413,9 +413,9 @@ function MatrixScene:draw_travelling_matrix()
     local pw = mat.cols * CELL_SIZE
     local ph = mat.rows * CELL_SIZE
 
-    -- Centre panel on cursor position
-    local bx = px - pw / 2
-    local by = py - ph / 2
+    -- Anchor panel top-left to cursor cell top-left
+    local bx = px
+    local by = py
 
     -- Draw each cell of the matrix
     for r = 1, mat.rows do

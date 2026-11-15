@@ -9,7 +9,7 @@ end
 function love.conf(t)
     t.window.width    = 1280
     t.window.height   = 720
-    t.window.title    = "Love Exemplar"
+    t.window.title    = "Matrix Circuit"
     t.window.resizable = true
 
     if headless then

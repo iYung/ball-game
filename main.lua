@@ -22,8 +22,8 @@ end
 
 love.graphics.setDefaultFilter("nearest", "nearest")
 
-local SceneManager = require("lua/core/scene_manager")
-local GameScene    = require("game/scenes/game_scene")
+local SceneManager  = require("lua/core/scene_manager")
+local MatrixScene   = require("game/scenes/matrix_scene")
 
 local LOGICAL_W, LOGICAL_H = 1280, 720
 local canvas
@@ -37,7 +37,7 @@ function love.load()
     canvas:setFilter("nearest", "nearest")
 
     manager = SceneManager.new(LOGICAL_W, LOGICAL_H)
-    manager:switch(GameScene.new())
+    manager:switch(MatrixScene.new())
 end
 
 function love.update(dt)
@@ -58,4 +58,18 @@ end
 
 function love.keypressed(key)
     if key == "escape" then love.event.quit() end
+    manager:key_pressed(key)
+end
+
+function love.mousepressed(x, y, btn)
+    local scale = math.min(love.graphics.getWidth() / LOGICAL_W, love.graphics.getHeight() / LOGICAL_H)
+    local ox = (love.graphics.getWidth() - LOGICAL_W * scale) / 2
+    local oy = (love.graphics.getHeight() - LOGICAL_H * scale) / 2
+    local lx = (x - ox) / scale
+    local ly = (y - oy) / scale
+    manager:mouse_pressed(lx, ly, btn)
+end
+
+function love.textinput(text)
+    manager:text_input(text)
 end

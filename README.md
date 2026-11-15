@@ -1,6 +1,39 @@
-# love-exemplar
+# Matrix Circuit
 
-A minimal Love2D project demonstrating clean architecture patterns. Intended as a reference, not a game.
+A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to transform an input matrix into a target matrix using elementary matrix operations.
+
+## How to play
+
+The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue) cell fixed by each puzzle. Place tiles on the grid to route a cursor from Source to Sink — the cursor carries the matrix and applies operations as it passes through op tiles.
+
+**Controls:**
+
+| Key | Action |
+|-----|--------|
+| `R` | Run — animate the cursor at full speed |
+| `Space` | Step — advance the cursor one cell |
+| `Backspace` | Reset — return cursor to source |
+| `← →` | Previous / next puzzle |
+| Left-click grid | Place selected tile |
+| Right-click grid | Erase tile |
+| Left-click palette | Select a tile type |
+| `Esc` | Quit |
+
+**Tile types:**
+
+- **Arrows** (`→ ← ↑ ↓`) — redirect the cursor
+- **T** (Transpose) — swap rows and columns
+- **×R** (Scale Row) — multiply one row by a scalar
+- **R+R** (Add Rows) — add a multiple of one row to another
+- **↔R** (Swap Rows) — exchange two rows
+- **−I** (Negate) — multiply every element by −1
+- **×k** (Scalar Mul) — multiply every element by a scalar
+
+Op tiles that need parameters (row indices, scalars) open a small editor when you click to place them. Tab cycles fields, Enter confirms, Esc cancels.
+
+**Winning:** when the cursor reaches the Sink and the transformed matrix matches the target, you win. If the cursor loops or leaves the grid, the run fails.
+
+**10 puzzles** — from a simple straight-wire tutorial (puzzle 1) through 3×3 Gaussian elimination (puzzle 10).
 
 ## Structure
 

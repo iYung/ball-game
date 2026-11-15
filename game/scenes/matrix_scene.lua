@@ -218,7 +218,9 @@ function MatrixScene:get_footprint()
     for r = 0, mat.rows - 1 do
         for c = 0, mat.cols - 1 do
             local x, y = cx + c, cy + r
-            fp[cell_key(x, y)] = {x=x, y=y}
+            if self.grid:in_bounds(x, y) then
+                fp[cell_key(x, y)] = {x=x, y=y}
+            end
         end
     end
     return fp

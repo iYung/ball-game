@@ -287,17 +287,24 @@ function MatrixScene:do_step()
     end
     self.current_matrix = mat
 
-    self.anim_from_x=from_x; self.anim_from_y=from_y
-    self.anim_to_x=to_x;     self.anim_to_y=to_y
-    self.anim_t     = 0
-    self.anim_ready = false
-
     if status == "sink" then
         self.running = false
         self.status  = mat:equals(self.target_matrix) and "win" or "fail"
+        -- Snap to final position; don't animate into the sink cell.
+        self.anim_from_x=to_x; self.anim_from_y=to_y
+        self.anim_to_x=to_x;   self.anim_to_y=to_y
+        self.anim_t     = 1
+        self.anim_ready = false
     elseif status ~= "ok" then
         self.running = false
         self.status  = status
+        self.anim_t  = 1
+        self.anim_ready = false
+    else
+        self.anim_from_x=from_x; self.anim_from_y=from_y
+        self.anim_to_x=to_x;     self.anim_to_y=to_y
+        self.anim_t     = 0
+        self.anim_ready = false
     end
 end
 

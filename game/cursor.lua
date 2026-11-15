@@ -36,12 +36,29 @@ function Cursor.apply_op(tile, matrix)
     if tile.kind ~= "op" then return matrix end
     local op = tile.op
     local p  = tile.params or {}
-    if     op == "transpose"  then return matrix:transpose()
-    elseif op == "negate"     then return matrix:negate()
-    elseif op == "scale_row"  then return matrix:scale_row(p.row, p.scalar)
-    elseif op == "add_rows"   then return matrix:add_rows(p.src, p.dst, p.scalar)
-    elseif op == "swap_rows"  then return matrix:swap_rows(p.row_a, p.row_b)
-    elseif op == "scalar_mul" then return matrix:scalar_mul(p.scalar)
+    local n  = matrix.rows  -- clamp row indices to actual matrix size
+
+    if op == "transpose" then
+        return matrix:transpose()
+    elseif op == "negate" then
+        return matrix:negate()
+    elseif op == "scale_row" then
+        local r = math.max(1, math.min(n, p.row    or 1))
+        local s = p.scalar or 1
+        return matrix:scale_row(r, s)
+    elseif op == "add_rows" then
+        local src = math.max(1, math.min(n, p.src   or 1))
+        local dst = math.max(1, math.min(n, p.dst   or 2))
+        local s   = p.scalar or 1
+        if src == dst then return matrix end  -- would be a no-op / NaN risk
+        return matrix:add_rows(src, dst, s)
+    elseif op == "swap_rows" then
+        local a = math.max(1, math.min(n, p.row_a or 1))
+        local b = math.max(1, math.min(n, p.row_b or 2))
+        return matrix:swap_rows(a, b)
+    elseif op == "scalar_mul" then
+        local s = p.scalar or 1
+        return matrix:scalar_mul(s)
     end
     return matrix
 end

@@ -205,6 +205,7 @@ function MatrixScene:do_reset()
     self.running        = false
     self.cursor         = nil
     self.occupied_ops   = {}
+    self._last_fp       = {}
     self.anim_t         = 1
     self.anim_ready     = false
 end
@@ -244,6 +245,7 @@ function MatrixScene:start_run()
     self.running        = true
     self.editing        = nil
     self.occupied_ops   = {}
+    self._last_fp       = {}  -- empty so first move enters all new footprint cells
     self.anim_t         = 1
     self.anim_ready     = true
     self:_snap_anim_to_cursor()
@@ -252,13 +254,14 @@ end
 function MatrixScene:do_step()
     if not self.cursor then self:start_run(); return end
 
-    local old_fp         = self:get_footprint()
+    local old_fp         = self._last_fp
     local from_x, from_y = cell_top_left(self.cursor.x, self.cursor.y)
 
     local status = self.cursor:move()
 
     local to_x, to_y = cell_top_left(self.cursor.x, self.cursor.y)
     local new_fp     = self:get_footprint()
+    self._last_fp    = new_fp
 
     -- Deactivate op tiles whose cells the matrix has fully left.
     for key in pairs(self.occupied_ops) do

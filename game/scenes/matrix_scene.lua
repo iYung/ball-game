@@ -229,6 +229,11 @@ function MatrixScene:do_step()
     local new_fp     = self:get_footprint()
     self._last_fp    = new_fp
 
+    -- Footprint-based sink: fires as soon as any matrix cell overlaps the sink,
+    -- not just when the anchor reaches it.
+    local sink_key = cell_key(self.puzzle.sink.x, self.puzzle.sink.y)
+    if new_fp[sink_key] then status = "sink" end
+
     -- Deactivate op tiles whose entire footprint the matrix has fully left.
     for akey, info in pairs(self.occupied_ops) do
         local tile  = self.grid:get(info.ax, info.ay)
@@ -273,9 +278,10 @@ function MatrixScene:do_step()
     if status == "sink" then
         self.running = false
         self.status  = mat:equals(self.target_matrix) and "win" or "fail"
-        self.anim_from_x=to_x; self.anim_from_y=to_y
-        self.anim_to_x=to_x;   self.anim_to_y=to_y
-        self.anim_t     = 1
+        -- Animate the final step in; running=false prevents any further steps.
+        self.anim_from_x=from_x; self.anim_from_y=from_y
+        self.anim_to_x=to_x;     self.anim_to_y=to_y
+        self.anim_t     = 0
         self.anim_ready = false
     elseif status ~= "ok" then
         self.running = false

@@ -14,7 +14,7 @@ local runner = require("lua/headless/runner")
 -- scene_factory receives (input, sm) from runner.setup but GameScene.new()
 -- takes no arguments; simply ignore the args and return a new scene.
 local ctx = runner.setup(function(input, sm)
-    return require("game/scenes/game_scene").new()
+    return require("game/scenes/matrix_scene").new()
 end)
 
 runner.tick(ctx.input, ctx.sm, 10)

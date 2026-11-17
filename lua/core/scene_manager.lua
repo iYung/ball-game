@@ -63,4 +63,22 @@ function SceneManager:draw()
     end
 end
 
+function SceneManager:key_pressed(key)
+    if self.current and self.current.key_pressed then
+        self.current:key_pressed(key)
+    end
+end
+
+function SceneManager:mouse_pressed(x, y, btn)
+    if self.current and self.current.mouse_pressed then
+        self.current:mouse_pressed(x, y, btn)
+    end
+end
+
+function SceneManager:text_input(text)
+    if self.current and self.current.text_input then
+        self.current:text_input(text)
+    end
+end
+
 return SceneManager

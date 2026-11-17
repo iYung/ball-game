@@ -123,4 +123,82 @@ do
     print("PASS: epsilon equals")
 end
 
+-- add_matrix()
+do
+    -- basic 2×2 element-wise addition
+    local a = m(2, 2, {{1,2},{3,4}})
+    local b = m(2, 2, {{10,20},{30,40}})
+    local r = a:add_matrix(b)
+    assert_immutable(a, r, "add_matrix")
+    assert_eq(r, m(2, 2, {{11,22},{33,44}}), "add_matrix 2x2")
+    -- original unchanged
+    assert(a.values[1][1] == 1, "add_matrix: original unchanged")
+
+    -- dimension mismatch: 1×1 added to 2×2 — only overlapping cell changes
+    local c = m(2, 2, {{5,6},{7,8}})
+    local small = m(1, 1, {{100}})
+    local r2 = c:add_matrix(small)
+    assert(r2.values[1][1] == 105, "add_matrix: overlapping cell updated")
+    assert(r2.values[1][2] == 6,   "add_matrix: non-overlapping col unchanged")
+    assert(r2.values[2][1] == 7,   "add_matrix: non-overlapping row unchanged")
+    assert(r2.values[2][2] == 8,   "add_matrix: non-overlapping cell unchanged")
+    print("PASS: add_matrix")
+end
+
+-- sub_matrix()
+do
+    -- basic 2×2 element-wise subtraction
+    local a = m(2, 2, {{10,20},{30,40}})
+    local b = m(2, 2, {{1,2},{3,4}})
+    local r = a:sub_matrix(b)
+    assert_immutable(a, r, "sub_matrix")
+    assert_eq(r, m(2, 2, {{9,18},{27,36}}), "sub_matrix 2x2")
+    -- original not mutated (copy semantics)
+    assert(a.values[1][1] == 10, "sub_matrix: original row1 col1 unchanged")
+    assert(a.values[2][2] == 40, "sub_matrix: original row2 col2 unchanged")
+    print("PASS: sub_matrix")
+end
+
+-- mul_matrix()
+do
+    -- basic 2×2 element-wise multiplication
+    local a = m(2, 2, {{2,3},{4,5}})
+    local b = m(2, 2, {{10,10},{10,10}})
+    local r = a:mul_matrix(b)
+    assert_immutable(a, r, "mul_matrix")
+    assert_eq(r, m(2, 2, {{20,30},{40,50}}), "mul_matrix 2x2")
+
+    -- all-ones operand returns identical matrix (identity for element-wise multiply)
+    local ones = m(2, 2, {{1,1},{1,1}})
+    local r2 = a:mul_matrix(ones)
+    assert_eq(r2, a, "mul_matrix: all-ones operand is identity")
+    print("PASS: mul_matrix")
+end
+
+-- set_row()
+do
+    -- replace row 2 of a 3×3 matrix with specific values
+    local a = m(3, 3, {{1,2,3},{4,5,6},{7,8,9}})
+    local r = a:set_row(2, {10,20,30})
+    assert_immutable(a, r, "set_row")
+    assert_eq(r, m(3, 3, {{1,2,3},{10,20,30},{7,8,9}}), "set_row row2")
+    -- original unchanged
+    assert(a.values[2][1] == 4, "set_row: original unchanged")
+
+    -- out-of-range row returns unchanged copy (r=0)
+    local r2 = a:set_row(0, {99,99,99})
+    assert_eq(r2, a, "set_row: r=0 returns unchanged copy")
+
+    -- out-of-range row returns unchanged copy (r=5 on 3-row matrix)
+    local r3 = a:set_row(5, {99,99,99})
+    assert_eq(r3, a, "set_row: r=5 on 3-row matrix returns unchanged copy")
+
+    -- values shorter than cols — only specified cols change, rest unchanged
+    local r4 = a:set_row(1, {77})
+    assert(r4.values[1][1] == 77, "set_row: short values col1 updated")
+    assert(r4.values[1][2] == 2,  "set_row: short values col2 unchanged")
+    assert(r4.values[1][3] == 3,  "set_row: short values col3 unchanged")
+    print("PASS: set_row")
+end
+
 print("ALL TESTS PASSED")

@@ -83,17 +83,38 @@ function Sim.apply_op(tile, matrix)
     elseif op == "scale_row" then
         local r = math.max(1, math.min(n, p.row or 1))
         return matrix:scale_row(r, p.scalar or 1)
-    elseif op == "add_rows" then
-        local src = math.max(1, math.min(n, p.src or 1))
-        local dst = math.max(1, math.min(n, p.dst or 2))
-        if src == dst then return matrix end
-        return matrix:add_rows(src, dst, p.scalar or 1)
     elseif op == "swap_rows" then
         local a = math.max(1, math.min(n, p.row_a or 1))
         local b = math.max(1, math.min(n, p.row_b or 2))
         return matrix:swap_rows(a, b)
     elseif op == "scalar_mul" then
         return matrix:scalar_mul(p.scalar or 1)
+    elseif op == "add_matrix" then
+        local rows = tile.tile_rows or 1
+        local cols = tile.tile_cols or 1
+        local Matrix = require("game/matrix_math")
+        local addend = Matrix.new(rows, cols, tile.values)
+        return matrix:add_matrix(addend)
+    elseif op == "sub_matrix" then
+        local rows = tile.tile_rows or 1
+        local cols = tile.tile_cols or 1
+        local Matrix = require("game/matrix_math")
+        local operand = Matrix.new(rows, cols, tile.values)
+        return matrix:sub_matrix(operand)
+    elseif op == "mul_matrix" then
+        local rows = tile.tile_rows or 1
+        local cols = tile.tile_cols or 1
+        local Matrix = require("game/matrix_math")
+        local factor = Matrix.new(rows, cols, tile.values)
+        return matrix:mul_matrix(factor)
+    elseif op == "set_row" then
+        local row = p.row or 1
+        local values = {}
+        local tv = tile.values or {{}}
+        for c = 1, tile.tile_cols or 1 do
+            values[c] = (tv[1] and tv[1][c]) or 0
+        end
+        return matrix:set_row(row, values)
     end
     return matrix
 end

@@ -23,12 +23,16 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 **Tile types:**
 
 - **P** (Pusher) — a 1×1 mobile unit labelled A–H (up to 8). The tile you place is its start cell. Each tick its timeline command (`^ v < >`, or `.` idle) moves it one cell. Walking into a matrix cell shoves the whole matrix one cell the same way (a pusher starting under the matrix rides along inside it). Pushers stay put at the grid edge and can't walk into each other; a shove that would push the matrix off the grid or onto another pusher does nothing. Pushers act in letter order each tick, so A moves before B.
-- **T** (Transpose) — swap rows and columns
-- **×R** (Scale Row, 3 cells) — multiply one row by a scalar
-- **R+R** (Add Rows, 4 cells) — add a multiple of one row to another
-- **↔R** (Swap Rows, 3 cells) — exchange two rows
+- **×R** (Scale Row) — 1×4 vertical tile; click a band to select the target row, then click left/right thirds of the selected band to adjust the scalar
+- **⇅R** (Swap Rows) — 1×2 vertical tile; click left/right thirds of each strip to adjust the row index
 - **−I** (Negate) — multiply every element by −1
-- **×k** (Scalar Mul, 2 cells) — multiply every element by a scalar
+- **×k** (Scalar Mul) — multiply every element by a scalar
+- **+M** (Add Matrix) — element-wise add a constant matrix; expands up to 4×4 via `+`/`−` affordances on the tile edges
+- **−M** (Sub Matrix) — element-wise subtract a constant matrix; same resizable grid layout
+- **×M** (Mul Matrix) — element-wise multiply by a constant matrix; same resizable grid layout
+- **=R** (Set Row) — replace a row with user-defined values; left cell selects the row, additional cells hold the values (expandable up to 4 columns)
+
+Click a value cell on any matrix op tile to increment/decrement its value (left/right thirds = −1/+1). Values are clamped to [−9, 9].
 
 Each puzzle only offers the op tiles it needs in the palette (the pusher and eraser are always there).
 
@@ -38,7 +42,7 @@ Op tiles span one board cell for the op plus one per parameter. Click the left t
 
 **Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. A run with no movement for a full timeline loop ends as **STUCK**, and a run past 500 ticks ends as **TIMEOUT**.
 
-**10 puzzles** — from a simple identity check (puzzle 1) through 3×3 Gaussian elimination (puzzle 10).
+**10 puzzles** — from a simple identity check (puzzle 1) through increasingly complex matrix transformations including row operations and constant-matrix ops.
 
 ## Structure
 

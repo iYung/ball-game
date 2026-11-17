@@ -87,4 +87,43 @@ function Matrix:scalar_mul(s)
     return m
 end
 
+function Matrix:add_matrix(other)
+    local m = self:copy()
+    for r = 1, math.min(self.rows, other.rows) do
+        for c = 1, math.min(self.cols, other.cols) do
+            m.values[r][c] = m.values[r][c] + other.values[r][c]
+        end
+    end
+    return m
+end
+
+function Matrix:sub_matrix(other)
+    local m = self:copy()
+    for r = 1, math.min(self.rows, other.rows) do
+        for c = 1, math.min(self.cols, other.cols) do
+            m.values[r][c] = m.values[r][c] - other.values[r][c]
+        end
+    end
+    return m
+end
+
+function Matrix:mul_matrix(other)
+    local m = self:copy()
+    for r = 1, math.min(self.rows, other.rows) do
+        for c = 1, math.min(self.cols, other.cols) do
+            m.values[r][c] = m.values[r][c] * other.values[r][c]
+        end
+    end
+    return m
+end
+
+function Matrix:set_row(r, values)
+    if r < 1 or r > self.rows then return self:copy() end
+    local m = self:copy()
+    for c = 1, math.min(self.cols, #values) do
+        m.values[r][c] = values[c]
+    end
+    return m
+end
+
 return Matrix

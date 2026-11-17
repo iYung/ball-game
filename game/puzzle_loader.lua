@@ -4,11 +4,11 @@ local PUZZLES = {
     "data/puzzles/03_negate.lua",
     "data/puzzles/04_swap.lua",
     "data/puzzles/05_scale.lua",
-    "data/puzzles/06_add_rows.lua",
+    "data/puzzles/06_row_swap.lua",
     "data/puzzles/07_double_flip.lua",
     "data/puzzles/08_combo.lua",
     "data/puzzles/09_uturn.lua",
-    "data/puzzles/10_elimination.lua",
+    "data/puzzles/10_set_row.lua",
 }
 
 local PuzzleLoader = {}

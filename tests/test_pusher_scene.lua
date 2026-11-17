@@ -101,4 +101,24 @@ do
     print("PASS: sources off the edge")
 end
 
+-- The palette only offers the ops a puzzle lists (pusher and erase always stay).
+do
+    local function labels(scene)
+        local out = {}
+        for _, r in pairs(scene._btn_rects) do out[r.btn.label] = true end
+        return out
+    end
+    local scene = new_scene()
+    local l = labels(scene)
+    assert(l["P"] and l["[X]"] and not l["T"] and not l["-I"], "puzzle 1 offers no ops")
+    scene:load_puzzle(2)
+    l = labels(scene)
+    assert(l["T"] and not l["xR"] and not l["R+R"], "puzzle 2 offers only transpose")
+    scene.palette:select({ kind = "op", op = "transpose" })
+    scene:load_puzzle(4)
+    assert(scene.palette:selected() == nil, "selection of a now-hidden op is cleared")
+    assert(labels(scene)["<>R"], "puzzle 4 offers swap rows")
+    print("PASS: per-puzzle palette")
+end
+
 print("ALL TESTS PASSED")

@@ -30,6 +30,8 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 - **−I** (Negate) — multiply every element by −1
 - **×k** (Scalar Mul, 2 cells) — multiply every element by a scalar
 
+Each puzzle only offers the op tiles it needs in the palette (the pusher and eraser are always there).
+
 Op tiles span one board cell for the op plus one per parameter. Click the left third of a parameter cell for −1 and the right third for +1. An op fires once when the matrix first overlaps any of its cells, and re-arms after the matrix fully leaves.
 
 **Timeline:** the panel in the right column has one row per pusher and `len` slots (default 8, adjustable 1–16, loops). Edit it while stopped. Every pusher runs the same loop, so offset the commands to choreograph them.

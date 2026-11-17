@@ -120,18 +120,6 @@ function MatrixScene:on_enter()
     self.anim_t       = 1
     self.anim_ready   = false
 
-    self._btn_rects = {}
-    local bx, by = 10, PALETTE_Y + 6
-    local bw, bh, gap = 48, 48, 56
-    for i, btn in ipairs(PALETTE_BUTTONS) do
-        if btn.sep then
-            bx = bx + 20
-        else
-            self._btn_rects[i] = { x=bx, y=by, w=bw, h=bh, btn=btn }
-            bx = bx + gap
-        end
-    end
-
     self:load_puzzle(self._start_puzzle)
 end
 
@@ -168,6 +156,33 @@ function MatrixScene:load_puzzle(n)
     self.grid:set(p.sink.x,   p.sink.y,   {kind="sink",   locked=true})
     self.occupied_ops = {}
     self._last_fp     = {}
+    self:_build_palette()
+end
+
+-- Lays out the palette: pusher, the puzzle's available ops (all when it lists none), erase.
+function MatrixScene:_build_palette()
+    local allowed
+    if self.puzzle.ops then
+        allowed = {}
+        for _, op in ipairs(self.puzzle.ops) do allowed[op] = true end
+    end
+    self._btn_rects = {}
+    local bx, by = 10, PALETTE_Y + 6
+    local bw, bh, gap = 48, 48, 56
+    local pending_sep = false
+    for i, btn in ipairs(PALETTE_BUTTONS) do
+        if btn.sep then
+            pending_sep = true
+        elseif not btn.op or not allowed or allowed[btn.op] then
+            if pending_sep then bx = bx + 20; pending_sep = false end
+            self._btn_rects[i] = { x=bx, y=by, w=bw, h=bh, btn=btn }
+            bx = bx + gap
+        end
+    end
+    local sel = self.palette:selected()
+    if sel and sel.kind == "op" and allowed and not allowed[sel.op] then
+        self.palette:select(nil)
+    end
 end
 
 function MatrixScene:do_reset()

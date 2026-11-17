@@ -3,6 +3,7 @@ return {
     name   = "Combo",
     grid_w = 10, grid_h = 10,
     source = { x=2, y=5 },
+    ops    = { "scale_row" },  -- op tiles offered in the palette
     sink   = { x=10, y=5 },
     input  = { rows=3, cols=3, values={ {2,0,0}, {0,3,0}, {0,0,1} } },
     target = { rows=3, cols=3, values={ {-2,0,0}, {0,3,0}, {0,0,1} } },

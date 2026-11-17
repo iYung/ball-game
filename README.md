@@ -4,36 +4,41 @@ A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to tran
 
 ## How to play
 
-The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue) cell fixed by each puzzle. Place tiles on the grid to route a cursor from Source to Sink — the cursor carries the matrix and applies operations as it passes through op tiles.
+The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue) cell fixed by each puzzle. The matrix starts on the Source and does not move on its own — you place **pushers** and program them on a shared **timeline**. Pushers walk around the board and shove the matrix when they walk into it. Op tiles in its path transform it; any matrix cell touching the Sink ends the run.
 
 **Controls:**
 
 | Key | Action |
 |-----|--------|
-| `R` | Run — animate the cursor at full speed |
-| `Space` | Step — advance the cursor one cell |
-| `Backspace` | Reset — return cursor to source |
+| `R` | Run — one timeline tick at a time, animated |
+| `Space` | Step — advance one tick |
+| `Backspace` | Reset — return the matrix to the source |
 | `← →` | Previous / next puzzle |
 | Left-click grid | Place selected tile |
 | Right-click grid | Erase tile |
 | Left-click palette | Select a tile type |
+| Left / right-click timeline slot | Cycle that slot's command forward / back |
 | `Esc` | Quit |
 
 **Tile types:**
 
-- **Arrows** (`→ ← ↑ ↓`) — redirect the cursor
+- **P** (Pusher) — a 1×1 mobile unit labelled A–H (up to 8). The tile you place is its start cell. Each tick its timeline command (`^ v < >`, or `.` idle) moves it one cell. Walking into a matrix cell shoves the whole matrix one cell the same way (a pusher starting under the matrix rides along inside it). Pushers stay put at the grid edge and can't walk into each other; a shove that would push the matrix off the grid or onto another pusher does nothing. Pushers act in letter order each tick, so A moves before B.
 - **T** (Transpose) — swap rows and columns
-- **×R** (Scale Row) — multiply one row by a scalar
-- **R+R** (Add Rows) — add a multiple of one row to another
-- **↔R** (Swap Rows) — exchange two rows
+- **×R** (Scale Row, 3 cells) — multiply one row by a scalar
+- **R+R** (Add Rows, 4 cells) — add a multiple of one row to another
+- **↔R** (Swap Rows, 3 cells) — exchange two rows
 - **−I** (Negate) — multiply every element by −1
-- **×k** (Scalar Mul) — multiply every element by a scalar
+- **×k** (Scalar Mul, 2 cells) — multiply every element by a scalar
 
-Op tiles that need parameters (row indices, scalars) open a small editor when you click to place them. Tab cycles fields, Enter confirms, Esc cancels.
+Each puzzle only offers the op tiles it needs in the palette (the pusher and eraser are always there).
 
-**Winning:** when the cursor reaches the Sink and the transformed matrix matches the target, you win. If the cursor loops or leaves the grid, the run fails.
+Op tiles span one board cell for the op plus one per parameter. Click the left third of a parameter cell for −1 and the right third for +1. An op fires once when the matrix first overlaps any of its cells, and re-arms after the matrix fully leaves.
 
-**10 puzzles** — from a simple straight-wire tutorial (puzzle 1) through 3×3 Gaussian elimination (puzzle 10).
+**Timeline:** the panel in the right column has one row per pusher and `len` slots (default 8, adjustable 1–16, loops). Edit it while stopped. Every pusher runs the same loop, so offset the commands to choreograph them.
+
+**Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. A run with no movement for a full timeline loop ends as **STUCK**, and a run past 500 ticks ends as **TIMEOUT**.
+
+**10 puzzles** — from a simple identity check (puzzle 1) through 3×3 Gaussian elimination (puzzle 10).
 
 ## Structure
 

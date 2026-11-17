@@ -21,10 +21,10 @@ local function run_to_end(scene)
     end
 end
 
--- Puzzle 1: 2x2 identity from (1,5) to sink (10,5). A pusher riding inside the matrix
+-- Puzzle 1: 2x2 identity from (2,5) to sink (10,5). A pusher riding inside the matrix
 -- walks right and carries it across.
 local function carry(scene)
-    add_pusher(scene, 1, 6, { "right", "right", "right", "right", "right", "right", "right", "right" })
+    add_pusher(scene, 2, 6, { "right", "right", "right", "right", "right", "right", "right", "right" })
 end
 
 do
@@ -35,7 +35,7 @@ do
     assert(scene.sim.x == 9, "matrix right edge touches the sink, anchor x=" .. scene.sim.x)
     local p = scene.sim.pushers[1]
     assert(p.x == 9 and p.y == 6, "pusher moved with the matrix, at " .. p.x .. "," .. p.y)
-    assert(scene.grid:get(1, 6).kind == "pusher", "placed tile still marks the start")
+    assert(scene.grid:get(2, 6).kind == "pusher", "placed tile still marks the start")
     print("PASS: pusher carries matrix to sink")
 end
 
@@ -88,6 +88,17 @@ do
     scene:mouse_pressed(L.inc.x + 1, L.inc.y + 1, 1)
     assert(scene.timeline_n == 9, "timeline locked while running")
     print("PASS: timeline editing")
+end
+
+-- No puzzle starts its matrix on the grid edge (room for a pusher behind it).
+do
+    local PuzzleLoader = require("game/puzzle_loader")
+    for i = 1, PuzzleLoader.count() do
+        local pz = PuzzleLoader.load(i)
+        assert(pz.source.x > 1 and pz.source.y > 1 and pz.source.x < pz.grid_w and pz.source.y < pz.grid_h,
+            "puzzle " .. i .. " source is on the edge")
+    end
+    print("PASS: sources off the edge")
 end
 
 print("ALL TESTS PASSED")

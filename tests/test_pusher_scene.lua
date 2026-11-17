@@ -21,26 +21,28 @@ local function run_to_end(scene)
     end
 end
 
--- Puzzle 1: 2x2 identity from (1,5) to sink (10,5). Four pushers chain the matrix across.
+-- Puzzle 1: 2x2 identity from (1,5) to sink (10,5). A pusher riding inside the matrix
+-- walks right and carries it across.
+local function carry(scene)
+    add_pusher(scene, 1, 6, { "right", "right", "right", "right", "right", "right", "right", "right" })
+end
+
 do
     local scene = new_scene()
-    add_pusher(scene, 1, 6, { "right", "right" })
-    add_pusher(scene, 3, 6, { [3] = "right", [4] = "right" })
-    add_pusher(scene, 5, 6, { [5] = "right", [6] = "right" })
-    add_pusher(scene, 7, 6, { [7] = "right", [8] = "right" })
+    carry(scene)
     run_to_end(scene)
-    assert(scene.status == "win", "chained pushers carry the matrix to the sink, got " .. tostring(scene.status))
+    assert(scene.status == "win", "pusher carries the matrix to the sink, got " .. tostring(scene.status))
     assert(scene.sim.x == 9, "matrix right edge touches the sink, anchor x=" .. scene.sim.x)
-    print("PASS: pushers carry matrix to sink")
+    local p = scene.sim.pushers[1]
+    assert(p.x == 9 and p.y == 6, "pusher moved with the matrix, at " .. p.x .. "," .. p.y)
+    assert(scene.grid:get(1, 6).kind == "pusher", "placed tile still marks the start")
+    print("PASS: pusher carries matrix to sink")
 end
 
 -- An op tile on the path fires exactly once, changing the result.
 do
     local scene = new_scene()
-    add_pusher(scene, 1, 6, { "right", "right" })
-    add_pusher(scene, 3, 6, { [3] = "right", [4] = "right" })
-    add_pusher(scene, 5, 6, { [5] = "right", [6] = "right" })
-    add_pusher(scene, 7, 6, { [7] = "right", [8] = "right" })
+    carry(scene)
     scene:_place_tile_at(5, 5, { kind = "op", op = "negate" })
     run_to_end(scene)
     assert(scene.status == "fail", "negate makes identity mismatch, got " .. tostring(scene.status))

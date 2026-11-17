@@ -4,7 +4,7 @@ A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to tran
 
 ## How to play
 
-The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue) cell fixed by each puzzle. The matrix starts on the Source and does not move on its own — you place **pushers** and program them on a shared **timeline** to shove it across the board. Op tiles in its path transform it; any matrix cell touching the Sink ends the run.
+The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue) cell fixed by each puzzle. The matrix starts on the Source and does not move on its own — you place **pushers** and program them on a shared **timeline**. Pushers walk around the board and shove the matrix when they walk into it. Op tiles in its path transform it; any matrix cell touching the Sink ends the run.
 
 **Controls:**
 
@@ -22,7 +22,7 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 
 **Tile types:**
 
-- **P** (Pusher) — a 1×1 tile labelled A–H (up to 8). Each tick its timeline command (`^ v < >` or `.` idle) shoves the matrix one cell in that direction, if the matrix covers the cell next to the pusher in that direction. Pushers are not solid; the matrix slides over them.
+- **P** (Pusher) — a 1×1 mobile unit labelled A–H (up to 8). The tile you place is its start cell. Each tick its timeline command (`^ v < >`, or `.` idle) moves it one cell. Walking into a matrix cell shoves the whole matrix one cell the same way (a pusher starting under the matrix rides along inside it). Pushers stay put at the grid edge and can't walk into each other; a shove that would push the matrix off the grid or onto another pusher does nothing. Pushers act in letter order each tick, so A moves before B.
 - **T** (Transpose) — swap rows and columns
 - **×R** (Scale Row, 3 cells) — multiply one row by a scalar
 - **R+R** (Add Rows, 4 cells) — add a multiple of one row to another
@@ -32,7 +32,7 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 
 Op tiles span one board cell for the op plus one per parameter. Click the left third of a parameter cell for −1 and the right third for +1. An op fires once when the matrix first overlaps any of its cells, and re-arms after the matrix fully leaves.
 
-**Timeline:** the panel in the right column has one row per pusher and `len` slots (default 8, adjustable 1–16, loops). Edit it while stopped. Simultaneous pushes are summed per axis, so opposing pushes cancel; a push off the grid edge is ignored.
+**Timeline:** the panel in the right column has one row per pusher and `len` slots (default 8, adjustable 1–16, loops). Edit it while stopped. Every pusher runs the same loop, so offset the commands to choreograph them.
 
 **Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. A run with no movement for a full timeline loop ends as **STUCK**, and a run past 500 ticks ends as **TIMEOUT**.
 

@@ -10,79 +10,65 @@ do
     print("PASS: slot loops")
 end
 
--- push only when the matrix covers the cell next to the pusher in its direction
+local function st(over)
+    local t = { x = 5, y = 5, rows = 2, cols = 2, w = 10, h = 10, pushers = {}, n = 4, tick = 0 }
+    for k, v in pairs(over) do t[k] = v end
+    return t
+end
+local function P(x, y, ...) return { x = x, y = y, cmds = { ... } } end
+
+-- a pusher moves one cell per command; idle/nil stay put
 do
-    local p = { x = 3, y = 3, cmds = { "right" } }
-    -- 2x2 matrix anchored (4,3): covers (4,3) -> adjacent right of pusher
-    local dx, dy = Sim.net_push(4, 3, 2, 2, 10, 10, { p }, 1)
-    assert(dx == 1 and dy == 0, "adjacent matrix is pushed right")
-    -- matrix anchored (5,3) does not cover (4,3)
-    dx, dy = Sim.net_push(5, 3, 2, 2, 10, 10, { p }, 1)
-    assert(dx == 0 and dy == 0, "non-adjacent matrix is not pushed")
-    -- idle / nil slot does nothing
-    dx, dy = Sim.net_push(4, 3, 2, 2, 10, 10, { p }, 2)
-    assert(dx == 0 and dy == 0, "nil command is idle")
-    -- command pointing away from the matrix does nothing
-    local q = { x = 3, y = 3, cmds = { "left" } }
-    dx, dy = Sim.net_push(4, 3, 2, 2, 10, 10, { q }, 1)
-    assert(dx == 0 and dy == 0, "push away from matrix does nothing")
-    print("PASS: push adjacency")
+    local s = st({ pushers = { P(1, 1, "right", "down", "idle") } })
+    assert(Sim.advance(s) == true and s.pushers[1].x == 2 and s.pushers[1].y == 1, "moves right")
+    assert(Sim.advance(s) == true and s.pushers[1].x == 2 and s.pushers[1].y == 2, "moves down")
+    assert(Sim.advance(s) == false and s.pushers[1].x == 2, "idle stays")
+    assert(Sim.advance(s) == false, "nil command is idle")
+    print("PASS: pusher moves")
 end
 
--- opposing pushes cancel; same-axis pushes clamp to 1; different axes combine
+-- walking into the matrix shoves it one cell
 do
-    local a = { x = 3, y = 4, cmds = { "right" } }  -- target (4,4)
-    local b = { x = 6, y = 4, cmds = { "left" } }   -- target (5,4)
-    local dx, dy = Sim.net_push(4, 4, 2, 2, 10, 10, { a, b }, 1)
-    assert(dx == 0 and dy == 0, "opposing pushes cancel")
-
-    local c = { x = 3, y = 4, cmds = { "right" } }  -- target (4,4)
-    local d = { x = 3, y = 5, cmds = { "right" } }  -- target (4,5)
-    dx, dy = Sim.net_push(4, 4, 2, 2, 10, 10, { c, d }, 1)
-    assert(dx == 1 and dy == 0, "same-axis pushes clamp to 1")
-
-    local e = { x = 3, y = 4, cmds = { "right" } }  -- target (4,4)
-    local f = { x = 4, y = 3, cmds = { "down" } }   -- target (4,4)
-    dx, dy = Sim.net_push(4, 4, 2, 2, 10, 10, { e, f }, 1)
-    assert(dx == 1 and dy == 1, "perpendicular pushes combine")
-    print("PASS: push resolution")
+    local s = st({ pushers = { P(4, 5, "right") } })  -- matrix covers (5..6, 5..6)
+    assert(Sim.advance(s) == true, "moved")
+    assert(s.x == 6 and s.y == 5, "matrix shoved right")
+    assert(s.pushers[1].x == 5 and s.pushers[1].y == 5, "pusher followed into the vacated cell")
+    -- walking beside it does not
+    local t = st({ pushers = { P(4, 8, "right") } })
+    Sim.advance(t)
+    assert(t.x == 5 and t.pushers[1].x == 5, "no contact, matrix untouched")
+    -- a pusher riding inside the matrix carries it along
+    local r = st({ x = 1, y = 5, pushers = { P(1, 6, "right", "right") } })
+    Sim.advance(r); Sim.advance(r)
+    assert(r.x == 3 and r.pushers[1].x == 3, "inside pusher drags matrix")
+    print("PASS: push matrix")
 end
 
--- pusher whose target is off the grid never fires
+-- blocking: grid edge stops pusher and matrix; matrix may not be shoved onto a pusher
 do
-    local p = { x = 1, y = 1, cmds = { "left" } }  -- target (0,1) off grid
-    local dx, dy = Sim.net_push(1, 1, 2, 2, 10, 10, { p }, 1)
-    assert(dx == 0 and dy == 0, "off-grid target ignored")
-    print("PASS: off-grid pusher")
-end
+    local s = st({ pushers = { P(1, 1, "left", "up") } })
+    assert(Sim.advance(s) == false and s.pushers[1].x == 1, "pusher stops at left edge")
+    assert(Sim.advance(s) == false and s.pushers[1].y == 1, "pusher stops at top edge")
 
--- blocking: only the grid edge blocks (pushers are not solid)
-do
-    assert(Sim.blocked(0, 1, 2, 2, 10, 10), "left edge blocks")
-    assert(Sim.blocked(10, 1, 2, 2, 10, 10), "right edge blocks 2-wide")
-    assert(Sim.blocked(1, 10, 2, 2, 10, 10), "bottom edge blocks 2-tall")
-    assert(not Sim.blocked(9, 9, 2, 2, 10, 10), "fits in corner")
+    local w = st({ x = 9, pushers = { P(8, 5, "right") } })
+    assert(Sim.advance(w) == false and w.x == 9 and w.pushers[1].x == 8, "matrix at wall: push does nothing")
+
+    local b = st({ pushers = { P(4, 5, "right"), P(7, 5, "idle") } })  -- B sits where the matrix would land
+    assert(Sim.advance(b) == false and b.x == 5 and b.pushers[1].x == 4, "matrix cannot be shoved onto a pusher")
     print("PASS: blocking")
 end
 
--- advance: moves, drags a 2-wide matrix over its own pusher, blocked at wall
+-- pushers are solid to each other and act in order
 do
-    local st = {
-        x = 1, y = 5, rows = 2, cols = 2, w = 10, h = 10,
-        pushers = { { x = 1, y = 6, cmds = { "right", "right", "right" } } },
-        n = 3, tick = 0,
-    }
-    assert(Sim.advance(st) == true and st.x == 2 and st.tick == 1, "tick 1 pushes over own pusher")
-    assert(Sim.advance(st) == true and st.x == 3 and st.tick == 2, "tick 2 pushes again")
-    assert(Sim.advance(st) == false and st.x == 3 and st.tick == 3, "tick 3: pusher out of reach")
-
-    local wall = {
-        x = 9, y = 5, rows = 2, cols = 2, w = 10, h = 10,
-        pushers = { { x = 8, y = 5, cmds = { "right" } } },
-        n = 1, tick = 0,
-    }
-    assert(Sim.advance(wall) == false and wall.x == 9, "push into wall is blocked")
-    print("PASS: advance")
+    local s = st({ pushers = { P(1, 1, "right"), P(2, 1, "idle") } })
+    assert(Sim.advance(s) == false and s.pushers[1].x == 1, "cannot walk into another pusher")
+    local t = st({ pushers = { P(1, 1, "right"), P(2, 1, "down") } })
+    Sim.advance(t)
+    assert(t.pushers[1].x == 1 and t.pushers[2].y == 2, "first acts first: still blocked; second moves away")
+    local u = st({ pushers = { P(2, 1, "down"), P(1, 1, "right") } })
+    Sim.advance(u)
+    assert(u.pushers[2].x == 2, "with the other listed first, the cell is free")
+    print("PASS: pusher collision")
 end
 
 -- apply_op

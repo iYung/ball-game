@@ -17,43 +17,56 @@ local function sign(v)
     return 0
 end
 
--- pushers: array of { x, y, cmds }, cmds[slot] is "up"|"down"|"left"|"right"|"idle"|nil.
--- A pusher is active when the matrix covers the cell next to it in its command direction.
--- Returns the net (dx, dy): vectors summed, each axis clamped to -1..1.
-function Sim.net_push(x, y, rows, cols, w, h, pushers, slot)
-    local sx, sy = 0, 0
-    for _, p in ipairs(pushers) do
-        local d = Sim.DIRS[(p.cmds and p.cmds[slot]) or "idle"]
-        if d then
-            local tx, ty = p.x + d.dx, p.y + d.dy
-            local in_grid = tx >= 1 and tx <= w and ty >= 1 and ty <= h
-            if in_grid and tx >= x and tx <= x + cols - 1
-                       and ty >= y and ty <= y + rows - 1 then
-                sx = sx + d.dx
-                sy = sy + d.dy
-            end
-        end
-    end
-    return sign(sx), sign(sy)
+local function covers(x, y, rows, cols, cx, cy)
+    return cx >= x and cx <= x + cols - 1 and cy >= y and cy <= y + rows - 1
 end
 
--- True if a matrix anchored at (nx, ny) would leave the grid. Pushers are not solid:
--- the matrix may slide over them (otherwise it could never travel past its own pushers).
+local function pusher_at(pushers, cx, cy, skip)
+    for _, q in ipairs(pushers) do
+        if q ~= skip and q.x == cx and q.y == cy then return q end
+    end
+end
+
+-- True if a matrix anchored at (nx, ny) would leave the grid.
 function Sim.blocked(nx, ny, rows, cols, w, h)
     return nx < 1 or ny < 1 or nx + cols - 1 > w or ny + rows - 1 > h
 end
 
--- Run one tick. st: { x, y, rows, cols, w, h, pushers, n, tick }.
--- Increments st.tick, moves st.x/st.y when a push succeeds, returns moved (bool).
+-- Run one tick. st: { x, y, rows, cols, w, h, pushers, n, tick } where x,y is the matrix
+-- anchor and pushers is an array of { x, y, cmds }; cmds[slot] is "up"|"down"|"left"|"right"|"idle"|nil.
+-- Pushers act one at a time in array order, each stepping one cell in its command direction:
+--   * off the grid, or into another pusher's cell: the pusher stays put
+--   * into a matrix cell: the matrix is shoved one cell the same way; if that would take it
+--     off the grid or onto another pusher, nothing moves
+-- Mutates st.tick, st.x/st.y and each pusher's x/y. Returns moved (bool): anything moved.
 function Sim.advance(st)
     st.tick = st.tick + 1
-    local slot = Sim.slot(st.tick, st.n)
-    local dx, dy = Sim.net_push(st.x, st.y, st.rows, st.cols, st.w, st.h, st.pushers, slot)
-    if dx == 0 and dy == 0 then return false end
-    local nx, ny = st.x + dx, st.y + dy
-    if Sim.blocked(nx, ny, st.rows, st.cols, st.w, st.h) then return false end
-    st.x, st.y = nx, ny
-    return true
+    local slot  = Sim.slot(st.tick, st.n)
+    local moved = false
+    for _, p in ipairs(st.pushers) do
+        local d = Sim.DIRS[(p.cmds and p.cmds[slot]) or "idle"]
+        if d then
+            local tx, ty = p.x + d.dx, p.y + d.dy
+            local ok = tx >= 1 and tx <= st.w and ty >= 1 and ty <= st.h
+                       and not pusher_at(st.pushers, tx, ty, p)
+            if ok and covers(st.x, st.y, st.rows, st.cols, tx, ty) then
+                local nx, ny = st.x + d.dx, st.y + d.dy
+                if Sim.blocked(nx, ny, st.rows, st.cols, st.w, st.h) then
+                    ok = false
+                else
+                    for _, q in ipairs(st.pushers) do
+                        if q ~= p and covers(nx, ny, st.rows, st.cols, q.x, q.y)
+                           and not covers(st.x, st.y, st.rows, st.cols, q.x, q.y) then
+                            ok = false; break
+                        end
+                    end
+                    if ok then st.x, st.y = nx, ny end
+                end
+            end
+            if ok then p.x, p.y = tx, ty; moved = true end
+        end
+    end
+    return moved
 end
 
 -- Applies an op tile to a matrix; row params are clamped to the matrix size.

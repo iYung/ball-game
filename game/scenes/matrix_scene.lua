@@ -211,7 +211,8 @@ end
 function MatrixScene:start_run()
     local p             = self.puzzle
     self.current_matrix = self.input_matrix:copy()
-    self.sim            = { x=p.source.x, y=p.source.y, tick=0, idle=0 }
+    self.sim            = { x=p.source.x, y=p.source.y, tick=0, idle=0,
+                            pushers=self:_pusher_list() }
     self.status         = "running"
     self.running        = true
     self.occupied_ops   = {}
@@ -296,7 +297,7 @@ function MatrixScene:do_step()
 
     local st = {
         x=sim.x, y=sim.y, rows=mat.rows, cols=mat.cols,
-        w=grid.w, h=grid.h, pushers=self:_pusher_list(),
+        w=grid.w, h=grid.h, pushers=sim.pushers,
         n=self.timeline_n, tick=sim.tick,
     }
     local moved = Sim.advance(st)
@@ -393,6 +394,34 @@ function MatrixScene:draw_grid()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+function MatrixScene:draw_pusher(id, sx, sy, ghost)
+    local cs, a = CELL_SIZE, ghost and 0.25 or 0.95
+    love.graphics.setColor(0.30, 0.18, 0.45, a)
+    love.graphics.rectangle("fill", sx + 4, sy + 4, cs - 8, cs - 8, 6, 6)
+    love.graphics.setColor(0.80, 0.60, 1.0, ghost and 0.4 or 1)
+    love.graphics.setLineWidth(2)
+    love.graphics.rectangle("line", sx + 4, sy + 4, cs - 8, cs - 8, 6, 6)
+    love.graphics.setLineWidth(1)
+    love.graphics.setFont(self.font_cell)
+    love.graphics.printf(string.char(64 + (id or 1)), sx, sy + cs / 2 - 8, cs, "center")
+    if not ghost then
+        local cmd = self.cur_slot and (self.timeline[id] or {})[self.cur_slot]
+        if cmd and cmd ~= "idle" then
+            love.graphics.setColor(1, 0.9, 0.4, 1)
+            love.graphics.setFont(self.font_val)
+            love.graphics.printf(CMD_GLYPH[cmd], sx, sy + cs - 22, cs, "center")
+        end
+    end
+end
+
+function MatrixScene:draw_live_pushers()
+    if not self.sim then return end
+    for _, p in ipairs(self.sim.pushers) do
+        local sx, sy = cell_top_left(p.x, p.y)
+        self:draw_pusher(p.id, sx, sy, false)
+    end
+end
+
 -- draw_tile takes cell coordinates so multi-cell ops can draw a spanning background.
 function MatrixScene:draw_tile(tile, cx, cy)
     local sx, sy = cell_top_left(cx, cy)
@@ -414,21 +443,8 @@ function MatrixScene:draw_tile(tile, cx, cy)
         love.graphics.printf("SINK", sx, mid_y - 7, cs, "center")
 
     elseif tile.kind == "pusher" then
-        love.graphics.setColor(0.30, 0.18, 0.45, 0.95)
-        love.graphics.rectangle("fill", sx + 4, sy + 4, cs - 8, cs - 8, 6, 6)
-        love.graphics.setColor(0.80, 0.60, 1.0, 1)
-        love.graphics.setLineWidth(2)
-        love.graphics.rectangle("line", sx + 4, sy + 4, cs - 8, cs - 8, 6, 6)
-        love.graphics.setLineWidth(1)
-        love.graphics.setFont(self.font_cell)
-        love.graphics.printf(string.char(64 + (tile.id or 1)), sx, mid_y - 8, cs, "center")
-        -- Show the command this pusher is executing during a run.
-        local cmd = self.cur_slot and (self.timeline[tile.id] or {})[self.cur_slot]
-        if cmd and cmd ~= "idle" then
-            love.graphics.setColor(1, 0.9, 0.4, 1)
-            love.graphics.setFont(self.font_val)
-            love.graphics.printf(CMD_GLYPH[cmd], sx, sy + cs - 22, cs, "center")
-        end
+        -- During a run the placed tile only marks the start; the live pusher is drawn separately.
+        self:draw_pusher(tile.id, sx, sy, self.sim ~= nil)
 
     elseif tile.kind == "op" then
         local width  = tile.width or 1
@@ -665,6 +681,7 @@ end
 
 function MatrixScene:draw()
     self:draw_grid()
+    self:draw_live_pushers()
     self:draw_travelling_matrix()
     self:draw_palette()
     self._tl_top = self.hud:draw(self.input_matrix, self.target_matrix, self.puzzle.name, self.status)

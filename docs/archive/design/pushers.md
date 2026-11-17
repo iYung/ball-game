@@ -67,3 +67,13 @@ Existing 10 puzzles keep their op tiles, source, sink and matrices. Locked arrow
 1. **Timeline panel location**: right column (above) instead of "below grid" as you chose, because the grid already fills the screen. Alternative is shrinking the cell size. OK to use the right column?
 2. **Multiple pushers, same tick**: summed with per-axis clamp (above). Alternative: only the first active pusher (by letter) acts.
 3. **Puzzle solvability**: I will assume the 10 puzzles stay as-is minus the locked arrows. If any layout turns out to need a different op placement, that is a follow-up.
+
+## Revision: mobile pushers
+
+The adjacency/sum-and-clamp model above was wrong: pushers were fixed tiles. The intended model is that **programming a pusher moves it**.
+
+- The placed tile is the pusher's start cell. Each tick its command moves it one cell (`up/down/left/right`, `idle` stays).
+- Walking into a matrix cell shoves the matrix one cell the same way, and the pusher takes the vacated cell. A pusher placed under the matrix rides inside it.
+- Pushers act in letter order, one at a time. Off-grid moves and moves into another pusher's cell are skipped. A shove that would take the matrix off the grid or onto another pusher does nothing, and the pusher stays put.
+- `net_push` (summing/clamping) is gone, since conflicts resolve by ordering.
+- The "stuck" check now means no pusher or matrix moved for a full timeline loop.

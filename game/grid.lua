@@ -23,6 +23,10 @@ function Grid:in_bounds_multi(ax, ay, width)
     return self:in_bounds(ax, ay) and self:in_bounds(ax + width - 1, ay)
 end
 
+function Grid:in_bounds_multi_2d(ax, ay, width, height)
+    return self:in_bounds(ax, ay) and self:in_bounds(ax + width - 1, ay + height - 1)
+end
+
 -- Returns true + anchor coords if (x,y) is a ref cell; false otherwise.
 function Grid:is_ref(x, y)
     if not self:in_bounds(x, y) then return false, nil, nil end
@@ -46,6 +50,20 @@ end
 function Grid:set(x, y, tile)
     assert(self:in_bounds(x, y), string.format("Grid.set: (%d,%d) out of bounds", x, y))
     self.cells[y][x] = tile
+end
+
+-- Place a 2D multi-cell tile. Anchor at (ax,ay); ref cells fill the width×height region.
+function Grid:set_multi_2d(ax, ay, tile, width, height)
+    assert(self:in_bounds_multi_2d(ax, ay, width, height),
+        string.format("Grid.set_multi_2d: (%d,%d) width %d height %d out of bounds", ax, ay, width, height))
+    self.cells[ay][ax] = tile
+    for dy = 0, height - 1 do
+        for dx = 0, width - 1 do
+            if not (dx == 0 and dy == 0) then
+                self.cells[ay + dy][ax + dx] = { ref = true, ax = ax, ay = ay }
+            end
+        end
+    end
 end
 
 -- Place a multi-cell tile. Anchor at (ax,ay); ref cells at (ax+1,ay)..(ax+w-1,ay).
@@ -101,9 +119,13 @@ function Grid:clear(x, y)
         end
     end
 
-    for i = 0, width - 1 do
-        if self:in_bounds(ax + i, ay) then
-            self.cells[ay][ax + i] = nil
+    local height = tile.height or 1
+
+    for dy = 0, height - 1 do
+        for dx = 0, width - 1 do
+            if self:in_bounds(ax + dx, ay + dy) then
+                self.cells[ay + dy][ax + dx] = nil
+            end
         end
     end
 end

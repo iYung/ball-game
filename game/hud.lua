@@ -4,16 +4,16 @@ HUD.__index = HUD
 local STATUS_COLORS = {
     win           = {0.2, 0.8, 0.3, 1},
     fail          = {0.9, 0.2, 0.2, 1},
-    loop          = {0.9, 0.6, 0.1, 1},
-    out_of_bounds = {0.9, 0.6, 0.1, 1},
+    stuck         = {0.9, 0.6, 0.1, 1},
+    timeout       = {0.9, 0.6, 0.1, 1},
     running       = {0.4, 0.6, 1.0, 1},
 }
 
 local STATUS_LABELS = {
     win           = "WIN!",
     fail          = "FAIL — matrix mismatch",
-    loop          = "LOOP DETECTED",
-    out_of_bounds = "OUT OF BOUNDS",
+    stuck         = "STUCK — nothing is pushing",
+    timeout       = "TIMEOUT",
     running       = "Running...",
 }
 
@@ -67,7 +67,8 @@ function HUD:draw_matrix(mat, cx, top_y, font_num)
     return grid_h
 end
 
-function HUD:draw(input_mat, target_mat, current_mat, puzzle_name, status)
+-- Returns the y just below the divider, where the scene draws the timeline panel.
+function HUD:draw(input_mat, target_mat, puzzle_name, status)
     local x, y, w, h = self.x, self.y, self.w, self.h
 
     -- Background
@@ -117,20 +118,7 @@ function HUD:draw(input_mat, target_mat, current_mat, puzzle_name, status)
     love.graphics.setColor(0.2, 0.2, 0.3, 1)
     love.graphics.rectangle("fill", x + 20, cursor_y, w - 40, 1)
     cursor_y = cursor_y + 10
-
-    -- CURRENT STATE
-    love.graphics.setFont(self.font_label)
-    love.graphics.setColor(0.6, 0.75, 1.0, 1)
-    love.graphics.printf("CURRENT STATE", x, cursor_y, w, "center")
-    cursor_y = cursor_y + 22
-
-    if current_mat then
-        self:draw_matrix(current_mat, cx, cursor_y, self.font_num)
-    else
-        love.graphics.setFont(self.font_num)
-        love.graphics.setColor(0.4, 0.4, 0.5, 1)
-        love.graphics.printf("---", x, cursor_y + 10, w, "center")
-    end
+    local panel_top = cursor_y
 
     -- Status banner at the bottom
     if status and STATUS_COLORS[status] then
@@ -145,6 +133,7 @@ function HUD:draw(input_mat, target_mat, current_mat, puzzle_name, status)
     end
 
     love.graphics.setColor(1, 1, 1, 1)
+    return panel_top
 end
 
 return HUD

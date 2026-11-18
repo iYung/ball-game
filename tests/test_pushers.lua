@@ -106,29 +106,29 @@ end
 
 -- nxm matrix: transpose swaps dimensions, Sim.blocked uses actual rows/cols
 do
-    -- 2x3 matrix cannot shove past a 2-col-wide gap corridor into x=5 (cols=3 wide)
+    -- corridor at x=5,6: 2-row opening at y=5,6 (matches puzzle 11's gap=2 layout)
     local gaps = {}
     for y = 1, 10 do
-        if y < 4 or y > 6 then
+        if y < 5 or y > 6 then
             gaps[y] = gaps[y] or {}
             gaps[y][5] = true
             gaps[y][6] = true
         end
     end
-    -- 2x3 anchor at (3,5), pusher pushes right; new anchor (4,5) would cover cols 4,5,6 and rows 5,6;
-    -- (5,5) and (6,5) are open (y=5 is in the corridor), but (5,6) is NOT blocked; test a truly blocked case:
-    -- 2x3 anchor at (3,4), new anchor (4,4) covers (4..6,4..5); y=4,5 are open → allowed
-    local s2x3_ok = st({ x = 3, y = 4, rows = 2, cols = 3, pushers = { P(3, 3, "down") }, gaps = gaps })
-    assert(Sim.advance(s2x3_ok) ~= nil, "2x3 moves when corridor is clear")
 
-    -- 2x3 anchor at (3,2): new anchor (4,2) covers cols 4,5,6 rows 2,3; y=3 has gaps[3][5]=true → blocked
-    local s2x3_blk = st({ x = 3, y = 2, rows = 2, cols = 3, pushers = { P(3, 1, "down") }, gaps = gaps })
+    -- 2x3 anchor at (3,5): new anchor (4,5) covers cols 4,5,6 rows 5,6; y=5,6 open → allowed
+    local s2x3_ok = st({ x = 3, y = 5, rows = 2, cols = 3, pushers = { P(3, 4, "down") }, gaps = gaps })
+    assert(Sim.advance(s2x3_ok) ~= nil, "2x3 fits through 2-row corridor")
+
+    -- 2x3 anchor at (3,4): new anchor (4,4) covers rows 4,5; y=4 is blocked → blocked
+    local s2x3_blk = st({ x = 3, y = 4, rows = 2, cols = 3, pushers = { P(3, 3, "down") }, gaps = gaps })
     Sim.advance(s2x3_blk)
     assert(s2x3_blk.x == 3, "2x3 blocked when footprint overlaps gap")
 
-    -- 3x2 anchor at (3,4): new anchor (4,4) covers cols 4,5 rows 4,5,6; corridor open y=4..6 → allowed
-    local s3x2_ok = st({ x = 3, y = 4, rows = 3, cols = 2, pushers = { P(3, 3, "down") }, gaps = gaps })
-    assert(Sim.advance(s3x2_ok) ~= nil, "3x2 fits through 2-wide corridor")
+    -- 3x2 anchor at (3,5): new anchor (4,5) covers cols 4,5 rows 5,6,7; y=7 is blocked → blocked
+    local s3x2_blk = st({ x = 3, y = 5, rows = 3, cols = 2, pushers = { P(3, 4, "down") }, gaps = gaps })
+    Sim.advance(s3x2_blk)
+    assert(s3x2_blk.x == 3, "3x2 cannot fit through 2-row corridor")
     print("PASS: nxm gap corridor")
 end
 

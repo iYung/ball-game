@@ -1404,14 +1404,24 @@ end
 function MatrixScene:key_pressed(key)
     if key == "r" then
         if not self.running and (self.status == nil or self.status == "fail"
-                              or self.status == "stuck" or self.status == "timeout") then
-            self:start_run()
+                              or self.status == "stuck" or self.status == "timeout"
+                              or self.status == "no_pusher") then
+            if #self:_pusher_list() == 0 then
+                self.status = "no_pusher"
+            else
+                self:start_run()
+            end
         end
     elseif key == "space" then
-        if not self.running and (self.status == nil or self.status == "running") then
-            self.anim_t = 1
-            self:do_step()
-            self.anim_t = 1
+        if not self.running and (self.status == nil or self.status == "running"
+                              or self.status == "no_pusher") then
+            if #self:_pusher_list() == 0 then
+                self.status = "no_pusher"
+            else
+                self.anim_t = 1
+                self:do_step()
+                self.anim_t = 1
+            end
         end
     elseif key == "backspace" then
         self:do_reset()

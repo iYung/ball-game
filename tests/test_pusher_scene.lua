@@ -121,4 +121,20 @@ do
     print("PASS: per-puzzle palette")
 end
 
+-- Pressing R or Space without a pusher sets status=no_pusher and does not start the run.
+do
+    local scene = new_scene()
+    scene:key_pressed("r")
+    assert(scene.status == "no_pusher", "R without pusher sets no_pusher, got " .. tostring(scene.status))
+    assert(scene.sim == nil, "sim not created when no pusher")
+    scene:key_pressed("space")
+    assert(scene.status == "no_pusher", "Space without pusher keeps no_pusher")
+    assert(scene.sim == nil, "sim still nil")
+    -- After placing a pusher the guard clears and the run starts.
+    add_pusher(scene, 2, 6, { "right", "right", "right", "right", "right", "right", "right", "right" })
+    scene:key_pressed("r")
+    assert(scene.status == "running" or scene.sim ~= nil, "run starts once a pusher is placed")
+    print("PASS: no_pusher guard")
+end
+
 print("ALL TESTS PASSED")

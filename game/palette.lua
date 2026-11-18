@@ -25,4 +25,8 @@ function Palette:is_eraser()
     return self._selected == nil
 end
 
+function Palette:is_drag()
+    return self._selected ~= nil and self._selected.kind == "drag"
+end
+
 return Palette

@@ -14,8 +14,8 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 | `Space` | Step — advance one tick |
 | `Backspace` | Reset — return the matrix to the source |
 | `← →` | Previous / next puzzle |
-| Left-click grid | Place selected tile |
-| Right-click grid | Erase tile |
+| Left-click grid | Place selected tile (or pick up a tile in **[Mv]** mode) |
+| Right-click grid | Erase tile (or cancel an in-progress drag) |
 | Left-click palette | Select a tile type |
 | Left / right-click timeline slot | Cycle that slot's command forward / back |
 | `Esc` | Quit |
@@ -35,7 +35,9 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 
 Click a value cell on any matrix op tile to increment/decrement its value (left/right thirds = −1/+1). Values are clamped to [−9, 9].
 
-Each puzzle only offers the op tiles it needs in the palette (the pusher and eraser are always there).
+Each puzzle only offers the op tiles it needs in the palette (the pusher, **[Mv]** move tool, and eraser are always there).
+
+**Moving tiles:** select **[Mv]** in the palette, then click any unlocked tile to pick it up. A ghost preview follows the cursor — green means the drop is valid, red means the target is occupied or out of bounds. Release the mouse to drop, or right-click to cancel (the tile snaps back to its original position with all parameters intact). Multi-cell tiles (e.g. Scale Row) move as a unit.
 
 Op tiles span one board cell for the op plus one per parameter. Click the left third of a parameter cell for −1 and the right third for +1. An op fires once when the matrix first overlaps any of its cells, and re-arms after the matrix fully leaves.
 

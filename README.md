@@ -45,7 +45,7 @@ Op tiles span one board cell for the op plus one per parameter. Click the left t
 
 **Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. A run with no movement for a full timeline loop ends as **STUCK**, and a run past 500 ticks ends as **TIMEOUT**.
 
-**11 puzzles** — from a simple identity check (puzzle 1) through increasingly complex matrix transformations including row operations, constant-matrix ops, and a gap-corridor puzzle requiring matrix rotation (puzzle 11). Puzzles can use non-square (n×m) matrices.
+**16 puzzles** — from a simple identity check (puzzle 1) through increasingly complex matrix transformations. Puzzles 1–11 each introduce or practice a single operation; puzzles 12–16 require two or three different operations in sequence (e.g. transpose then scale, Gaussian elimination, or a three-step chain). Puzzles can use non-square (n×m) matrices.
 
 ## Structure
 

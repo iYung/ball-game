@@ -55,6 +55,11 @@ do
 
     local b = st({ pushers = { P(4, 5, "right"), P(7, 5, "idle") } })  -- B sits where the matrix would land
     assert(Sim.advance(b) == false and b.x == 5 and b.pushers[1].x == 4, "matrix cannot be shoved onto a pusher")
+
+    -- matrix cannot be shoved onto a pusher already inside the footprint
+    -- matrix (1,5) cols=3: covers (1,5),(2,5),(3,5); B at (2,5) is in both old and new footprint after a right-push
+    local c = st({ x=1, y=5, rows=1, cols=3, pushers = { P(0, 5, "right"), P(2, 5, "idle") } })
+    assert(Sim.advance(c) == false and c.x == 1 and c.pushers[1].x == 0, "matrix cannot be shoved onto an already-inside pusher")
     print("PASS: blocking")
 end
 

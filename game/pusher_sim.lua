@@ -66,8 +66,7 @@ function Sim.advance(st)
                     ok = false
                 else
                     for _, q in ipairs(st.pushers) do
-                        if q ~= p and covers(nx, ny, st.rows, st.cols, q.x, q.y)
-                           and not covers(st.x, st.y, st.rows, st.cols, q.x, q.y) then
+                        if q ~= p and covers(nx, ny, st.rows, st.cols, q.x, q.y) then
                             ok = false; break
                         end
                     end

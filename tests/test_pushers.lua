@@ -132,4 +132,24 @@ do
     print("PASS: nxm gap corridor")
 end
 
+-- footprint_clear: bounds + gap + pusher checks
+do
+    -- valid footprint
+    assert(Sim.footprint_clear(5, 5, 2, 2, 10, 10, nil, {}),   "valid footprint clears")
+    -- off-board (extends past right edge)
+    assert(not Sim.footprint_clear(9, 5, 1, 3, 10, 10, nil, {}), "off-board footprint blocked")
+    -- off-board (extends past bottom edge)
+    assert(not Sim.footprint_clear(5, 9, 3, 1, 10, 10, nil, {}), "off-board footprint blocked (bottom)")
+    -- overlaps a gap cell
+    local gaps = {[7]={[10]=true}}
+    assert(not Sim.footprint_clear(8, 7, 1, 3, 10, 10, gaps, {}), "gap overlap blocked")
+    -- overlaps a pusher
+    local pushers = {{x=6, y=5}}
+    assert(not Sim.footprint_clear(5, 5, 2, 2, 10, 10, nil, pushers), "pusher overlap blocked")
+    -- pusher outside footprint: allowed
+    local pushers2 = {{x=8, y=5}}
+    assert(Sim.footprint_clear(5, 5, 2, 2, 10, 10, nil, pushers2), "pusher outside footprint: ok")
+    print("PASS: footprint_clear")
+end
+
 print("ALL TESTS PASSED")

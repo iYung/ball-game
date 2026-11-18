@@ -129,7 +129,7 @@ function MatrixScene:on_enter()
     self.font_ui      = love.graphics.newFont(11)
     self.font_key     = love.graphics.newFont(11)
     self.font_val     = love.graphics.newFont(13)
-    self.run_speed    = 0.22
+    self.run_speed    = 0.35
     self.anim_from_x  = 0;  self.anim_from_y = 0
     self.anim_to_x    = 0;  self.anim_to_y   = 0
     self.anim_t       = 1

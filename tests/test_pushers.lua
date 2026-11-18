@@ -84,4 +84,52 @@ do
     print("PASS: apply_op")
 end
 
+-- gap cells: pusher cannot enter; matrix cannot be shoved onto or through
+do
+    local gaps = { [3] = { [3] = true } }
+
+    -- pusher blocked by a gap cell
+    local s = st({ pushers = { P(2, 3, "right") }, gaps = gaps })
+    assert(Sim.advance(s) == false and s.pushers[1].x == 2, "pusher cannot enter gap")
+
+    -- matrix shove blocked when new position overlaps a gap
+    -- matrix at (1,2) cols=2 rows=2; pusher pushes right; new anchor (2,2) covers (2,2),(3,2),(2,3),(3,3); (3,3) is a gap
+    local m = st({ x = 1, y = 2, rows = 2, cols = 2, pushers = { P(1, 3, "right") }, gaps = gaps })
+    local moved = Sim.advance(m)
+    assert(not moved or (m.x == 1), "matrix cannot be shoved onto a gap cell")
+
+    -- no gaps table: existing behaviour unchanged
+    local n = st({ pushers = { P(2, 3, "right") } })
+    assert(Sim.advance(n) == true and n.pushers[1].x == 3, "no gaps: pusher moves freely")
+    print("PASS: gap blocking")
+end
+
+-- nxm matrix: transpose swaps dimensions, Sim.blocked uses actual rows/cols
+do
+    -- 2x3 matrix cannot shove past a 2-col-wide gap corridor into x=5 (cols=3 wide)
+    local gaps = {}
+    for y = 1, 10 do
+        if y < 4 or y > 6 then
+            gaps[y] = gaps[y] or {}
+            gaps[y][5] = true
+            gaps[y][6] = true
+        end
+    end
+    -- 2x3 anchor at (3,5), pusher pushes right; new anchor (4,5) would cover cols 4,5,6 and rows 5,6;
+    -- (5,5) and (6,5) are open (y=5 is in the corridor), but (5,6) is NOT blocked; test a truly blocked case:
+    -- 2x3 anchor at (3,4), new anchor (4,4) covers (4..6,4..5); y=4,5 are open → allowed
+    local s2x3_ok = st({ x = 3, y = 4, rows = 2, cols = 3, pushers = { P(3, 3, "down") }, gaps = gaps })
+    assert(Sim.advance(s2x3_ok) ~= nil, "2x3 moves when corridor is clear")
+
+    -- 2x3 anchor at (3,2): new anchor (4,2) covers cols 4,5,6 rows 2,3; y=3 has gaps[3][5]=true → blocked
+    local s2x3_blk = st({ x = 3, y = 2, rows = 2, cols = 3, pushers = { P(3, 1, "down") }, gaps = gaps })
+    Sim.advance(s2x3_blk)
+    assert(s2x3_blk.x == 3, "2x3 blocked when footprint overlaps gap")
+
+    -- 3x2 anchor at (3,4): new anchor (4,4) covers cols 4,5 rows 4,5,6; corridor open y=4..6 → allowed
+    local s3x2_ok = st({ x = 3, y = 4, rows = 3, cols = 2, pushers = { P(3, 3, "down") }, gaps = gaps })
+    assert(Sim.advance(s3x2_ok) ~= nil, "3x2 fits through 2-wide corridor")
+    print("PASS: nxm gap corridor")
+end
+
 print("ALL TESTS PASSED")

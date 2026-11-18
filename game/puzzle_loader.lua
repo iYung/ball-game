@@ -9,6 +9,7 @@ local PUZZLES = {
     "data/puzzles/08_combo.lua",
     "data/puzzles/09_uturn.lua",
     "data/puzzles/10_set_row.lua",
+    "data/puzzles/11_rotate_gap.lua",
 }
 
 local PuzzleLoader = {}

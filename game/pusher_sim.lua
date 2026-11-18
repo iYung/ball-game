@@ -27,9 +27,19 @@ local function pusher_at(pushers, cx, cy, skip)
     end
 end
 
--- True if a matrix anchored at (nx, ny) would leave the grid.
-function Sim.blocked(nx, ny, rows, cols, w, h)
-    return nx < 1 or ny < 1 or nx + cols - 1 > w or ny + rows - 1 > h
+-- True if a matrix anchored at (nx, ny) would leave the grid or overlap a gap cell.
+-- gaps is an optional {[y]={[x]=true}} lookup.
+function Sim.blocked(nx, ny, rows, cols, w, h, gaps)
+    if nx < 1 or ny < 1 or nx + cols - 1 > w or ny + rows - 1 > h then return true end
+    if gaps then
+        for dr = 0, rows - 1 do
+            for dc = 0, cols - 1 do
+                local gy, gx = ny + dr, nx + dc
+                if gaps[gy] and gaps[gy][gx] then return true end
+            end
+        end
+    end
+    return false
 end
 
 -- Run one tick. st: { x, y, rows, cols, w, h, pushers, n, tick } where x,y is the matrix
@@ -49,9 +59,10 @@ function Sim.advance(st)
             local tx, ty = p.x + d.dx, p.y + d.dy
             local ok = tx >= 1 and tx <= st.w and ty >= 1 and ty <= st.h
                        and not pusher_at(st.pushers, tx, ty, p)
+                       and not (st.gaps and st.gaps[ty] and st.gaps[ty][tx])
             if ok and covers(st.x, st.y, st.rows, st.cols, tx, ty) then
                 local nx, ny = st.x + d.dx, st.y + d.dy
-                if Sim.blocked(nx, ny, st.rows, st.cols, st.w, st.h) then
+                if Sim.blocked(nx, ny, st.rows, st.cols, st.w, st.h, st.gaps) then
                     ok = false
                 else
                     for _, q in ipairs(st.pushers) do

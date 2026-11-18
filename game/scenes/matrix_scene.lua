@@ -176,7 +176,11 @@ function MatrixScene:load_puzzle(n)
             })
         end
     end
-    self.grid:set(p.source.x, p.source.y, {kind="source", locked=true})
+    local src_cols = p.input.cols
+    local src_rows = p.input.rows
+    self.grid:set_multi_2d(p.source.x, p.source.y, {
+        kind="source", locked=true, width=src_cols, height=src_rows
+    }, src_cols, src_rows)
     self.grid:set(p.sink.x,   p.sink.y,   {kind="sink",   locked=true})
     self.gaps = {}
     for _, g in ipairs(p.gaps or {}) do
@@ -611,6 +615,12 @@ end
 -- draw_ref_cell: called for each ref cell in Pass 2.
 -- dc, dr are 0-based offsets from the anchor.
 function MatrixScene:draw_ref_cell(tile, dc, dr, cx, cy)
+    if tile and tile.kind == "source" then
+        local sx, sy = cell_top_left(cx, cy)
+        love.graphics.setColor(0.1, 0.5, 0.2, 0.5)
+        love.graphics.rectangle("fill", sx, sy, CELL_SIZE, CELL_SIZE)
+        return
+    end
     local op = tile and tile.op
     if op == "add_matrix" or op == "sub_matrix" or op == "mul_matrix" then
         self:draw_matrix_value_cell(tile, dc + 1, dr + 1, cx, cy)
@@ -637,11 +647,13 @@ function MatrixScene:draw_tile(tile, cx, cy)
     local mid_y  = sy + cs / 2
 
     if tile.kind == "source" then
+        local span_w = (tile.width  or 1) * cs
+        local span_h = (tile.height or 1) * cs
         love.graphics.setColor(0.1, 0.5, 0.2, 0.5)
-        love.graphics.rectangle("fill", sx, sy, cs, cs)
+        love.graphics.rectangle("fill", sx, sy, span_w, span_h)
         love.graphics.setColor(0.4, 1.0, 0.5, 1)
         love.graphics.setFont(self.font_cell)
-        love.graphics.printf("SRC", sx, mid_y - 7, cs, "center")
+        love.graphics.printf("SRC", sx, sy + span_h / 2 - 7, span_w, "center")
 
     elseif tile.kind == "sink" then
         love.graphics.setColor(0.1, 0.3, 0.7, 0.5)

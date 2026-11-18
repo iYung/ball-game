@@ -22,13 +22,13 @@ end
 -- Erase removes scale_row
 do
     local scene = new_scene()
-    scene:_place_tile_at(3, 3, { kind = "op", op = "scale_row" })
-    assert(scene.grid:get(3, 3) ~= nil, "scale_row was placed")
+    scene:_place_tile_at(4, 3, { kind = "op", op = "scale_row" })
+    assert(scene.grid:get(4, 3) ~= nil, "scale_row was placed")
 
     scene.palette:select(nil)  -- erase mode (is_eraser() == true)
-    local mx, my = cell_center(3, 3)
+    local mx, my = cell_center(4, 3)
     scene:mouse_pressed(mx, my, 1)
-    assert(scene.grid:get(3, 3) == nil, "erase removes scale_row anchor")
+    assert(scene.grid:get(4, 3) == nil, "erase removes scale_row anchor")
     print("PASS: erase removes scale_row")
 end
 
@@ -62,8 +62,8 @@ end
 -- Left-click with an op selected still edits params (erase guard doesn't fire)
 do
     local scene = new_scene()
-    scene:_place_tile_at(3, 3, { kind = "op", op = "scale_row" })
-    local tile = scene.grid:get(3, 3)
+    scene:_place_tile_at(4, 3, { kind = "op", op = "scale_row" })
+    local tile = scene.grid:get(4, 3)
     local orig_row = tile.params.row
 
     -- Select scale_row op in palette (not eraser)
@@ -71,9 +71,9 @@ do
     assert(not scene.palette:is_eraser(), "palette has selection, not eraser")
 
     -- Click band 2 (second cell of scale_row tile at y=4)
-    local mx, my = cell_center(3, 4)
+    local mx, my = cell_center(4, 4)
     scene:mouse_pressed(mx, my, 1)
-    local tile_after = scene.grid:get(3, 3)
+    local tile_after = scene.grid:get(4, 3)
     assert(tile_after ~= nil, "tile still exists after param click")
     assert(tile_after.params.row == 2, "band 2 selected, got " .. tostring(tile_after.params.row))
     print("PASS: param click still works when palette is not eraser")
@@ -84,8 +84,8 @@ end
 -- scale_row is placed with tile_rows=4
 do
     local scene = new_scene()
-    scene:_place_tile_at(3, 3, { kind = "op", op = "scale_row" })
-    local tile = scene.grid:get(3, 3)
+    scene:_place_tile_at(4, 3, { kind = "op", op = "scale_row" })
+    local tile = scene.grid:get(4, 3)
     assert(tile ~= nil, "tile placed")
     assert(tile.tile_rows == 4, "scale_row starts with tile_rows=4, got " .. tostring(tile.tile_rows))
     assert(tile.height == 4, "scale_row height=4, got " .. tostring(tile.height))
@@ -95,23 +95,23 @@ end
 -- shrink_row reduces tile_rows
 do
     local scene = new_scene()
-    scene:_place_tile_at(3, 3, { kind = "op", op = "scale_row" })
-    scene:_resize_tile(3, 3, "shrink_row")
-    local tile = scene.grid:get(3, 3)
+    scene:_place_tile_at(4, 3, { kind = "op", op = "scale_row" })
+    scene:_resize_tile(4, 3, "shrink_row")
+    local tile = scene.grid:get(4, 3)
     assert(tile.tile_rows == 3, "tile_rows reduced to 3, got " .. tostring(tile.tile_rows))
     assert(tile.height == 3, "height reduced to 3, got " .. tostring(tile.height))
     -- old row 4 ref cell should be gone
-    assert(scene.grid:get(3, 6) == nil, "ref cell at row 6 cleared after shrink (tile was at row 3, height 3 → occupies 3,4,5,6 → actually 3,4,5)")
+    assert(scene.grid:get(4, 6) == nil, "ref cell at row 6 cleared after shrink (tile was at row 3, height 3 → occupies 3,4,5,6 → actually 3,4,5)")
     print("PASS: scale_row shrinks to tile_rows=3")
 end
 
 -- grow_row increases tile_rows
 do
     local scene = new_scene()
-    scene:_place_tile_at(3, 3, { kind = "op", op = "scale_row" })
-    scene:_resize_tile(3, 3, "shrink_row")  -- now tile_rows=3
-    scene:_resize_tile(3, 3, "grow_row")    -- back to 4
-    local tile = scene.grid:get(3, 3)
+    scene:_place_tile_at(4, 3, { kind = "op", op = "scale_row" })
+    scene:_resize_tile(4, 3, "shrink_row")  -- now tile_rows=3
+    scene:_resize_tile(4, 3, "grow_row")    -- back to 4
+    local tile = scene.grid:get(4, 3)
     assert(tile.tile_rows == 4, "tile_rows back to 4, got " .. tostring(tile.tile_rows))
     assert(tile.height == 4, "height back to 4")
     print("PASS: scale_row grows back to tile_rows=4")
@@ -120,9 +120,9 @@ end
 -- Cannot shrink below 1
 do
     local scene = new_scene()
-    scene:_place_tile_at(3, 3, { kind = "op", op = "scale_row" })
-    for _ = 1, 10 do scene:_resize_tile(3, 3, "shrink_row") end
-    local tile = scene.grid:get(3, 3)
+    scene:_place_tile_at(4, 3, { kind = "op", op = "scale_row" })
+    for _ = 1, 10 do scene:_resize_tile(4, 3, "shrink_row") end
+    local tile = scene.grid:get(4, 3)
     assert(tile.tile_rows == 1, "cannot shrink below 1, got " .. tostring(tile.tile_rows))
     print("PASS: scale_row cannot shrink below 1")
 end
@@ -130,9 +130,9 @@ end
 -- Cannot grow beyond 4
 do
     local scene = new_scene()
-    scene:_place_tile_at(3, 3, { kind = "op", op = "scale_row" })
-    for _ = 1, 10 do scene:_resize_tile(3, 3, "grow_row") end
-    local tile = scene.grid:get(3, 3)
+    scene:_place_tile_at(4, 3, { kind = "op", op = "scale_row" })
+    for _ = 1, 10 do scene:_resize_tile(4, 3, "grow_row") end
+    local tile = scene.grid:get(4, 3)
     assert(tile.tile_rows == 4, "cannot grow beyond 4, got " .. tostring(tile.tile_rows))
     print("PASS: scale_row cannot grow beyond 4")
 end
@@ -140,11 +140,11 @@ end
 -- shrink_row clamps params.row to new height
 do
     local scene = new_scene()
-    scene:_place_tile_at(3, 3, { kind = "op", op = "scale_row" })
-    local tile = scene.grid:get(3, 3)
+    scene:_place_tile_at(4, 3, { kind = "op", op = "scale_row" })
+    local tile = scene.grid:get(4, 3)
     tile.params.row = 4  -- select band 4
-    scene:_resize_tile(3, 3, "shrink_row")  -- tile_rows now 3
-    tile = scene.grid:get(3, 3)
+    scene:_resize_tile(4, 3, "shrink_row")  -- tile_rows now 3
+    tile = scene.grid:get(4, 3)
     assert(tile.params.row <= tile.tile_rows,
         "params.row clamped to tile_rows after shrink, row=" .. tile.params.row .. " rows=" .. tile.tile_rows)
     print("PASS: params.row clamped on shrink")

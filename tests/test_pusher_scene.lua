@@ -21,10 +21,10 @@ local function run_to_end(scene)
     end
 end
 
--- Puzzle 1: 2x2 identity from (2,5) to sink (10,5). A pusher riding inside the matrix
--- walks right and carries it across.
+-- Puzzle 1: 2x2 identity from source (2,5) to sink (10,5). A pusher starts just left
+-- of the source and pushes the matrix right until it hits the sink.
 local function carry(scene)
-    add_pusher(scene, 2, 6, { "right", "right", "right", "right", "right", "right", "right", "right" })
+    add_pusher(scene, 1, 6, { "right", "right", "right", "right", "right", "right", "right", "right" })
 end
 
 do
@@ -34,8 +34,8 @@ do
     assert(scene.status == "win", "pusher carries the matrix to the sink, got " .. tostring(scene.status))
     assert(scene.sim.x == 9, "matrix right edge touches the sink, anchor x=" .. scene.sim.x)
     local p = scene.sim.pushers[1]
-    assert(p.x == 9 and p.y == 6, "pusher moved with the matrix, at " .. p.x .. "," .. p.y)
-    assert(scene.grid:get(2, 6).kind == "pusher", "placed tile still marks the start")
+    assert(p.x == 8 and p.y == 6, "pusher moved with the matrix, at " .. p.x .. "," .. p.y)
+    assert(scene.grid:get(1, 6).kind == "pusher", "placed tile still marks the start")
     print("PASS: pusher carries matrix to sink")
 end
 

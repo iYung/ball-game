@@ -8,7 +8,7 @@ export PATH="$HOME/.local/share/mise/shims:$PATH"
 APP_TITLE="${APP_TITLE:-Love Exemplar}"
 
 echo "Zipping game files into game.love..."
-zip -r game.love main.lua conf.lua assets/ core/ game/
+zip -r game.love main.lua conf.lua assets/ lua/ game/
 
 echo "Running love.js to build web output..."
 npx love.js game.love web/ --title "$APP_TITLE" --compatibility -m 67108864

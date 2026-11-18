@@ -68,7 +68,7 @@ local MAX_TICKS = 500
 
 local function op_width(op)        return (OP_SIZES[op] or {1,1})[1] end
 local function op_height(op, tile)
-    if op == "scale_row" then return (tile and tile.matrix_rows) or 4 end
+    if op == "scale_row" then return (tile and tile.tile_rows) or 4 end
     return (OP_SIZES[op] or {1,1})[2]
 end
 
@@ -447,7 +447,7 @@ function MatrixScene:draw_grid()
 
     -- Pass 3: expand/shrink affordances for resizable ops
     self._expand_rects = {}
-    local EXPAND_OPS = {add_matrix=true, sub_matrix=true, mul_matrix=true, set_row=true}
+    local EXPAND_OPS = {add_matrix=true, sub_matrix=true, mul_matrix=true, set_row=true, scale_row=true}
     for cy2 = 1, 10 do
         for cx2 = 1, 10 do
             local is_r2, _, _ = self.grid:is_ref(cx2, cy2)
@@ -456,10 +456,11 @@ function MatrixScene:draw_grid()
                 if tile2 and tile2.kind == "op" and EXPAND_OPS[tile2.op] and not tile2.locked then
                     local ax2, ay2 = cx2, cy2
                     local tc = tile2.tile_cols or 1
-                    local tr = (tile2.op ~= "set_row") and (tile2.tile_rows or 1) or nil
+                    local tr = tile2.tile_rows
+                    local has_col_resize = tile2.tile_cols ~= nil
 
                     -- +col strip to the right
-                    if tc < 4 then
+                    if has_col_resize and tc < 4 then
                         local sx2, sy2 = cell_top_left(ax2 + tc, ay2)
                         local sh = (tr or 1) * CELL_SIZE
                         local sw = CELL_SIZE / 3
@@ -472,7 +473,7 @@ function MatrixScene:draw_grid()
                     end
 
                     -- -col strip (right inside edge), only if tc > 1
-                    if tc > 1 then
+                    if has_col_resize and tc > 1 then
                         local sx2, sy2 = cell_top_left(ax2 + tc - 1, ay2)
                         local sw = CELL_SIZE / 4
                         local sh = (tr or 1) * CELL_SIZE
@@ -620,7 +621,7 @@ function MatrixScene:draw_tile(tile, cx, cy)
             love.graphics.print(OP_SYMBOLS[op] or "?", sx + 2, sy + 2)
             self:draw_matrix_value_cell(tile, 1, 1, cx, cy)
         elseif op == "scale_row" then
-            for band = 1, (tile.matrix_rows or 4) do
+            for band = 1, h do
                 self:draw_scale_band(tile, band, cx, cy + band - 1)
             end
         elseif op == "swap_rows" then
@@ -1013,6 +1014,8 @@ function MatrixScene:_place_tile_at(cx, cy, spec)
     elseif spec.op == "set_row" then
         tile_cols = 1
         values = {{0}}
+    elseif spec.op == "scale_row" then
+        tile_rows = 4
     end
 
     local tile = {
@@ -1067,18 +1070,23 @@ function MatrixScene:_resize_tile(ax, ay, action)
 
     elseif action == "grow_row" and tr < 4 then
         self.grid:clear(ax, ay)
-        local fill = (tile.op == "mul_matrix") and 1 or 0
-        tile.values[tr + 1] = {}
-        for c = 1, tc do tile.values[tr + 1][c] = fill end
+        if tile.values then
+            local fill = (tile.op == "mul_matrix") and 1 or 0
+            tile.values[tr + 1] = {}
+            for c = 1, tc do tile.values[tr + 1][c] = fill end
+        end
         tile.tile_rows = tr + 1
         tile.height    = old_h + 1
         self.grid:set_multi_2d(ax, ay, tile, tc, tile.tile_rows)
 
     elseif action == "shrink_row" and tr > 1 then
         self.grid:clear(ax, ay)
-        tile.values[tr] = nil
+        if tile.values then tile.values[tr] = nil end
         tile.tile_rows = tr - 1
         tile.height    = old_h - 1
+        if tile.params and tile.params.row then
+            tile.params.row = math.min(tile.params.row, tile.tile_rows)
+        end
         self.grid:set_multi_2d(ax, ay, tile, tc, tile.tile_rows)
     end
 end
@@ -1139,6 +1147,11 @@ function MatrixScene:mouse_pressed(mx, my, btn)
         local dc = cx - ax
         local dr = cy - ay
         local op = anchor_tile and anchor_tile.op
+
+        if anchor_tile and not anchor_tile.locked and self.palette:is_eraser() then
+            self.grid:clear(cx, cy)
+            return
+        end
 
         -- Handle op-specific clicks
         if anchor_tile and anchor_tile.kind == "op" then

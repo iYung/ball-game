@@ -110,7 +110,7 @@ do
     end
     local scene = new_scene()
     local l = labels(scene)
-    assert(l["P"] and l["[X]"] and not l["T"] and not l["-I"], "puzzle 1 offers no ops")
+    assert(l["P"] and l["[X]"] and l["T"] and l["-I"], "puzzle 1 offers all ops")
     scene:load_puzzle(2)
     l = labels(scene)
     assert(l["T"] and not l["xR"] and not l["R+R"], "puzzle 2 offers only transpose")

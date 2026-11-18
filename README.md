@@ -1,6 +1,6 @@
 # Matrix Circuit
 
-A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to transform an input matrix into a target matrix using elementary matrix operations.
+A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to transform an input matrix into a target matrix using elementary matrix operations. Choose from 11 puzzles on the level-select screen; completing a puzzle returns you there.
 
 ## How to play
 
@@ -13,12 +13,11 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 | `R` | Run — one timeline tick at a time, animated |
 | `Space` | Step — advance one tick |
 | `Backspace` | Reset — return the matrix to the source |
-| `← →` | Previous / next puzzle |
 | Left-click grid | Place selected tile |
 | Right-click grid | Erase tile |
 | Left-click palette | Select a tile type |
 | Left / right-click timeline slot | Cycle that slot's command forward / back |
-| `Esc` | Quit |
+| `Esc` | Return to level select (from puzzle) or start screen (from level select) |
 
 **Tile types:**
 

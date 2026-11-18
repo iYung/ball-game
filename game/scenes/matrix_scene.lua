@@ -112,10 +112,12 @@ local function lerp(a, b, t) return a + (b - a) * t end
 
 -- ── Constructor ────────────────────────────────────────────────────────────
 
-function MatrixScene.new(puzzle_index)
+function MatrixScene.new(puzzle_index, scene_manager)
     local base = Scene.new(1280, 720)
     local self  = setmetatable(base, MatrixScene)
-    self._start_puzzle = puzzle_index or 1
+    self._start_puzzle    = puzzle_index or 1
+    self._scene_manager   = scene_manager
+    self._win_timer       = nil
     return self
 end
 
@@ -162,6 +164,7 @@ function MatrixScene:load_puzzle(n)
     self.cur_slot       = nil
     self.timeline       = {}
     self.timeline_n     = TL.DEFAULT_N
+    self._win_timer     = nil
     self.grid           = Grid.new(p.grid_w, p.grid_h)
 
     if p.locked then
@@ -398,6 +401,13 @@ function MatrixScene:update(dt)
     if self.running and self.anim_ready then
         self.anim_ready = false
         self:do_step()
+    end
+    if self.status == "win" and self._scene_manager then
+        self._win_timer = (self._win_timer or 0) + dt
+        if self._win_timer >= 0.8 then
+            local LevelSelectScene = require("game/scenes/level_select_scene")
+            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
+        end
     end
 end
 
@@ -836,7 +846,7 @@ function MatrixScene:draw_palette()
     love.graphics.print("[Bsp] Reset", 755, PALETTE_Y + 22)
 
     love.graphics.setColor(0.5, 0.65, 0.5, 1)
-    local nav = string.format("< [<-] Puzzle %d/%d [->] >", self.puzzle_index, PuzzleLoader.count())
+    local nav = string.format("Puzzle %d/%d  [Esc] Menu", self.puzzle_index, PuzzleLoader.count())
     love.graphics.printf(nav, 0, PALETTE_Y + 6, HUD_X, "right")
     love.graphics.setColor(1, 1, 1, 1)
 end
@@ -1286,10 +1296,11 @@ function MatrixScene:key_pressed(key)
         end
     elseif key == "backspace" then
         self:do_reset()
-    elseif key == "left" then
-        self.grid:clear_all(); self:load_puzzle(self.puzzle_index - 1)
-    elseif key == "right" then
-        self.grid:clear_all(); self:load_puzzle(self.puzzle_index + 1)
+    elseif key == "escape" then
+        if self._scene_manager then
+            local LevelSelectScene = require("game/scenes/level_select_scene")
+            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
+        end
     end
 end
 

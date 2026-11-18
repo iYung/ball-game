@@ -87,6 +87,7 @@ local PALETTE_BUTTONS = {
     { kind="op", op="mul_matrix", label="xM"  },
     { kind="op", op="set_row",    label="=R"  },
     { sep=true },
+    { kind="drag", label="Mv" },
     { erase=true, label="[X]" },
 }
 
@@ -134,6 +135,9 @@ function MatrixScene:on_enter()
     self.anim_t       = 1
     self.anim_ready   = false
     self._expand_rects = {}
+    self._drag_tile   = nil
+    self._drag_origin = nil
+    self._drag_ghost  = nil
 
     self:load_puzzle(self._start_puzzle)
 end
@@ -221,6 +225,24 @@ function MatrixScene:do_reset()
     self._last_fp       = {}
     self.anim_t         = 1
     self.anim_ready     = false
+    self._drag_tile   = nil
+    self._drag_origin = nil
+    self._drag_ghost  = nil
+end
+
+function MatrixScene:_clear_drag()
+    if self._drag_tile and self._drag_origin then
+        local tile = self._drag_tile
+        local ox, oy = self._drag_origin.x, self._drag_origin.y
+        if (tile.width or 1) > 1 or (tile.height or 1) > 1 then
+            self.grid:set_multi_2d(ox, oy, tile, tile.width or 1, tile.height or 1)
+        else
+            self.grid:set(ox, oy, tile)
+        end
+    end
+    self._drag_tile   = nil
+    self._drag_origin = nil
+    self._drag_ghost  = nil
 end
 
 -- Returns a table keyed by cell_key for every board cell the matrix currently covers.
@@ -515,6 +537,44 @@ function MatrixScene:draw_grid()
                 end
             end
         end
+    end
+
+    -- Ghost preview while dragging
+    if self._drag_tile and self._drag_ghost then
+        local tile = self._drag_tile
+        local gx, gy = self._drag_ghost.cx, self._drag_ghost.cy
+        local w = tile.width  or 1
+        local h = tile.height or 1
+        local valid = self.grid:in_bounds_multi_2d(gx, gy, w, h)
+        if valid then
+            for dy = 0, h - 1 do
+                for dx = 0, w - 1 do
+                    local cell = self.grid.cells[gy + dy] and self.grid.cells[gy + dy][gx + dx]
+                    if cell ~= nil then valid = false; break end
+                end
+                if not valid then break end
+            end
+        end
+        local sx, sy = cell_top_left(gx, gy)
+        if valid then
+            love.graphics.setColor(0.2, 0.7, 0.2, 0.45)
+        else
+            love.graphics.setColor(0.7, 0.2, 0.2, 0.45)
+        end
+        love.graphics.rectangle("fill", sx, sy, w * CELL_SIZE, h * CELL_SIZE)
+        love.graphics.setColor(valid and 0.4 or 0.9, valid and 0.9 or 0.3, valid and 0.4 or 0.3, 0.8)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", sx + 1, sy + 1, w * CELL_SIZE - 2, h * CELL_SIZE - 2)
+        love.graphics.setLineWidth(1)
+        local label
+        if tile.kind == "pusher" then
+            label = string.char(64 + (tile.id or 1))
+        else
+            label = OP_SYMBOLS[tile.op] or "?"
+        end
+        love.graphics.setColor(1, 1, 1, 0.8)
+        love.graphics.setFont(self.font_cell)
+        love.graphics.printf(label, sx, sy + h * CELL_SIZE / 2 - 8, w * CELL_SIZE, "center")
     end
 
     love.graphics.setColor(1, 1, 1, 1)
@@ -815,7 +875,8 @@ function MatrixScene:draw_palette()
             is_sel = true
         elseif sel and btn.kind == sel.kind then
             if btn.kind == "pusher" then is_sel = true
-            elseif btn.kind == "op" then is_sel = (btn.op == sel.op) end
+            elseif btn.kind == "op" then is_sel = (btn.op == sel.op)
+            elseif btn.kind == "drag" then is_sel = true end
         end
 
         love.graphics.setColor(0.12, 0.12, 0.20, 1)
@@ -1091,6 +1152,20 @@ function MatrixScene:_resize_tile(ax, ay, action)
     end
 end
 
+function MatrixScene:mouse_moved(mx, my)
+    if not self._drag_tile then return end
+    if in_grid_panel(mx, my) then
+        local cx, cy = screen_to_cell(mx, my)
+        if self.grid:in_bounds(cx, cy) then
+            self._drag_ghost = {cx=cx, cy=cy}
+        else
+            self._drag_ghost = nil
+        end
+    else
+        self._drag_ghost = nil
+    end
+end
+
 function MatrixScene:mouse_pressed(mx, my, btn)
     if mx >= HUD_X then
         self:_timeline_click(mx, my, btn)
@@ -1109,6 +1184,8 @@ function MatrixScene:mouse_pressed(mx, my, btn)
                     self.palette:select({kind="pusher"})
                 elseif b.kind == "op" then
                     self.palette:select({kind="op", op=b.op})
+                elseif b.kind == "drag" then
+                    self.palette:select({kind="drag"})
                 end
                 return
             end
@@ -1121,11 +1198,30 @@ function MatrixScene:mouse_pressed(mx, my, btn)
     if not self.grid:in_bounds(cx, cy) then return end
 
     if btn == 2 then
-        self.grid:clear(cx, cy)
+        if self._drag_tile then
+            self:_clear_drag()
+        else
+            self.grid:clear(cx, cy)
+        end
         return
     end
 
     if btn == 1 then
+        -- Drag pickup: when in drag mode, pick up an existing unlocked tile
+        if self.palette:is_drag() and not self.running then
+            local is_r, ax, ay = self.grid:is_ref(cx, cy)
+            if not is_r then ax, ay = cx, cy end
+            local tile = self.grid:get(cx, cy)
+            if tile and not tile.locked and tile.kind ~= "gap" then
+                self._drag_tile   = tile
+                self._drag_origin = {x=ax, y=ay}
+                self._drag_ghost  = {cx=ax, cy=ay}
+                self.grid:clear(ax, ay)
+                return
+            end
+            return
+        end
+
         -- Check expand/shrink affordances first
         for _, rect in ipairs(self._expand_rects or {}) do
             if mx >= rect.x and mx < rect.x + rect.w
@@ -1270,6 +1366,39 @@ function MatrixScene:mouse_pressed(mx, my, btn)
             end
         end
     end
+end
+
+function MatrixScene:mouse_released(mx, my, btn)
+    if btn ~= 1 or not self._drag_tile then return end
+    local tile = self._drag_tile
+    local ghost = self._drag_ghost
+    if ghost then
+        local gx, gy = ghost.cx, ghost.cy
+        local w = tile.width  or 1
+        local h = tile.height or 1
+        local valid = self.grid:in_bounds_multi_2d(gx, gy, w, h)
+        if valid then
+            for dy = 0, h - 1 do
+                for dx = 0, w - 1 do
+                    local cell = self.grid.cells[gy + dy] and self.grid.cells[gy + dy][gx + dx]
+                    if cell ~= nil then valid = false; break end
+                end
+                if not valid then break end
+            end
+        end
+        if valid then
+            if w > 1 or h > 1 then
+                self.grid:set_multi_2d(gx, gy, tile, w, h)
+            else
+                self.grid:set(gx, gy, tile)
+            end
+            self._drag_tile   = nil
+            self._drag_origin = nil
+            self._drag_ghost  = nil
+            return
+        end
+    end
+    self:_clear_drag()
 end
 
 function MatrixScene:key_pressed(key)

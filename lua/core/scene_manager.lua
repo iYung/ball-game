@@ -75,6 +75,18 @@ function SceneManager:mouse_pressed(x, y, btn)
     end
 end
 
+function SceneManager:mouse_moved(x, y)
+    if self.current and self.current.mouse_moved then
+        self.current:mouse_moved(x, y)
+    end
+end
+
+function SceneManager:mouse_released(x, y, btn)
+    if self.current and self.current.mouse_released then
+        self.current:mouse_released(x, y, btn)
+    end
+end
+
 function SceneManager:text_input(text)
     if self.current and self.current.text_input then
         self.current:text_input(text)

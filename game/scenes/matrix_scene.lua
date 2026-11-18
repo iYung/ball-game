@@ -66,8 +66,11 @@ local CMD_ORDER = { "idle", "up", "down", "left", "right" }
 local CMD_GLYPH = { idle=".", up="^", down="v", left="<", right=">" }
 local MAX_TICKS = 500
 
-local function op_width(op)  return (OP_SIZES[op] or {1,1})[1] end
-local function op_height(op) return (OP_SIZES[op] or {1,1})[2] end
+local function op_width(op)        return (OP_SIZES[op] or {1,1})[1] end
+local function op_height(op, tile)
+    if op == "scale_row" then return (tile and tile.matrix_rows) or 4 end
+    return (OP_SIZES[op] or {1,1})[2]
+end
 
 local DIR_ARROWS = { right="->", left="<-", up="^", down="v" }
 
@@ -148,6 +151,11 @@ function MatrixScene:load_puzzle(n)
     self.input_matrix   = Matrix.new(p.input.rows,  p.input.cols,  p.input.values)
     self.target_matrix  = Matrix.new(p.target.rows, p.target.cols, p.target.values)
     self.current_matrix = nil
+    -- Clamp row-index params to actual matrix row count
+    local nr = p.input.rows
+    PARAM_DEFS.scale_row[1].max  = nr
+    PARAM_DEFS.swap_rows[1].max  = nr
+    PARAM_DEFS.swap_rows[2].max  = nr
     self.status         = nil
     self.running        = false
     self.sim            = nil
@@ -166,6 +174,12 @@ function MatrixScene:load_puzzle(n)
     end
     self.grid:set(p.source.x, p.source.y, {kind="source", locked=true})
     self.grid:set(p.sink.x,   p.sink.y,   {kind="sink",   locked=true})
+    self.gaps = {}
+    for _, g in ipairs(p.gaps or {}) do
+        self.gaps[g.y] = self.gaps[g.y] or {}
+        self.gaps[g.y][g.x] = true
+        self.grid:set(g.x, g.y, {kind="gap", locked=true})
+    end
     self.occupied_ops = {}
     self._last_fp     = {}
     self:_build_palette()
@@ -239,7 +253,7 @@ function MatrixScene:start_run()
     local p             = self.puzzle
     self.current_matrix = self.input_matrix:copy()
     self.sim            = { x=p.source.x, y=p.source.y, tick=0, idle=0,
-                            pushers=self:_pusher_list() }
+                            pushers=self:_pusher_list(), gaps=self.gaps }
     self.status         = "running"
     self.running        = true
     self.occupied_ops   = {}
@@ -329,7 +343,7 @@ function MatrixScene:do_step()
     local st = {
         x=sim.x, y=sim.y, rows=mat.rows, cols=mat.cols,
         w=grid.w, h=grid.h, pushers=sim.pushers,
-        n=self.timeline_n, tick=sim.tick,
+        n=self.timeline_n, tick=sim.tick, gaps=sim.gaps,
     }
     local moved = Sim.advance(st)
     sim.x, sim.y, sim.tick = st.x, st.y, st.tick
@@ -405,6 +419,13 @@ function MatrixScene:draw_grid()
             love.graphics.rectangle("fill", sx, sy, CELL_SIZE, CELL_SIZE)
             love.graphics.setColor(0.20, 0.20, 0.30, 1)
             love.graphics.rectangle("line", sx, sy, CELL_SIZE, CELL_SIZE)
+            local tile_raw = self.grid.cells[cy][cx]
+            if tile_raw and tile_raw.kind == "gap" then
+                love.graphics.setColor(0.04, 0.04, 0.06, 1)
+                love.graphics.rectangle("fill", sx, sy, CELL_SIZE, CELL_SIZE)
+                love.graphics.setColor(0.3, 0.1, 0.1, 1)
+                love.graphics.rectangle("line", sx, sy, CELL_SIZE, CELL_SIZE)
+            end
         end
     end
 
@@ -572,9 +593,14 @@ function MatrixScene:draw_tile(tile, cx, cy)
         -- During a run the placed tile only marks the start; the live pusher is drawn separately.
         self:draw_pusher(tile.id, sx, sy, self.sim ~= nil)
 
+    elseif tile.kind == "gap" then
+        love.graphics.setColor(0.5, 0.15, 0.15, 1)
+        love.graphics.setFont(self.font_cell)
+        love.graphics.printf("×", sx, mid_y - 8, cs, "center")
+
     elseif tile.kind == "op" then
         local w = op_width(tile.op)
-        local h = op_height(tile.op)
+        local h = op_height(tile.op, tile)
         local span_w = w * cs
         local span_h = h * cs
 
@@ -594,7 +620,7 @@ function MatrixScene:draw_tile(tile, cx, cy)
             love.graphics.print(OP_SYMBOLS[op] or "?", sx + 2, sy + 2)
             self:draw_matrix_value_cell(tile, 1, 1, cx, cy)
         elseif op == "scale_row" then
-            for band = 1, 4 do
+            for band = 1, (tile.matrix_rows or 4) do
                 self:draw_scale_band(tile, band, cx, cy + band - 1)
             end
         elseif op == "swap_rows" then
@@ -617,7 +643,7 @@ function MatrixScene:draw_tile(tile, cx, cy)
         end
     end
 
-    if tile.locked then
+    if tile.locked and tile.kind ~= "gap" then
         love.graphics.setColor(0.7, 0.7, 0.7, 0.7)
         love.graphics.circle("fill", sx + cs - 8, sy + 7, 3)
         love.graphics.rectangle("fill", sx + cs - 10, sy + 7, 4, 5)
@@ -932,8 +958,9 @@ end
 -- ── Input ──────────────────────────────────────────────────────────────────
 
 function MatrixScene:_place_tile_at(cx, cy, spec)
+    local matrix_rows = self.input_matrix and self.input_matrix.rows or 4
     local w = op_width(spec.op or "")
-    local h = op_height(spec.op or "")
+    local h = op_height(spec.op or "", {matrix_rows = matrix_rows})
     if spec.kind == "arrow" then w = 1; h = 1 end
 
     if not self.grid:in_bounds_multi_2d(cx, cy, w, h) then return end
@@ -994,6 +1021,7 @@ function MatrixScene:_place_tile_at(cx, cy, spec)
         width=w, height=h,
         tile_rows=tile_rows, tile_cols=tile_cols,
         values=values,
+        matrix_rows=(spec.op == "scale_row") and matrix_rows or nil,
     }
 
     if w > 1 or h > 1 then

@@ -85,7 +85,7 @@ jobs:
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
           body: |
-            🌐 **Web preview:** https://pr-${{ github.event.pull_request.number }}.${{ vars.CLOUDFLARE_PAGES_DOMAIN || format('{0}.pages.dev', vars.CLOUDFLARE_PROJECT_NAME) }}
+            🌐 **Web preview:** https://pr-${{ github.event.pull_request.number }}.ball-game-bnq.pages.dev
           edit-mode: replace
 
   cleanup-pr:

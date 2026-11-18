@@ -62,7 +62,7 @@ local OP_SIZES = {
 
 -- Timeline panel: one row per pusher, one slot per tick, shared length n.
 local TL = { ROW_H=15, SLOT_W=22, SLOT_GAP=2, LABEL_W=26, MIN_N=1, MAX_N=16, DEFAULT_N=8, MAX_PUSHERS=8 }
-local CMD_ORDER = { "idle", "up", "down", "left", "right" }
+local CMD_ORDER = { "idle", "up", "right", "down", "left" }
 local CMD_GLYPH = { idle=".", up="^", down="v", left="<", right=">" }
 local MAX_TICKS = 500
 

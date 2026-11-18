@@ -68,7 +68,7 @@ local MAX_TICKS = 500
 
 local function op_width(op)        return (OP_SIZES[op] or {1,1})[1] end
 local function op_height(op, tile)
-    if op == "scale_row" then return (tile and (tile.tile_rows or tile.matrix_rows)) or 4 end
+    if op == "scale_row" then return (tile and tile.tile_rows) or 4 end
     return (OP_SIZES[op] or {1,1})[2]
 end
 

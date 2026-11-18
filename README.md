@@ -22,7 +22,7 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 
 **Tile types:**
 
-- **P** (Pusher) — a 1×1 mobile unit labelled A–H (up to 8). The tile you place is its start cell. Each tick its timeline command (`^ v < >`, or `.` idle) moves it one cell. Walking into a matrix cell shoves the whole matrix one cell the same way (a pusher starting under the matrix rides along inside it). Pushers stay put at the grid edge and gap cells, and can't walk into each other; a shove that would push the matrix off the grid, onto a gap, or onto another pusher does nothing. Pushers act in letter order each tick, so A moves before B.
+- **P** (Pusher) — a 1×1 mobile unit labelled A–H (up to 8). The tile you place is its start cell. Each tick its timeline command (`^ v < >`, or `.` idle) moves it one cell. Walking into a matrix cell shoves the whole matrix one cell the same way (a pusher starting under the matrix rides along inside it). Pushers stay put at the grid edge and gap cells, and can't walk into each other; a shove that would push the matrix off the grid, onto a gap, or onto another pusher (even one already inside the matrix footprint) does nothing. Pushers act in letter order each tick, so A moves before B.
 - **×** (Gap) — dark impassable cells placed by the puzzle. Neither pushers nor any part of the matrix can enter them. Some puzzles require reshaping the matrix (e.g. transposing a 2×3 into a 3×2) to fit through a narrow gap corridor.
 - **×R** (Scale Row) — vertical tile spanning the matrix's row count; click a band to select the target row, then click left/right thirds of the selected band to adjust the scalar
 - **⇅R** (Swap Rows) — 1×2 vertical tile; click left/right thirds of each strip to adjust the row index

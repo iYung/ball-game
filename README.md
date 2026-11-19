@@ -15,7 +15,7 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 | `Enter` | Play selected puzzle |
 | `Esc` | Return to start screen |
 
-Puzzles are grouped into three worlds — **Basics** (1–5), **Combos** (6–11), and **Advanced** (12–16) — shown in a top bar. Click the `<` / `>` arrows or press Left/Right to cycle worlds.
+Puzzles are grouped into three worlds — **Basics** (1–5), **Combos** (6–11), and **Advanced** (12–16) — shown in a top bar. Click the `<` / `>` arrows or press Left/Right to cycle worlds. Worlds 2 and 3 are **locked** until all puzzles in the previous world are solved. On the start screen, press `D` or click **(D) Unlock All** to mark every puzzle solved (useful for testing or jumping ahead).
 
 **In-game controls:**
 

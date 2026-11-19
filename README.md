@@ -59,11 +59,13 @@ Each puzzle only offers the op tiles it needs in the palette (the pusher, **[Mv]
 
 Op tiles span one board cell for the op plus one per parameter. Click the left third of a parameter cell for −1 and the right third for +1. An op fires once when the matrix first overlaps any of its cells, and re-arms after the matrix fully leaves.
 
+**Fixed ops:** some puzzles offer ops in two variants — editable (default) and fixed. Fixed ops in the palette are labelled with a `!` suffix (e.g. `xR!`). They can be placed and moved freely but their parameters are preset and cannot be changed. Puzzle-placed fixed ops (shown with a lock icon) are pre-positioned by the puzzle with set parameters; they cannot be moved, erased, or edited.
+
 **Timeline:** the panel in the right column has one row per pusher and `len` slots (default 8, adjustable 1–500, loops). When the loop is longer than the visible window, click `<` / `>` to scroll, or just run — the view auto-scrolls to follow the current slot and rewinds when the loop wraps. Edit it while stopped. Every pusher runs the same loop, so offset the commands to choreograph them.
 
 **Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. After a brief pause, a **solution recap screen** appears showing the number of ticks your solution took, the number of pieces you placed, and a looping animated playback of your solution — matrix ball and pushers moving in sync — on the board. Press `Enter` to advance to the next puzzle, `R` to replay the animation, or `Esc` to return to the level-select screen. A run with no movement for a full timeline loop ends as **STUCK**, and a run past 500 ticks ends as **TIMEOUT**.
 
-**20 puzzles** — from a simple identity check (puzzle 1) through increasingly complex matrix transformations. Puzzles 1–11 each introduce or practice a single operation; puzzles 12–16 require two or three operations in sequence (e.g. transpose then scale, Gaussian elimination, or a three-step chain); puzzles 17–20 introduce the new ops: row reduction, column operations, flips, and absolute value with rotation. Puzzles can use non-square (n×m) matrices.
+**23 puzzles** — from a simple identity check (puzzle 1) through increasingly complex matrix transformations. Puzzles 1–11 each introduce or practice a single operation; puzzles 12–16 require two or three operations in sequence (e.g. transpose then scale, Gaussian elimination, or a three-step chain); puzzles 17–20 introduce the new ops: row reduction, column operations, flips, and absolute value with rotation; puzzles 21–23 introduce fixed ops (player-placed fixed tools and puzzle-placed locked ops). Puzzles can use non-square (n×m) matrices.
 
 ## Structure
 

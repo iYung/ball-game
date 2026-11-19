@@ -15,6 +15,13 @@ local PUZZLES = {
     "data/puzzles/14_elimination.lua",
     "data/puzzles/15_scale_swap.lua",
     "data/puzzles/16_triple.lua",
+    "data/puzzles/17_add_rows.lua",
+    "data/puzzles/18_col_ops.lua",
+    "data/puzzles/19_flips.lua",
+    "data/puzzles/20_abs_rotate.lua",
+    "data/puzzles/21_fixed_player.lua",
+    "data/puzzles/22_fixed_puzzle.lua",
+    "data/puzzles/23_locked_scale.lua",
 }
 
 local PuzzleLoader = {}

@@ -131,7 +131,7 @@ do
     assert(scene.status == "no_pusher", "Space without pusher keeps no_pusher")
     assert(scene.sim == nil, "sim still nil")
     -- After placing a pusher the guard clears and the run starts.
-    add_pusher(scene, 2, 6, { "right", "right", "right", "right", "right", "right", "right", "right" })
+    add_pusher(scene, 1, 6, { "right", "right", "right", "right", "right", "right", "right", "right" })
     scene:key_pressed("r")
     assert(scene.status == "running" or scene.sim ~= nil, "run starts once a pusher is placed")
     print("PASS: no_pusher guard")

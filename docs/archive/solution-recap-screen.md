@@ -1,0 +1,6 @@
+# Solution Recap Screen Checklist
+
+- [x] Task A — `game/scenes/matrix_scene.lua` — Add frame recording: clear `self._run_frames = {}` in `start_run`; in `do_step` append `{from_x, from_y, to_x, to_y, matrix=self.current_matrix:copy()}` after computing the from/to positions, before updating anim state
+- [x] Task B — `game/scenes/matrix_scene.lua` — Add `_count_pieces()` helper that iterates all grid anchor cells and counts tiles where `tile.locked == false` (pushers + ops placed by the player, skipping ref cells to avoid double-counting multi-cell tiles)
+- [x] Task C — `game/scenes/matrix_scene.lua` — Change the win transition: instead of switching to `LevelSelectScene`, switch to `SolutionRecapScene.new(stats, board, frames, run_speed, scene_manager)` where `stats={ticks=self.sim.tick, pieces=self:_count_pieces(), puzzle_name=self.puzzle.name, puzzle_index=self.puzzle_index}`
+- [x] Task D — `game/scenes/solution_recap_scene.lua` — Create the new scene: draw static board (grid tiles + pushers) on the left panel; looping animated matrix using recorded frames with smooth-step interpolation; stat panel on the right showing "SOLVED!", puzzle name, ticks, pieces; bottom hint bar; input handling ([Enter]=next puzzle, [R]=restart replay, [Esc]=level-select)

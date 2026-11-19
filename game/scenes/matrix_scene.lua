@@ -290,9 +290,26 @@ function MatrixScene:start_run()
     self.cur_slot       = nil
     self.anim_t         = 1
     self.anim_ready     = true
+    self._run_frames    = {}
     self:_snap_anim_to_matrix()
     -- Ops under the starting footprint fire immediately.
     self:_process_footprint({})
+end
+
+function MatrixScene:_count_pieces()
+    local count = 0
+    for cy = 1, self.grid.h do
+        for cx = 1, self.grid.w do
+            local is_r = self.grid:is_ref(cx, cy)
+            if not is_r then
+                local tile = self.grid:get(cx, cy)
+                if tile and not tile.locked then
+                    count = count + 1
+                end
+            end
+        end
+    end
+    return count
 end
 
 -- Recomputes the footprint, re-arms op tiles the matrix has fully left, and fires
@@ -378,6 +395,12 @@ function MatrixScene:do_step()
     local mat  = self.current_matrix
     local from_x, from_y = cell_top_left(sim.x, sim.y)
 
+    local pushers_from = {}
+    for _, p in ipairs(sim.pushers) do
+        local px, py = cell_top_left(p.x, p.y)
+        pushers_from[#pushers_from + 1] = { id = p.id, px = px, py = py }
+    end
+
     local st = {
         x=sim.x, y=sim.y, rows=mat.rows, cols=mat.cols,
         w=grid.w, h=grid.h, pushers=sim.pushers,
@@ -390,6 +413,21 @@ function MatrixScene:do_step()
 
     local to_x, to_y = cell_top_left(sim.x, sim.y)
     local new_fp     = self:_process_footprint(self._last_fp)
+
+    if self._run_frames then
+        local pushers_to = {}
+        for _, p in ipairs(sim.pushers) do
+            local px, py = cell_top_left(p.x, p.y)
+            pushers_to[#pushers_to + 1] = { id = p.id, px = px, py = py }
+        end
+        self._run_frames[#self._run_frames + 1] = {
+            from_x       = from_x,       from_y       = from_y,
+            to_x         = to_x,         to_y         = to_y,
+            matrix       = self.current_matrix:copy(),
+            pushers_from = pushers_from,
+            pushers_to   = pushers_to,
+        }
+    end
 
     -- Any matrix cell on the sink ends the run.
     local status = "ok"
@@ -440,8 +478,22 @@ function MatrixScene:update(dt)
     if self.status == "win" and self._scene_manager then
         self._win_timer = (self._win_timer or 0) + dt
         if self._win_timer >= 0.8 then
-            local LevelSelectScene = require("game/scenes/level_select_scene")
-            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
+            local SolutionRecapScene = require("game/scenes/solution_recap_scene")
+            local stats = {
+                ticks        = self.sim.tick,
+                pieces       = self:_count_pieces(),
+                puzzle_name  = self.puzzle.name,
+                puzzle_index = self.puzzle_index,
+            }
+            local board = {
+                grid        = self.grid,
+                timeline    = self.timeline,
+                timeline_n  = self.timeline_n,
+                puzzle      = self.puzzle,
+            }
+            self._scene_manager:switch(
+                SolutionRecapScene.new(stats, board, self._run_frames or {}, self.run_speed, self._scene_manager)
+            )
         end
     end
 end

@@ -27,7 +27,7 @@ function HUD.new(x, y, w, h)
     self.h = h
     self.font_num   = love.graphics.newFont(14)
     self.font_label = love.graphics.newFont(16)
-    self.font_title = love.graphics.newFont(18)
+    self.font_title = love.graphics.newFont(13)
     return self
 end
 
@@ -84,7 +84,7 @@ function HUD:draw(input_mat, target_mat, puzzle_name, status)
     love.graphics.setFont(self.font_title)
     love.graphics.setColor(0.85, 0.85, 0.95, 1)
     love.graphics.printf(puzzle_name or "", x, cursor_y, w, "center")
-    cursor_y = cursor_y + 36
+    cursor_y = cursor_y + 20
 
     -- INPUT
     love.graphics.setFont(self.font_label)

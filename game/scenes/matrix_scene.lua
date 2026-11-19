@@ -12,11 +12,14 @@ local MatrixScene = {}
 MatrixScene.__index = MatrixScene
 
 -- Layout constants
-local GRID_X     = 95
-local GRID_Y     = 20
-local CELL_SIZE  = 63
-local PALETTE_Y  = 660
-local HUD_X      = 820
+local GRID_X          = 95
+local GRID_Y          = 20
+local CELL_SIZE       = 63
+local PALETTE_Y       = 660
+local HUD_X           = 820
+local SCREEN_W         = 1280
+local CMD_BTN_X        = SCREEN_W - 193   -- right-aligns 4 cmd buttons (183px) with 10px right margin
+local PALETTE_REGION_W = CMD_BTN_X - 50   -- palette slot width, leaving breathing room before cmd buttons
 
 -- Ops that expose editable parameters
 local PARAM_DEFS = {
@@ -179,7 +182,7 @@ end
 
 function MatrixScene:on_enter()
     self.palette      = Palette.new()
-    self.hud          = HUD.new(HUD_X, 0, 460, 720)
+    self.hud          = HUD.new(HUD_X, 0, 460, PALETTE_Y)
     self.font_cell    = love.graphics.newFont(14)
     self.font_ui      = love.graphics.newFont(11)
     self.font_key     = love.graphics.newFont(11)
@@ -230,9 +233,10 @@ function MatrixScene:load_puzzle(n)
     self.cur_slot       = nil
     self.timeline       = {}
     self.timeline_n     = TL.DEFAULT_N
-    self.timeline_scroll = 0
-    self._win_timer     = nil
-    self.grid           = Grid.new(p.grid_w, p.grid_h)
+    self.timeline_scroll  = 0
+    self._palette_scroll  = 0
+    self._win_timer      = nil
+    self.grid            = Grid.new(p.grid_w, p.grid_h)
 
     if p.locked then
         for _, t in ipairs(p.locked) do
@@ -288,19 +292,28 @@ function MatrixScene:_build_palette()
     self._btn_rects = {}
     local bx, by = 10, PALETTE_Y + 6
     local bw, bh, gap = 48, 48, 56
-    local pending_sep = false
+    local pending_sep   = false
+    local slot          = 0   -- 0-based button index (separators don't count as slots)
+    local sep_offset_px = 0   -- accumulated extra px from separator gaps
     for i, btn in ipairs(PALETTE_BUTTONS) do
         if btn.sep then
             pending_sep = true
         elseif not btn.op or not allowed or allowed[btn.op] then
-            if pending_sep then bx = bx + 20; pending_sep = false end
-            self._btn_rects[i] = { x=bx, y=by, w=bw, h=bh, btn=btn }
-            bx = bx + gap
+            if pending_sep then
+                bx = bx + 20
+                sep_offset_px = sep_offset_px + 20
+                pending_sep = false
+            end
+                self._btn_rects[i] = { x=bx, y=by, w=bw, h=bh, btn=btn,
+                                   slot=slot, sep_offset=sep_offset_px }
+            bx   = bx + gap
+            slot = slot + 1
         end
     end
     -- Fixed op buttons (ops listed in puzzle.fixed_ops)
     if self.puzzle.fixed_ops and #self.puzzle.fixed_ops > 0 then
-        bx = bx + 20  -- separator gap
+        bx            = bx + 20
+        sep_offset_px = sep_offset_px + 20
         for _, op in ipairs(self.puzzle.fixed_ops) do
             local label = nil
             for _, btn in ipairs(PALETTE_BUTTONS) do
@@ -310,12 +323,16 @@ function MatrixScene:_build_palette()
                 local idx = "fixed_" .. op
                 self._btn_rects[idx] = {
                     x=bx, y=by, w=bw, h=bh,
-                    btn={ kind="op", op=op, label=label, fixed=true }
+                    btn={ kind="op", op=op, label=label, fixed=true },
+                    slot=slot, sep_offset=sep_offset_px,
                 }
-                bx = bx + gap
+                bx   = bx + gap
+                slot = slot + 1
             end
         end
     end
+    self._palette_total_btns = slot
+    self._palette_vis_slots  = math.floor(PALETTE_REGION_W / gap)
     local sel = self.palette:selected()
     if sel and sel.kind == "op" and allowed and not allowed[sel.op] then
         if not fixed_allowed[sel.op] then self.palette:select(nil) end
@@ -327,14 +344,12 @@ function MatrixScene:_build_cmd_buttons()
     self._cmd_btn_rects = {}
     local bw, bh = 42, 48
     local step   = 47
-    local start_x = 622
-    local by = PALETTE_Y + 6
     for i, btn in ipairs(CMD_BUTTONS) do
         self._cmd_btn_rects[i] = {
             id    = btn.id,
             label = btn.label,
-            x     = start_x + (i - 1) * step,
-            y     = by,
+            x     = CMD_BTN_X + (i - 1) * step,
+            y     = PALETTE_Y + 6,
             w     = bw,
             h     = bh,
         }
@@ -1255,30 +1270,68 @@ end
 
 function MatrixScene:draw_palette()
     love.graphics.setColor(0.06, 0.06, 0.10, 1)
-    love.graphics.rectangle("fill", 0, PALETTE_Y, HUD_X, 60)
+    love.graphics.rectangle("fill", 0, PALETTE_Y, SCREEN_W, 60)
 
-    local sel = self.palette:selected()
+    local sel        = self.palette:selected()
+    local gap        = 56
+    local bw         = 48
+    local scroll     = self._palette_scroll or 0
+    local max_scroll = math.max(0, (self._palette_total_btns or 0) - (self._palette_vis_slots or 99))
+
+    -- Slot-based palette buttons: skip those scrolled off-screen or beyond cmd region
     for _, rect in pairs(self._btn_rects) do
-        local btn    = rect.btn
-        local is_sel = false
-        if sel == nil and btn.erase then
-            is_sel = true
-        elseif sel and btn.kind == sel.kind then
-            if btn.kind == "pusher" then is_sel = true
-            elseif btn.kind == "op" then
-                is_sel = (btn.op == sel.op) and ((btn.fixed or false) == (sel.fixed or false))
-            elseif btn.kind == "drag" then is_sel = true end
-        end
+        local btn      = rect.btn
+        local screen_x = 10 + (rect.sep_offset or 0) + (rect.slot - scroll) * gap
+        if screen_x >= 10 and screen_x + bw <= PALETTE_REGION_W then
+            local is_sel = false
+            if sel == nil and btn.erase then
+                is_sel = true
+            elseif sel and btn.kind == sel.kind then
+                if btn.kind == "pusher" then is_sel = true
+                elseif btn.kind == "op" then
+                    is_sel = (btn.op == sel.op) and ((btn.fixed or false) == (sel.fixed or false))
+                elseif btn.kind == "drag" then is_sel = true end
+            end
 
-        love.graphics.setColor(0.12, 0.12, 0.20, 1)
-        love.graphics.rectangle("fill", rect.x, rect.y, rect.w, rect.h, 4, 4)
-        love.graphics.setColor(is_sel and {0.8,0.9,1.0,1} or {0.3,0.3,0.45,1})
-        love.graphics.setLineWidth(is_sel and 2 or 1)
-        love.graphics.rectangle("line", rect.x, rect.y, rect.w, rect.h, 4, 4)
-        love.graphics.setLineWidth(1)
-        love.graphics.setColor(0.85, 0.85, 0.9, 1)
-        love.graphics.setFont(self.font_ui)
-        love.graphics.printf(btn.label, rect.x, rect.y + 17, rect.w, "center")
+            love.graphics.setColor(0.12, 0.12, 0.20, 1)
+            love.graphics.rectangle("fill", screen_x, rect.y, bw, rect.h, 4, 4)
+            love.graphics.setColor(is_sel and {0.8,0.9,1.0,1} or {0.3,0.3,0.45,1})
+            love.graphics.setLineWidth(is_sel and 2 or 1)
+            love.graphics.rectangle("line", screen_x, rect.y, bw, rect.h, 4, 4)
+            love.graphics.setLineWidth(1)
+            love.graphics.setColor(0.85, 0.85, 0.9, 1)
+            love.graphics.setFont(self.font_ui)
+            love.graphics.printf(btn.label, screen_x, rect.y + 17, bw, "center")
+        end
+    end
+
+    -- Scroll arrows (only when palette overflows)
+    self._palette_scroll_left_rect  = nil
+    self._palette_scroll_right_rect = nil
+    if max_scroll > 0 then
+        local by = PALETTE_Y + 6
+        if scroll > 0 then
+            local r = { x=4, y=by, w=14, h=48 }
+            self._palette_scroll_left_rect = r
+            love.graphics.setColor(0.14, 0.14, 0.22, 1)
+            love.graphics.rectangle("fill", r.x, r.y, r.w, r.h, 2, 2)
+            love.graphics.setColor(0.3, 0.3, 0.45, 1)
+            love.graphics.rectangle("line", r.x, r.y, r.w, r.h, 2, 2)
+            love.graphics.setColor(0.7, 0.7, 0.85, 1)
+            love.graphics.setFont(self.font_ui)
+            love.graphics.printf("<", r.x, r.y + 17, r.w, "center")
+        end
+        if scroll < max_scroll then
+            local r = { x=PALETTE_REGION_W + 10, y=by, w=14, h=48 }
+            self._palette_scroll_right_rect = r
+            love.graphics.setColor(0.14, 0.14, 0.22, 1)
+            love.graphics.rectangle("fill", r.x, r.y, r.w, r.h, 2, 2)
+            love.graphics.setColor(0.3, 0.3, 0.45, 1)
+            love.graphics.rectangle("line", r.x, r.y, r.w, r.h, 2, 2)
+            love.graphics.setColor(0.7, 0.7, 0.85, 1)
+            love.graphics.setFont(self.font_ui)
+            love.graphics.printf(">", r.x, r.y + 17, r.w, "center")
+        end
     end
 
     self:_draw_cmd_buttons()
@@ -1286,7 +1339,7 @@ function MatrixScene:draw_palette()
     love.graphics.setColor(0.5, 0.65, 0.5, 1)
     love.graphics.setFont(self.font_key)
     local nav = string.format("Puzzle %d/%d  [Esc] Menu", self.puzzle_index, PuzzleLoader.count())
-    love.graphics.printf(nav, 0, PALETTE_Y + 6, HUD_X, "right")
+    love.graphics.printf(nav, 0, PALETTE_Y + 50, PALETTE_REGION_W, "right")
     love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -1603,12 +1656,7 @@ function MatrixScene:mouse_moved(mx, my)
 end
 
 function MatrixScene:mouse_pressed(mx, my, btn)
-    if mx >= HUD_X then
-        self:_timeline_click(mx, my, btn)
-        return
-    end
-
-    -- Palette bar
+    -- Palette bar spans full screen width — check before HUD column guard
     if my >= PALETTE_Y then
         -- Command buttons
         if self._cmd_btn_rects then
@@ -1652,9 +1700,22 @@ function MatrixScene:mouse_pressed(mx, my, btn)
                 end
             end
         end
+        -- Palette scroll arrows
+        local max_scroll = math.max(0, (self._palette_total_btns or 0) - (self._palette_vis_slots or 999))
+        if self._palette_scroll_left_rect and in_rect(self._palette_scroll_left_rect, mx, my) then
+            self._palette_scroll = math.max(0, (self._palette_scroll or 0) - 1)
+            return
+        end
+        if self._palette_scroll_right_rect and in_rect(self._palette_scroll_right_rect, mx, my) then
+            self._palette_scroll = math.min(max_scroll, (self._palette_scroll or 0) + 1)
+            return
+        end
+
         for _, rect in pairs(self._btn_rects) do
-            if mx >= rect.x and mx < rect.x + rect.w
-            and my >= rect.y and my < rect.y + rect.h then
+            local screen_x = 10 + (rect.sep_offset or 0) + (rect.slot - (self._palette_scroll or 0)) * 56
+            if mx >= screen_x and mx < screen_x + rect.w
+            and my >= rect.y and my < rect.y + rect.h
+            and screen_x >= 10 and screen_x + rect.w <= PALETTE_REGION_W then
                 local b = rect.btn
                 if b.erase then
                     self.palette:select(nil)
@@ -1668,6 +1729,11 @@ function MatrixScene:mouse_pressed(mx, my, btn)
                 return
             end
         end
+        return
+    end
+
+    if mx >= HUD_X then
+        self:_timeline_click(mx, my, btn)
         return
     end
 

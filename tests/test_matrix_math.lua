@@ -201,4 +201,80 @@ do
     print("PASS: set_row")
 end
 
+-- scale_col()
+do
+    local a = m(2, 2, {{1,2},{3,4}})
+    local r = a:scale_col(2, 3)
+    assert_immutable(a, r, "scale_col")
+    assert_eq(r, m(2, 2, {{1,6},{3,12}}), "scale_col result")
+    print("PASS: scale_col")
+end
+
+-- swap_cols()
+do
+    local a = m(2, 3, {{1,2,3},{4,5,6}})
+    local r = a:swap_cols(1, 3)
+    assert_immutable(a, r, "swap_cols")
+    assert_eq(r, m(2, 3, {{3,2,1},{6,5,4}}), "swap_cols result")
+    local same = a:swap_cols(2, 2)
+    assert_eq(same, a, "swap_cols same col no-op")
+    print("PASS: swap_cols")
+end
+
+-- add_cols()
+do
+    local a = m(2, 2, {{1,0},{2,0}})
+    local r = a:add_cols(1, 2, 3)
+    assert_immutable(a, r, "add_cols")
+    assert_eq(r, m(2, 2, {{1,3},{2,6}}), "add_cols result")
+    local same = a:add_cols(1, 1, 5)
+    assert(same == a, "add_cols same col is a no-op")
+    print("PASS: add_cols")
+end
+
+-- set_col()
+do
+    local a = m(3, 2, {{1,2},{3,4},{5,6}})
+    local r = a:set_col(1, {9,8,7})
+    assert_immutable(a, r, "set_col")
+    assert_eq(r, m(3, 2, {{9,2},{8,4},{7,6}}), "set_col result")
+    print("PASS: set_col")
+end
+
+-- rotate_90()
+do
+    local a = m(2, 3, {{1,2,3},{4,5,6}})
+    local r = a:rotate_90()
+    assert_immutable(a, r, "rotate_90")
+    assert_eq(r, m(3, 2, {{4,1},{5,2},{6,3}}), "rotate_90 result")
+    print("PASS: rotate_90")
+end
+
+-- flip_h()
+do
+    local a = m(2, 3, {{1,2,3},{4,5,6}})
+    local r = a:flip_h()
+    assert_immutable(a, r, "flip_h")
+    assert_eq(r, m(2, 3, {{3,2,1},{6,5,4}}), "flip_h result")
+    print("PASS: flip_h")
+end
+
+-- flip_v()
+do
+    local a = m(3, 2, {{1,2},{3,4},{5,6}})
+    local r = a:flip_v()
+    assert_immutable(a, r, "flip_v")
+    assert_eq(r, m(3, 2, {{5,6},{3,4},{1,2}}), "flip_v result")
+    print("PASS: flip_v")
+end
+
+-- abs()
+do
+    local a = m(2, 2, {{-1,2},{-3,-4}})
+    local r = a:abs()
+    assert_immutable(a, r, "abs")
+    assert_eq(r, m(2, 2, {{1,2},{3,4}}), "abs result")
+    print("PASS: abs")
+end
+
 print("ALL TESTS PASSED")

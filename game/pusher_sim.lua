@@ -141,6 +141,39 @@ function Sim.apply_op(tile, matrix)
             values[c] = (tv[1] and tv[1][c]) or 0
         end
         return matrix:set_row(row, values)
+    elseif op == "add_rows" then
+        local src = math.max(1, math.min(n, p.src or 1))
+        local dst = math.max(1, math.min(n, p.dst or 2))
+        if src == dst then return matrix end
+        return matrix:add_rows(src, dst, p.scalar or 1)
+    elseif op == "scale_col" then
+        local c = math.max(1, math.min(matrix.cols, p.col or 1))
+        return matrix:scale_col(c, p.scalar or 1)
+    elseif op == "swap_cols" then
+        local a = math.max(1, math.min(matrix.cols, p.col_a or 1))
+        local b = math.max(1, math.min(matrix.cols, p.col_b or 2))
+        return matrix:swap_cols(a, b)
+    elseif op == "add_cols" then
+        local src = math.max(1, math.min(matrix.cols, p.src or 1))
+        local dst = math.max(1, math.min(matrix.cols, p.dst or 2))
+        if src == dst then return matrix end
+        return matrix:add_cols(src, dst, p.scalar or 1)
+    elseif op == "set_col" then
+        local col = p.col or 1
+        local values = {}
+        local tv = tile.values or {{}}
+        for r = 1, tile.tile_rows or 1 do
+            values[r] = (tv[r] and tv[r][1]) or 0
+        end
+        return matrix:set_col(col, values)
+    elseif op == "rotate_90" then
+        return matrix:rotate_90()
+    elseif op == "flip_h" then
+        return matrix:flip_h()
+    elseif op == "flip_v" then
+        return matrix:flip_v()
+    elseif op == "abs" then
+        return matrix:abs()
     end
     return matrix
 end

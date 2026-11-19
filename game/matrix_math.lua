@@ -126,4 +126,87 @@ function Matrix:set_row(r, values)
     return m
 end
 
+function Matrix:scale_col(c, s)
+    c = math.max(1, math.min(self.cols, c))
+    local m = self:copy()
+    for r = 1, m.rows do
+        m.values[r][c] = m.values[r][c] * s
+    end
+    return m
+end
+
+function Matrix:swap_cols(a, b)
+    local m = self:copy()
+    if a == b then return m end
+    for r = 1, m.rows do
+        m.values[r][a], m.values[r][b] = m.values[r][b], m.values[r][a]
+    end
+    return m
+end
+
+function Matrix:add_cols(src, dst, s)
+    if src == dst then return self end
+    local m = self:copy()
+    for r = 1, m.rows do
+        m.values[r][dst] = m.values[r][dst] + s * m.values[r][src]
+    end
+    return m
+end
+
+function Matrix:set_col(c, values)
+    c = math.max(1, math.min(self.cols, c))
+    local m = self:copy()
+    for r = 1, math.min(self.rows, #values) do
+        m.values[r][c] = values[r]
+    end
+    return m
+end
+
+function Matrix:rotate_90()
+    -- 90° clockwise: new[c][rows-r+1] = old[r][c], result is cols×rows
+    local v = {}
+    for nc = 1, self.cols do
+        v[nc] = {}
+        for nr = 1, self.rows do
+            v[nc][nr] = 0
+        end
+    end
+    for r = 1, self.rows do
+        for c = 1, self.cols do
+            v[c][self.rows - r + 1] = self.values[r][c]
+        end
+    end
+    return Matrix.new(self.cols, self.rows, v)
+end
+
+function Matrix:flip_h()
+    local m = self:copy()
+    for r = 1, m.rows do
+        for c = 1, math.floor(m.cols / 2) do
+            local mirror = m.cols - c + 1
+            m.values[r][c], m.values[r][mirror] = m.values[r][mirror], m.values[r][c]
+        end
+    end
+    return m
+end
+
+function Matrix:flip_v()
+    local m = self:copy()
+    for r = 1, math.floor(m.rows / 2) do
+        local mirror = m.rows - r + 1
+        m.values[r], m.values[mirror] = m.values[mirror], m.values[r]
+    end
+    return m
+end
+
+function Matrix:abs()
+    local m = self:copy()
+    for r = 1, m.rows do
+        for c = 1, m.cols do
+            m.values[r][c] = math.abs(m.values[r][c])
+        end
+    end
+    return m
+end
+
 return Matrix

@@ -10,9 +10,12 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 
 | Key | Action |
 |-----|--------|
-| `Up / Down` | Navigate puzzle list |
+| `Left / Right` | Switch world |
+| `Up / Down` | Navigate puzzle list within world |
 | `Enter` | Play selected puzzle |
 | `Esc` | Return to start screen |
+
+Puzzles are grouped into three worlds — **Basics** (1–5), **Combos** (6–11), and **Advanced** (12–16) — shown in a top bar. Click the `<` / `>` arrows or press Left/Right to cycle worlds.
 
 **In-game controls:**
 

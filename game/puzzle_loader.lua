@@ -17,7 +17,32 @@ local PUZZLES = {
     "data/puzzles/16_triple.lua",
 }
 
+local WORLDS = {
+    { name = "Basics",   puzzles = { 1,  2,  3,  4,  5 } },
+    { name = "Combos",   puzzles = { 6,  7,  8,  9, 10, 11 } },
+    { name = "Advanced", puzzles = { 12, 13, 14, 15, 16 } },
+}
+
 local PuzzleLoader = {}
+
+function PuzzleLoader.world_count()
+    return #WORLDS
+end
+
+function PuzzleLoader.world(w)
+    if type(w) ~= "number" or w < 1 or w > #WORLDS then
+        error(string.format("PuzzleLoader.world: index %s out of range (1–%d)", tostring(w), #WORLDS))
+    end
+    local def = WORLDS[w]
+    local result = { name = def.name, puzzles = {} }
+    for _, idx in ipairs(def.puzzles) do
+        result.puzzles[#result.puzzles + 1] = {
+            index = idx,
+            name  = PuzzleLoader.load(idx).name or ("Puzzle " .. idx),
+        }
+    end
+    return result
+end
 
 function PuzzleLoader.load(n)
     if type(n) ~= "number" or n < 1 or n > #PUZZLES then

@@ -10,6 +10,11 @@ local PUZZLES = {
     "data/puzzles/09_uturn.lua",
     "data/puzzles/10_set_row.lua",
     "data/puzzles/11_rotate_gap.lua",
+    "data/puzzles/12_negate_swap.lua",
+    "data/puzzles/13_flip_scale.lua",
+    "data/puzzles/14_elimination.lua",
+    "data/puzzles/15_scale_swap.lua",
+    "data/puzzles/16_triple.lua",
 }
 
 local PuzzleLoader = {}

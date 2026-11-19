@@ -4,7 +4,7 @@ A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to tran
 
 ## How to play
 
-The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue) cell fixed by each puzzle. The matrix starts on the Source and does not move on its own — you place **pushers** and program them on a shared **timeline**. Pushers walk around the board and shove the matrix when they walk into it. Op tiles in its path transform it; any matrix cell touching the Sink ends the run.
+The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue) fixed by each puzzle. The Source tile spans the same number of cells as the input matrix (rows × cols), showing exactly where the matrix will sit at the start of a run. The matrix does not move on its own — you place **pushers** and program them on a shared **timeline**. Pushers walk around the board and shove the matrix when they walk into it. Op tiles in its path transform it; any matrix cell touching the Sink ends the run.
 
 **Controls:**
 
@@ -14,15 +14,15 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 | `Space` | Step — advance one tick |
 | `Backspace` | Reset — return the matrix to the source |
 | `← →` | Previous / next puzzle |
-| Left-click grid | Place selected tile |
-| Right-click grid | Erase tile |
+| Left-click grid | Place selected tile (or pick up a tile in **[Mv]** mode) |
+| Right-click grid | Erase tile (or cancel an in-progress drag) |
 | Left-click palette | Select a tile type |
 | Left / right-click timeline slot | Cycle that slot's command forward / back |
 | `Esc` | Quit |
 
 **Tile types:**
 
-- **P** (Pusher) — a 1×1 mobile unit labelled A–H (up to 8). The tile you place is its start cell. Each tick its timeline command (`^ v < >`, or `.` idle) moves it one cell. Walking into a matrix cell shoves the whole matrix one cell the same way (a pusher starting under the matrix rides along inside it). Pushers stay put at the grid edge and gap cells, and can't walk into each other; a shove that would push the matrix off the grid, onto a gap, or onto another pusher does nothing. If a transform (e.g. transpose) produces a footprint that extends off the grid, overlaps a gap, or overlaps a pusher, the run ends as **FAIL**. Pushers act in letter order each tick, so A moves before B.
+- **P** (Pusher) — a 1×1 mobile unit labelled A–H (up to 8). The tile you place is its start cell. Each tick its timeline command (`^ v < >`, or `.` idle) moves it one cell. Walking into a matrix cell shoves the whole matrix one cell the same way (a pusher starting under the matrix rides along inside it). Pushers stay put at the grid edge and gap cells, and can't walk into each other; a shove that would push the matrix off the grid, onto a gap, or onto another pusher (even one already inside the matrix footprint) does nothing. If a transform (e.g. transpose) produces a footprint that extends off the grid, overlaps a gap, or overlaps a pusher, the run ends as **FAIL**. Pushers act in letter order each tick, so A moves before B.
 - **×** (Gap) — dark impassable cells placed by the puzzle. Neither pushers nor any part of the matrix can enter them. Some puzzles require reshaping the matrix (e.g. transposing a 2×3 into a 3×2) to fit through a narrow gap corridor.
 - **×R** (Scale Row) — vertical tile spanning the matrix's row count; click a band to select the target row, then click left/right thirds of the selected band to adjust the scalar
 - **⇅R** (Swap Rows) — 1×2 vertical tile; click left/right thirds of each strip to adjust the row index
@@ -35,7 +35,9 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 
 Click a value cell on any matrix op tile to increment/decrement its value (left/right thirds = −1/+1). Values are clamped to [−9, 9].
 
-Each puzzle only offers the op tiles it needs in the palette (the pusher and eraser are always there).
+Each puzzle only offers the op tiles it needs in the palette (the pusher, **[Mv]** move tool, and eraser are always there).
+
+**Moving tiles:** select **[Mv]** in the palette, then click any unlocked tile to pick it up. A ghost preview follows the cursor — green means the drop is valid, red means the target is occupied or out of bounds. Release the mouse to drop, or right-click to cancel (the tile snaps back to its original position with all parameters intact). Multi-cell tiles (e.g. Scale Row) move as a unit.
 
 Op tiles span one board cell for the op plus one per parameter. Click the left third of a parameter cell for −1 and the right third for +1. An op fires once when the matrix first overlaps any of its cells, and re-arms after the matrix fully leaves.
 
@@ -43,7 +45,7 @@ Op tiles span one board cell for the op plus one per parameter. Click the left t
 
 **Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. A run with no movement for a full timeline loop ends as **STUCK**, and a run past 500 ticks ends as **TIMEOUT**.
 
-**11 puzzles** — from a simple identity check (puzzle 1) through increasingly complex matrix transformations including row operations, constant-matrix ops, and a gap-corridor puzzle requiring matrix rotation (puzzle 11). Puzzles can use non-square (n×m) matrices.
+**16 puzzles** — from a simple identity check (puzzle 1) through increasingly complex matrix transformations. Puzzles 1–11 each introduce or practice a single operation; puzzles 12–16 require two or three different operations in sequence (e.g. transpose then scale, Gaussian elimination, or a three-step chain). Puzzles can use non-square (n×m) matrices.
 
 ## Structure
 

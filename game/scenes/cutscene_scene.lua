@@ -130,6 +130,7 @@ function CutsceneScene:draw()
     local beats = self._beats
     if #beats == 0 then return end
     local beat = beats[self._beat_idx]
+    if not beat then return end
 
     -- Background
     local bg = beat.bg or {0.05, 0.05, 0.10}

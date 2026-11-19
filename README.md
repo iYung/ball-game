@@ -6,7 +6,15 @@ A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to tran
 
 The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue) fixed by each puzzle. The Source tile spans the same number of cells as the input matrix (rows × cols), showing exactly where the matrix will sit at the start of a run. The matrix does not move on its own — you place **pushers** and program them on a shared **timeline**. Pushers walk around the board and shove the matrix when they walk into it. Op tiles in its path transform it; any matrix cell touching the Sink ends the run.
 
-**Controls:**
+**Level select:**
+
+| Key | Action |
+|-----|--------|
+| `Up / Down` | Navigate puzzle list |
+| `Enter` | Play selected puzzle |
+| `Esc` | Return to start screen |
+
+**In-game controls:**
 
 | Key | Action |
 |-----|--------|

@@ -142,7 +142,7 @@ function LevelSelectScene:draw()
     -- Hint
     love.graphics.setFont(self._font_hint)
     love.graphics.setColor(0.35, 0.40, 0.55, 1)
-    love.graphics.printf("[↑↓] Navigate   [Enter] Play   [Esc] Back", 0, H - 36, W, "center")
+    love.graphics.printf("[Up/Down] Navigate   [Enter] Play   [Esc] Back", 0, H - 36, W, "center")
 
     love.graphics.setColor(1, 1, 1, 1)
 end

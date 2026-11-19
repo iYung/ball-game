@@ -8,17 +8,19 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 
 **Controls:**
 
-| Key | Action |
-|-----|--------|
-| `R` | Run — one timeline tick at a time, animated |
-| `Space` | Step — advance one tick |
-| `Backspace` | Reset — return the matrix to the source |
+| Key / Button | Action |
+|-------------|--------|
+| `R` or **Run** button | Run — one timeline tick at a time, animated |
+| `Space` or **Step** button | Step — advance one tick |
+| `Backspace` or **Reset** button | Reset — return the matrix to the source |
+| `Esc` or **Menu** button | Return to level select (from puzzle) or start screen (from level select) |
 | `← →` | Previous / next puzzle |
 | Left-click grid | Place selected tile (or pick up a tile in **[Mv]** mode) |
 | Right-click grid | Erase tile (or cancel an in-progress drag) |
 | Left-click palette | Select a tile type |
 | Left / right-click timeline slot | Cycle that slot's command forward / back |
-| `Esc` | Return to level select (from puzzle) or start screen (from level select) |
+
+The **Run**, **Step**, **Reset**, and **Menu** buttons appear in the bottom palette bar. Buttons that aren't applicable in the current state are shown dimmed.
 
 **Tile types:**
 

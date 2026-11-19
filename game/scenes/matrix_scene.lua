@@ -91,6 +91,13 @@ local PALETTE_BUTTONS = {
     { erase=true, label="[X]" },
 }
 
+local CMD_BUTTONS = {
+    { id="run",   label="Run"   },
+    { id="step",  label="Step"  },
+    { id="reset", label="Reset" },
+    { id="menu",  label="Menu"  },
+}
+
 -- ── Helpers ────────────────────────────────────────────────────────────────
 
 local function screen_to_cell(mx, my)
@@ -219,6 +226,25 @@ function MatrixScene:_build_palette()
     local sel = self.palette:selected()
     if sel and sel.kind == "op" and allowed and not allowed[sel.op] then
         self.palette:select(nil)
+    end
+    self:_build_cmd_buttons()
+end
+
+function MatrixScene:_build_cmd_buttons()
+    self._cmd_btn_rects = {}
+    local bw, bh = 42, 48
+    local step   = 47
+    local start_x = 622
+    local by = PALETTE_Y + 6
+    for i, btn in ipairs(CMD_BUTTONS) do
+        self._cmd_btn_rects[i] = {
+            id    = btn.id,
+            label = btn.label,
+            x     = start_x + (i - 1) * step,
+            y     = by,
+            w     = bw,
+            h     = bh,
+        }
     end
 end
 
@@ -894,6 +920,46 @@ function MatrixScene:draw_travelling_matrix()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+function MatrixScene:_draw_cmd_buttons()
+    if not self._cmd_btn_rects then return end
+    for _, r in ipairs(self._cmd_btn_rects) do
+        local enabled
+        if r.id == "run" then
+            enabled = not self.running and self.status ~= "running" and self.status ~= "win"
+        elseif r.id == "step" then
+            enabled = not self.running and (self.status == nil or self.status == "running" or self.status == "no_pusher")
+        elseif r.id == "reset" then
+            enabled = self.sim ~= nil or self.status ~= nil
+        else
+            enabled = true
+        end
+
+        if enabled then
+            love.graphics.setColor(0.25, 0.25, 0.4, 1)
+        else
+            love.graphics.setColor(0.12, 0.12, 0.20, 1)
+        end
+        love.graphics.rectangle("fill", r.x, r.y, r.w, r.h, 4, 4)
+
+        if enabled then
+            love.graphics.setColor(0.45, 0.45, 0.65, 1)
+        else
+            love.graphics.setColor(0.2, 0.2, 0.3, 0.35)
+        end
+        love.graphics.setLineWidth(1)
+        love.graphics.rectangle("line", r.x, r.y, r.w, r.h, 4, 4)
+
+        if enabled then
+            love.graphics.setColor(0.85, 0.85, 0.9, 1)
+        else
+            love.graphics.setColor(0.4, 0.4, 0.5, 1)
+        end
+        love.graphics.setFont(self.font_ui)
+        love.graphics.printf(r.label, r.x, r.y + 17, r.w, "center")
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
 function MatrixScene:draw_palette()
     love.graphics.setColor(0.06, 0.06, 0.10, 1)
     love.graphics.rectangle("fill", 0, PALETTE_Y, HUD_X, 60)
@@ -921,13 +987,10 @@ function MatrixScene:draw_palette()
         love.graphics.printf(btn.label, rect.x, rect.y + 17, rect.w, "center")
     end
 
-    love.graphics.setColor(0.5, 0.5, 0.65, 1)
-    love.graphics.setFont(self.font_key)
-    love.graphics.print("[R] Run", 620, PALETTE_Y + 22)
-    love.graphics.print("[Spc] Step", 685, PALETTE_Y + 22)
-    love.graphics.print("[Bsp] Reset", 755, PALETTE_Y + 22)
+    self:_draw_cmd_buttons()
 
     love.graphics.setColor(0.5, 0.65, 0.5, 1)
+    love.graphics.setFont(self.font_key)
     local nav = string.format("Puzzle %d/%d  [Esc] Menu", self.puzzle_index, PuzzleLoader.count())
     love.graphics.printf(nav, 0, PALETTE_Y + 6, HUD_X, "right")
     love.graphics.setColor(1, 1, 1, 1)
@@ -1205,6 +1268,48 @@ function MatrixScene:mouse_pressed(mx, my, btn)
 
     -- Palette bar
     if my >= PALETTE_Y then
+        -- Command buttons
+        if self._cmd_btn_rects then
+            for _, r in ipairs(self._cmd_btn_rects) do
+                if mx >= r.x and mx < r.x + r.w and my >= r.y and my < r.y + r.h then
+                    local enabled = false
+                    if r.id == "run" then
+                        enabled = not self.running and self.status ~= "running" and self.status ~= "win"
+                    elseif r.id == "step" then
+                        enabled = not self.running and (self.status == nil or self.status == "running" or self.status == "no_pusher")
+                    elseif r.id == "reset" then
+                        enabled = self.sim ~= nil or self.status ~= nil
+                    elseif r.id == "menu" then
+                        enabled = true
+                    end
+                    if enabled then
+                        if r.id == "run" then
+                            if #self:_pusher_list() == 0 then
+                                self.status = "no_pusher"
+                            else
+                                self:start_run()
+                            end
+                        elseif r.id == "step" then
+                            if #self:_pusher_list() == 0 then
+                                self.status = "no_pusher"
+                            else
+                                self.anim_t = 1
+                                self:do_step()
+                                self.anim_t = 1
+                            end
+                        elseif r.id == "reset" then
+                            self:do_reset()
+                        elseif r.id == "menu" then
+                            if self._scene_manager then
+                                local LevelSelectScene = require("game/scenes/level_select_scene")
+                                self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
+                            end
+                        end
+                    end
+                    return
+                end
+            end
+        end
         for _, rect in pairs(self._btn_rects) do
             if mx >= rect.x and mx < rect.x + rect.w
             and my >= rect.y and my < rect.y + rect.h then

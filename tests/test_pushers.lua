@@ -251,4 +251,78 @@ do
     print("PASS: timeline auto-scroll")
 end
 
+-- add_rows (was missing from apply_op — now fixed)
+do
+    local inp = Matrix.new(3,3,{{2,0,0},{4,1,0},{0,0,1}})
+    local step1 = Sim.apply_op({kind="op", op="scale_row", params={row=1, scalar=0.5}}, inp)
+    local step2 = Sim.apply_op({kind="op", op="add_rows",  params={src=1, dst=2, scalar=-4}}, step1)
+    assert(step2:equals(Matrix.new(3,3,{{1,0,0},{0,1,0},{0,0,1}})), "add_rows fix: puzzle 14 chain")
+    print("PASS: add_rows fix")
+end
+
+-- scale_col
+do
+    local inp = Matrix.new(2,2,{{1,2},{3,4}})
+    local r = Sim.apply_op({kind="op", op="scale_col", params={col=2, scalar=3}}, inp)
+    assert(r:equals(Matrix.new(2,2,{{1,6},{3,12}})), "apply_op scale_col")
+    print("PASS: apply_op scale_col")
+end
+
+-- swap_cols
+do
+    local inp = Matrix.new(2,3,{{1,2,3},{4,5,6}})
+    local r = Sim.apply_op({kind="op", op="swap_cols", params={col_a=1, col_b=3}}, inp)
+    assert(r:equals(Matrix.new(2,3,{{3,2,1},{6,5,4}})), "apply_op swap_cols")
+    print("PASS: apply_op swap_cols")
+end
+
+-- add_cols
+do
+    local inp = Matrix.new(2,2,{{1,0},{2,0}})
+    local r = Sim.apply_op({kind="op", op="add_cols", params={src=1, dst=2, scalar=3}}, inp)
+    assert(r:equals(Matrix.new(2,2,{{1,3},{2,6}})), "apply_op add_cols")
+    print("PASS: apply_op add_cols")
+end
+
+-- set_col
+do
+    local inp = Matrix.new(3,2,{{1,2},{3,4},{5,6}})
+    local r = Sim.apply_op({kind="op", op="set_col", params={col=2},
+        tile_rows=3, values={{9},{8},{7}}}, inp)
+    assert(r:equals(Matrix.new(3,2,{{1,9},{3,8},{5,7}})), "apply_op set_col")
+    print("PASS: apply_op set_col")
+end
+
+-- rotate_90
+do
+    local inp = Matrix.new(2,3,{{1,2,3},{4,5,6}})
+    local r = Sim.apply_op({kind="op", op="rotate_90", params={}}, inp)
+    assert(r:equals(Matrix.new(3,2,{{4,1},{5,2},{6,3}})), "apply_op rotate_90")
+    print("PASS: apply_op rotate_90")
+end
+
+-- flip_h
+do
+    local inp = Matrix.new(2,3,{{1,2,3},{4,5,6}})
+    local r = Sim.apply_op({kind="op", op="flip_h", params={}}, inp)
+    assert(r:equals(Matrix.new(2,3,{{3,2,1},{6,5,4}})), "apply_op flip_h")
+    print("PASS: apply_op flip_h")
+end
+
+-- flip_v
+do
+    local inp = Matrix.new(3,2,{{1,2},{3,4},{5,6}})
+    local r = Sim.apply_op({kind="op", op="flip_v", params={}}, inp)
+    assert(r:equals(Matrix.new(3,2,{{5,6},{3,4},{1,2}})), "apply_op flip_v")
+    print("PASS: apply_op flip_v")
+end
+
+-- abs
+do
+    local inp = Matrix.new(2,2,{{-1,2},{-3,-4}})
+    local r = Sim.apply_op({kind="op", op="abs", params={}}, inp)
+    assert(r:equals(Matrix.new(2,2,{{1,2},{3,4}})), "apply_op abs")
+    print("PASS: apply_op abs")
+end
+
 print("ALL TESTS PASSED")

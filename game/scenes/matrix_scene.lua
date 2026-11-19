@@ -25,14 +25,29 @@ local PARAM_DEFS = {
     swap_rows  = { {key="row_a",  label="r1",  min=1, max=4},
                    {key="row_b",  label="r2",  min=1, max=4} },
     scalar_mul = { {key="scalar", label="x",   min=-9, max=9} },
-    set_row    = { {key="row", label="row", min=1, max=4} },
+    set_row    = { {key="row",    label="row", min=1, max=4} },
+    add_rows   = { {key="src",    label="sr",  min=1, max=4},
+                   {key="dst",    label="dr",  min=1, max=4},
+                   {key="scalar", label="x",   min=-9, max=9} },
+    scale_col  = { {key="col",    label="col", min=1, max=4},
+                   {key="scalar", label="x",   min=-9, max=9} },
+    swap_cols  = { {key="col_a",  label="c1",  min=1, max=4},
+                   {key="col_b",  label="c2",  min=1, max=4} },
+    add_cols   = { {key="src",    label="sc",  min=1, max=4},
+                   {key="dst",    label="dc",  min=1, max=4},
+                   {key="scalar", label="x",   min=-9, max=9} },
+    set_col    = { {key="col",    label="col", min=1, max=4} },
 }
 
 local DEFAULT_PARAMS = {
-    scale_row  = {row=1,  scalar=2},
+    scale_row  = {row=1,   scalar=2},
     swap_rows  = {row_a=1, row_b=2},
     scalar_mul = {scalar=2},
     set_row    = {row=1},
+    add_rows   = {src=1,   dst=2, scalar=1},
+    scale_col  = {col=1,   scalar=2},
+    swap_cols  = {col_a=1, col_b=2},
+    add_cols   = {src=1,   dst=2, scalar=1},
 }
 
 local OP_SYMBOLS = {
@@ -45,6 +60,15 @@ local OP_SYMBOLS = {
     sub_matrix = "-M",
     mul_matrix = "xM",
     set_row    = "=R",
+    add_rows   = "+R",
+    scale_col  = "xCn",
+    swap_cols  = "<>C",
+    add_cols   = "+C",
+    set_col    = "=C",
+    rotate_90  = "R90",
+    flip_h     = "FLh",
+    flip_v     = "FLv",
+    abs        = "|x|",
 }
 
 -- How many board cells each op tile spans: {cols, rows}
@@ -58,6 +82,15 @@ local OP_SIZES = {
     sub_matrix = {1, 1},
     mul_matrix = {1, 1},
     set_row    = {2, 1},
+    add_rows   = {4, 1},
+    scale_col  = {4, 1},
+    swap_cols  = {2, 1},
+    add_cols   = {4, 1},
+    set_col    = {1, 2},
+    rotate_90  = {1, 1},
+    flip_h     = {1, 1},
+    flip_v     = {1, 1},
+    abs        = {1, 1},
 }
 
 -- Timeline panel: one row per pusher, one slot per tick, shared length n.
@@ -66,9 +99,13 @@ local CMD_ORDER = { "idle", "up", "right", "down", "left" }
 local CMD_GLYPH = { idle=".", up="^", down="v", left="<", right=">" }
 local MAX_TICKS = 500
 
-local function op_width(op)        return (OP_SIZES[op] or {1,1})[1] end
+local function op_width(op, tile)
+    if op == "scale_col" then return (tile and tile.tile_cols) or 4 end
+    return (OP_SIZES[op] or {1,1})[1]
+end
 local function op_height(op, tile)
     if op == "scale_row" then return (tile and tile.tile_rows) or 4 end
+    if op == "set_col"   then return 1 + ((tile and tile.tile_rows) or 1) end
     return (OP_SIZES[op] or {1,1})[2]
 end
 
@@ -86,6 +123,15 @@ local PALETTE_BUTTONS = {
     { kind="op", op="sub_matrix", label="-M"  },
     { kind="op", op="mul_matrix", label="xM"  },
     { kind="op", op="set_row",    label="=R"  },
+    { kind="op", op="add_rows",  label="+R"  },
+    { kind="op", op="scale_col", label="xC"  },
+    { kind="op", op="swap_cols", label="<>C" },
+    { kind="op", op="add_cols",  label="+C"  },
+    { kind="op", op="set_col",   label="=C"  },
+    { kind="op", op="rotate_90", label="R90" },
+    { kind="op", op="flip_h",    label="FLh" },
+    { kind="op", op="flip_v",    label="FLv" },
+    { kind="op", op="abs",       label="|x|" },
     { sep=true },
     { kind="drag", label="Mv" },
     { erase=true, label="[X]" },
@@ -159,9 +205,18 @@ function MatrixScene:load_puzzle(n)
     self.current_matrix = nil
     -- Clamp row-index params to actual matrix row count
     local nr = p.input.rows
+    local nc = p.input.cols
     PARAM_DEFS.scale_row[1].max  = nr
     PARAM_DEFS.swap_rows[1].max  = nr
     PARAM_DEFS.swap_rows[2].max  = nr
+    PARAM_DEFS.add_rows[1].max   = nr
+    PARAM_DEFS.add_rows[2].max   = nr
+    PARAM_DEFS.scale_col[1].max  = nc
+    PARAM_DEFS.swap_cols[1].max  = nc
+    PARAM_DEFS.swap_cols[2].max  = nc
+    PARAM_DEFS.add_cols[1].max   = nc
+    PARAM_DEFS.add_cols[2].max   = nc
+    PARAM_DEFS.set_col[1].max    = nc
     self.status         = nil
     self.running        = false
     self.sim            = nil
@@ -568,7 +623,7 @@ function MatrixScene:draw_grid()
 
     -- Pass 3: expand/shrink affordances for resizable ops
     self._expand_rects = {}
-    local EXPAND_OPS = {add_matrix=true, sub_matrix=true, mul_matrix=true, set_row=true, scale_row=true}
+    local EXPAND_OPS = {add_matrix=true, sub_matrix=true, mul_matrix=true, set_row=true, scale_row=true, scale_col=true, set_col=true}
     for cy2 = 1, 10 do
         for cx2 = 1, 10 do
             local is_r2, _, _ = self.grid:is_ref(cx2, cy2)
@@ -729,8 +784,18 @@ function MatrixScene:draw_ref_cell(tile, dc, dr, cx, cy)
         else
             self:draw_set_row_value_cell(tile, dc, cx, cy)
         end
+    elseif op == "scale_col" then
+        self:draw_scale_col_band(tile, dc + 1, cx, cy)
+    elseif op == "swap_cols" then
+        self:draw_swap_col_strip(tile, dc + 1, cx, cy)
+    elseif op == "set_col" then
+        if dr == 0 then
+            self:draw_param_cell(tile, 1, cx, cy)
+        else
+            self:draw_set_col_value_cell(tile, dr, cx, cy)
+        end
     else
-        -- existing ops (scalar_mul, etc.)
+        -- existing ops (scalar_mul, add_rows, add_cols, etc.)
         self:draw_param_cell(tile, dc, cx, cy)
     end
 end
@@ -767,7 +832,7 @@ function MatrixScene:draw_tile(tile, cx, cy)
         love.graphics.printf("×", sx, mid_y - 8, cs, "center")
 
     elseif tile.kind == "op" then
-        local w = op_width(tile.op)
+        local w = op_width(tile.op, tile)
         local h = op_height(tile.op, tile)
         local span_w = w * cs
         local span_h = h * cs
@@ -803,8 +868,23 @@ function MatrixScene:draw_tile(tile, cx, cy)
             for dc = 1, tile.tile_cols or 1 do
                 self:draw_set_row_value_cell(tile, dc, cx + dc, cy)
             end
+        elseif op == "scale_col" then
+            for band = 1, w do
+                self:draw_scale_col_band(tile, band, cx + band - 1, cy)
+            end
+        elseif op == "swap_cols" then
+            self:draw_swap_col_strip(tile, 1, cx, cy)
+            self:draw_swap_col_strip(tile, 2, cx + 1, cy)
+            love.graphics.setColor(0.9, 0.7, 0.3, 1)
+            love.graphics.setFont(self.font_ui)
+            love.graphics.printf("⇄", sx + cs - 8, sy, cs, "left")
+        elseif op == "set_col" then
+            self:draw_param_cell(tile, 1, cx, cy)
+            for idr = 1, tile.tile_rows or 1 do
+                self:draw_set_col_value_cell(tile, idr, cx, cy + idr)
+            end
         else
-            -- Existing 1D ops (transpose, negate, scalar_mul anchor)
+            -- Existing 1D ops (transpose, negate, scalar_mul anchor, add_rows, add_cols, rotate_90, flip_h, flip_v, abs)
             love.graphics.setColor(0.9, 0.7, 0.3, 1)
             love.graphics.setFont(self.font_cell)
             love.graphics.printf(OP_SYMBOLS[op] or "?", sx, mid_y - 8, cs, "center")
@@ -920,6 +1000,69 @@ function MatrixScene:draw_set_row_value_cell(tile, dc, cx, cy)
     love.graphics.setColor(0.65, 0.5, 0.15, 1)
     love.graphics.setFont(self.font_ui)
     love.graphics.printf("c" .. dc, sx, sy + 5, cs, "center")
+
+    love.graphics.setColor(0.95, 0.85, 0.5, 1)
+    love.graphics.setFont(self.font_cell)
+    love.graphics.printf(tostring(v), sx, sy + cs / 2 - 10, cs, "center")
+
+    love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
+    love.graphics.setFont(self.font_ui)
+    love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
+    love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+end
+
+function MatrixScene:draw_scale_col_band(tile, band, cx, cy)
+    local sx, sy = cell_top_left(cx, cy)
+    local cs = CELL_SIZE
+    local selected = (band == (tile.params or {}).col)
+    local scalar = (tile.params or {}).scalar or 2
+
+    if selected then
+        love.graphics.setColor(0.35, 0.22, 0.04, 1)
+        love.graphics.rectangle("fill", sx, sy, cs, cs)
+        love.graphics.setColor(1.0, 0.85, 0.4, 1)
+        love.graphics.setFont(self.font_ui)
+        love.graphics.print("C" .. band, sx + 4, sy + 5)
+        love.graphics.setFont(self.font_cell)
+        love.graphics.printf("×" .. scalar, sx, sy + cs / 2 - 9, cs, "center")
+        love.graphics.setColor(0.7, 0.55, 0.2, 0.9)
+        love.graphics.setFont(self.font_ui)
+        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
+        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+    else
+        love.graphics.setColor(0.55, 0.40, 0.12, 1)
+        love.graphics.setFont(self.font_ui)
+        love.graphics.printf("C" .. band, sx, sy + cs / 2 - 7, cs, "center")
+    end
+end
+
+function MatrixScene:draw_swap_col_strip(tile, strip, cx, cy)
+    local sx, sy = cell_top_left(cx, cy)
+    local cs = CELL_SIZE
+    local params = tile.params or {}
+    local col_n = (strip == 1) and (params.col_a or 1) or (params.col_b or 2)
+
+    love.graphics.setColor(0.95, 0.85, 0.5, 1)
+    love.graphics.setFont(self.font_cell)
+    love.graphics.printf("C" .. col_n, sx, sy + cs / 2 - 9, cs, "center")
+
+    love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
+    love.graphics.setFont(self.font_ui)
+    love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
+    love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+end
+
+function MatrixScene:draw_set_col_value_cell(tile, dr, cx, cy)
+    local sx, sy = cell_top_left(cx, cy)
+    local cs = CELL_SIZE
+    local v = 0
+    if tile.values and tile.values[dr] then
+        v = tile.values[dr][1] or 0
+    end
+
+    love.graphics.setColor(0.65, 0.5, 0.15, 1)
+    love.graphics.setFont(self.font_ui)
+    love.graphics.printf("r" .. dr, sx, sy + 5, cs, "center")
 
     love.graphics.setColor(0.95, 0.85, 0.5, 1)
     love.graphics.setFont(self.font_cell)
@@ -1162,7 +1305,8 @@ end
 
 function MatrixScene:_place_tile_at(cx, cy, spec)
     local matrix_rows = self.input_matrix and self.input_matrix.rows or 4
-    local w = op_width(spec.op or "")
+    local matrix_cols = self.input_matrix and self.input_matrix.cols or 4
+    local w = op_width(spec.op or "", {tile_cols = matrix_cols})
     local h = op_height(spec.op or "", {matrix_rows = matrix_rows})
     if spec.kind == "arrow" then w = 1; h = 1 end
 
@@ -1218,6 +1362,12 @@ function MatrixScene:_place_tile_at(cx, cy, spec)
         values = {{0}}
     elseif spec.op == "scale_row" then
         tile_rows = 4
+    elseif spec.op == "scale_col" then
+        tile_cols = 4
+    elseif spec.op == "set_col" then
+        tile_rows = matrix_rows
+        values = {}
+        for r = 1, matrix_rows do values[r] = {0} end
     end
 
     local tile = {
@@ -1249,26 +1399,30 @@ function MatrixScene:_resize_tile(ax, ay, action)
     if action == "grow_col" and tc < 4 then
         -- Clear old footprint
         self.grid:clear(ax, ay)
-        -- Grow
-        local fill = (tile.op == "mul_matrix") and 1 or 0
-        for r = 1, tr do
-            if not tile.values[r] then tile.values[r] = {} end
-            tile.values[r][tc + 1] = fill
+        -- Grow (scale_col has no values table)
+        if tile.values then
+            local fill = (tile.op == "mul_matrix") and 1 or 0
+            for r = 1, tr do
+                if not tile.values[r] then tile.values[r] = {} end
+                tile.values[r][tc + 1] = fill
+            end
         end
         tile.tile_cols = tc + 1
         tile.width     = old_w + 1
-        self.grid:set_multi_2d(ax, ay, tile, tile.tile_cols, tr)
+        self.grid:set_multi_2d(ax, ay, tile, tile.tile_cols, tile.tile_rows or 1)
 
     elseif action == "shrink_col" and tc > 1 then
         self.grid:clear(ax, ay)
-        for r = 1, tr do
-            if tile.values[r] then tile.values[r][tc] = nil end
+        if tile.values then
+            for r = 1, tr do
+                if tile.values[r] then tile.values[r][tc] = nil end
+            end
         end
         tile.tile_cols = tc - 1
         tile.width     = old_w - 1
         local new_w = (tile.op == "set_row") and (1 + tile.tile_cols) or tile.tile_cols
         tile.width = new_w
-        self.grid:set_multi_2d(ax, ay, tile, new_w, tr)
+        self.grid:set_multi_2d(ax, ay, tile, new_w, tile.tile_rows or 1)
 
     elseif action == "grow_row" and tr < 4 then
         self.grid:clear(ax, ay)
@@ -1279,7 +1433,8 @@ function MatrixScene:_resize_tile(ax, ay, action)
         end
         tile.tile_rows = tr + 1
         tile.height    = old_h + 1
-        self.grid:set_multi_2d(ax, ay, tile, tc, tile.tile_rows)
+        local place_h = (tile.op == "set_col") and (1 + tile.tile_rows) or tile.tile_rows
+        self.grid:set_multi_2d(ax, ay, tile, tc, place_h)
 
     elseif action == "shrink_row" and tr > 1 then
         self.grid:clear(ax, ay)
@@ -1289,7 +1444,8 @@ function MatrixScene:_resize_tile(ax, ay, action)
         if tile.params and tile.params.row then
             tile.params.row = math.min(tile.params.row, tile.tile_rows)
         end
-        self.grid:set_multi_2d(ax, ay, tile, tc, tile.tile_rows)
+        local place_h = (tile.op == "set_col") and (1 + tile.tile_rows) or tile.tile_rows
+        self.grid:set_multi_2d(ax, ay, tile, tc, place_h)
     end
 end
 
@@ -1472,6 +1628,68 @@ function MatrixScene:mouse_pressed(mx, my, btn)
                     local new_val = math.max(1, math.min(4, (params[key] or 1) + delta))
                     if new_val ~= params[other_key] then
                         params[key] = new_val
+                    end
+                end
+                return
+
+            elseif op == "scale_col" then
+                local band = dc + 1
+                local params = anchor_tile.params
+                if band ~= params.col then
+                    params.col = band
+                else
+                    local cell_sx, _ = cell_top_left(cx, cy)
+                    local rel_x = mx - cell_sx
+                    if rel_x < CELL_SIZE / 3 then
+                        params.scalar = math.max(-9, (params.scalar or 2) - 1)
+                    elseif rel_x >= CELL_SIZE * 2 / 3 then
+                        params.scalar = math.min(9, (params.scalar or 2) + 1)
+                    end
+                end
+                return
+
+            elseif op == "swap_cols" then
+                local strip = dc + 1
+                local key = (strip == 1) and "col_a" or "col_b"
+                local other_key = (strip == 1) and "col_b" or "col_a"
+                local params = anchor_tile.params
+                local cell_sx, _ = cell_top_left(cx, cy)
+                local rel_x = mx - cell_sx
+                local delta = 0
+                if rel_x < CELL_SIZE / 3 then delta = -1
+                elseif rel_x >= CELL_SIZE * 2 / 3 then delta = 1
+                end
+                if delta ~= 0 then
+                    local new_val = math.max(1, math.min(4, (params[key] or 1) + delta))
+                    if new_val ~= params[other_key] then
+                        params[key] = new_val
+                    end
+                end
+                return
+
+            elseif op == "set_col" then
+                if dr == 0 then
+                    local defs = PARAM_DEFS["set_col"]
+                    if defs and defs[1] then
+                        local def = defs[1]
+                        local cell_sx, _ = cell_top_left(cx, cy)
+                        local rel_x = mx - cell_sx
+                        if rel_x < CELL_SIZE / 3 then
+                            anchor_tile.params[def.key] = math.max(def.min, (anchor_tile.params[def.key] or 1) - 1)
+                        elseif rel_x >= CELL_SIZE * 2 / 3 then
+                            anchor_tile.params[def.key] = math.min(def.max, (anchor_tile.params[def.key] or 1) + 1)
+                        end
+                    end
+                else
+                    local cell_sx, _ = cell_top_left(cx, cy)
+                    local rel_x = mx - cell_sx
+                    if not anchor_tile.values then anchor_tile.values = {} end
+                    if not anchor_tile.values[dr] then anchor_tile.values[dr] = {} end
+                    local cur = anchor_tile.values[dr][1] or 0
+                    if rel_x < CELL_SIZE / 3 then
+                        anchor_tile.values[dr][1] = math.max(-9, cur - 1)
+                    elseif rel_x >= CELL_SIZE * 2 / 3 then
+                        anchor_tile.values[dr][1] = math.min(9, cur + 1)
                     end
                 end
                 return

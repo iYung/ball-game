@@ -41,6 +41,15 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 - **−M** (Sub Matrix) — element-wise subtract a constant matrix; same resizable grid layout
 - **×M** (Mul Matrix) — element-wise multiply by a constant matrix; same resizable grid layout
 - **=R** (Set Row) — replace a row with user-defined values; left cell selects the row, additional cells hold the values (expandable up to 4 columns)
+- **+R** (Add Rows) — add a scalar multiple of one row to another; 4-cell tile (anchor + src row, dst row, scalar)
+- **×Cn** (Scale Col) — horizontal tile spanning the matrix's column count; click a band to select the target column, then click left/right thirds of the selected band to adjust the scalar
+- **⇄C** (Swap Cols) — 1×2 horizontal tile; click left/right thirds of each strip to adjust the column index
+- **+C** (Add Cols) — add a scalar multiple of one column to another; 4-cell tile
+- **=C** (Set Col) — replace a column with user-defined values; top cell selects the column, cells below hold the values
+- **R90** (Rotate 90) — rotate every element 90° clockwise; swaps matrix dimensions
+- **FLh** (Flip H) — reverse the order of columns (mirror left-right)
+- **FLv** (Flip V) — reverse the order of rows (mirror up-down)
+- **|x|** (Abs) — replace every element with its absolute value
 
 Click a value cell on any matrix op tile to increment/decrement its value (left/right thirds = −1/+1). Values are clamped to [−9, 9].
 
@@ -54,7 +63,7 @@ Op tiles span one board cell for the op plus one per parameter. Click the left t
 
 **Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. After a brief pause, a **solution recap screen** appears showing the number of ticks your solution took, the number of pieces you placed, and a looping animated playback of your solution — matrix ball and pushers moving in sync — on the board. Press `Enter` to advance to the next puzzle, `R` to replay the animation, or `Esc` to return to the level-select screen. A run with no movement for a full timeline loop ends as **STUCK**, and a run past 500 ticks ends as **TIMEOUT**.
 
-**16 puzzles** — from a simple identity check (puzzle 1) through increasingly complex matrix transformations. Puzzles 1–11 each introduce or practice a single operation; puzzles 12–16 require two or three different operations in sequence (e.g. transpose then scale, Gaussian elimination, or a three-step chain). Puzzles can use non-square (n×m) matrices.
+**20 puzzles** — from a simple identity check (puzzle 1) through increasingly complex matrix transformations. Puzzles 1–11 each introduce or practice a single operation; puzzles 12–16 require two or three operations in sequence (e.g. transpose then scale, Gaussian elimination, or a three-step chain); puzzles 17–20 introduce the new ops: row reduction, column operations, flips, and absolute value with rotation. Puzzles can use non-square (n×m) matrices.
 
 ## Structure
 

@@ -26,6 +26,7 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 | Right-click grid | Erase tile (or cancel an in-progress drag) |
 | Left-click palette | Select a tile type |
 | Left / right-click timeline slot | Cycle that slot's command forward / back |
+| Click `<` / `>` in timeline | Scroll the visible slot window left / right |
 | `Esc` | Return to level select (from puzzle) or start screen (from level select) |
 
 **Tile types:**
@@ -49,7 +50,7 @@ Each puzzle only offers the op tiles it needs in the palette (the pusher, **[Mv]
 
 Op tiles span one board cell for the op plus one per parameter. Click the left third of a parameter cell for −1 and the right third for +1. An op fires once when the matrix first overlaps any of its cells, and re-arms after the matrix fully leaves.
 
-**Timeline:** the panel in the right column has one row per pusher and `len` slots (default 8, adjustable 1–16, loops). Edit it while stopped. Every pusher runs the same loop, so offset the commands to choreograph them.
+**Timeline:** the panel in the right column has one row per pusher and `len` slots (default 8, adjustable 1–500, loops). When the loop is longer than the visible window, click `<` / `>` to scroll, or just run — the view auto-scrolls to follow the current slot and rewinds when the loop wraps. Edit it while stopped. Every pusher runs the same loop, so offset the commands to choreograph them.
 
 **Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. After a brief pause, a **solution recap screen** appears showing the number of ticks your solution took, the number of pieces you placed, and a looping animated playback of your solution — matrix ball and pushers moving in sync — on the board. Press `Enter` to advance to the next puzzle, `R` to replay the animation, or `Esc` to return to the level-select screen. A run with no movement for a full timeline loop ends as **STUCK**, and a run past 500 ticks ends as **TIMEOUT**.
 

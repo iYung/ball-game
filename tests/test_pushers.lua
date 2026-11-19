@@ -192,4 +192,63 @@ do
     print("PASS: footprint_clear")
 end
 
+-- ── Timeline scroll logic (pure-Lua, no LÖVE required) ───────────────────────
+-- These mirror the math in MatrixScene:_timeline_layout and _timeline_click.
+
+local function visible_count(slot_w_total, slot_w, slot_gap)
+    return math.max(1, math.floor(slot_w_total / (slot_w + slot_gap)))
+end
+
+local function clamp_scroll_on_shrink(scroll, timeline_n, vis)
+    return math.min(scroll, math.max(0, timeline_n - vis))
+end
+
+local function auto_scroll(cur_slot, scroll, vis)
+    if cur_slot == 1 then
+        return 0
+    elseif cur_slot > scroll + vis then
+        return cur_slot - vis
+    elseif cur_slot <= scroll then
+        return cur_slot - 1
+    end
+    return scroll
+end
+
+do
+    -- visible_count: slot area of 316px, slot_w=22, gap=2 → 13 slots
+    assert(visible_count(316, 22, 2) == 13, "316px -> 13 visible slots")
+    -- very narrow area always returns at least 1
+    assert(visible_count(5, 22, 2) == 1, "tiny area -> 1 visible slot")
+    -- exactly fits 8 slots (8*24=192)
+    assert(visible_count(192, 22, 2) == 8, "192px -> 8 slots")
+    print("PASS: timeline visible_count")
+end
+
+do
+    -- shrinking timeline_n clamps scroll so last slot stays visible
+    -- n=10 -> 8, vis=5: scroll was 6, should clamp to max(0,8-5)=3
+    assert(clamp_scroll_on_shrink(6, 8, 5) == 3, "scroll clamped after shrink")
+    -- scroll already in bounds: unchanged
+    assert(clamp_scroll_on_shrink(2, 8, 5) == 2, "scroll in bounds: unchanged")
+    -- scroll=0 stays 0
+    assert(clamp_scroll_on_shrink(0, 8, 5) == 0, "scroll=0 stays 0")
+    -- timeline_n < vis: clamp to 0
+    assert(clamp_scroll_on_shrink(3, 4, 5) == 0, "n < vis: scroll -> 0")
+    print("PASS: timeline scroll clamp on shrink")
+end
+
+do
+    -- auto-scroll: cur_slot wraps to 1 → scroll rewinds to 0
+    assert(auto_scroll(1, 5, 5) == 0, "wrap to slot 1 resets scroll")
+    -- cur_slot ahead of window: scroll forward
+    assert(auto_scroll(10, 3, 5) == 5, "cur_slot past window: scroll forward")
+    -- cur_slot at window right edge: no change
+    assert(auto_scroll(8, 3, 5) == 3, "cur_slot at right edge: no change")
+    -- cur_slot behind window: scroll back
+    assert(auto_scroll(2, 5, 5) == 1, "cur_slot behind window: scroll back")
+    -- cur_slot inside window: no change
+    assert(auto_scroll(5, 3, 5) == 3, "cur_slot inside window: no change")
+    print("PASS: timeline auto-scroll")
+end
+
 print("ALL TESTS PASSED")

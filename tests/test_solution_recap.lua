@@ -38,6 +38,11 @@ do
     assert(f.from_x ~= nil and f.from_y ~= nil, "frame has from_x/from_y")
     assert(f.to_x   ~= nil and f.to_y   ~= nil, "frame has to_x/to_y")
     assert(f.matrix ~= nil and f.matrix.values ~= nil, "frame has a matrix snapshot")
+    assert(type(f.pushers_from) == "table", "frame has pushers_from table")
+    assert(type(f.pushers_to)   == "table", "frame has pushers_to table")
+    assert(#f.pushers_from >= 1, "pushers_from has at least one entry (pusher was placed)")
+    local pf = f.pushers_from[1]
+    assert(pf.id ~= nil and pf.px ~= nil and pf.py ~= nil, "pushers_from entry has id/px/py fields")
     -- Frames are independent copies: mutating the scene matrix should not affect the frame.
     local orig_val = f.matrix.values[1][1]
     scene.current_matrix.values[1][1] = orig_val + 999

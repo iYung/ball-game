@@ -395,6 +395,12 @@ function MatrixScene:do_step()
     local mat  = self.current_matrix
     local from_x, from_y = cell_top_left(sim.x, sim.y)
 
+    local pushers_from = {}
+    for _, p in ipairs(sim.pushers) do
+        local px, py = cell_top_left(p.x, p.y)
+        pushers_from[#pushers_from + 1] = { id = p.id, px = px, py = py }
+    end
+
     local st = {
         x=sim.x, y=sim.y, rows=mat.rows, cols=mat.cols,
         w=grid.w, h=grid.h, pushers=sim.pushers,
@@ -409,10 +415,17 @@ function MatrixScene:do_step()
     local new_fp     = self:_process_footprint(self._last_fp)
 
     if self._run_frames then
+        local pushers_to = {}
+        for _, p in ipairs(sim.pushers) do
+            local px, py = cell_top_left(p.x, p.y)
+            pushers_to[#pushers_to + 1] = { id = p.id, px = px, py = py }
+        end
         self._run_frames[#self._run_frames + 1] = {
-            from_x = from_x, from_y = from_y,
-            to_x   = to_x,   to_y   = to_y,
-            matrix = self.current_matrix:copy(),
+            from_x       = from_x,       from_y       = from_y,
+            to_x         = to_x,         to_y         = to_y,
+            matrix       = self.current_matrix:copy(),
+            pushers_from = pushers_from,
+            pushers_to   = pushers_to,
         }
     end
 

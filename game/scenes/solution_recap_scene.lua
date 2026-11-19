@@ -124,13 +124,15 @@ function SolutionRecapScene:_draw_grid()
         end
     end
 
-    -- Tiles
+    -- Tiles (pushers skipped here; drawn animated by _draw_pushers)
     for cy = 1, grid.h do
         for cx = 1, grid.w do
             local is_r = grid:is_ref(cx, cy)
             if not is_r then
                 local tile = grid:get(cx, cy)
-                if tile then self:_draw_tile(tile, cx, cy) end
+                if tile and tile.kind ~= "pusher" then
+                    self:_draw_tile(tile, cx, cy)
+                end
             end
         end
     end
@@ -225,6 +227,35 @@ function SolutionRecapScene:_draw_matrix()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+function SolutionRecapScene:_draw_pushers()
+    local frames = self._frames
+    if #frames == 0 then return end
+    local frame = frames[self._frame_idx]
+    if not frame.pushers_from then return end
+
+    local t  = self._anim_t
+    local et = t * t * (3 - 2 * t)  -- smooth-step
+    local cs = CELL_SIZE
+
+    for i, pf in ipairs(frame.pushers_from) do
+        local pt = frame.pushers_to and frame.pushers_to[i]
+        local sx = pt and lerp(pf.px, pt.px, et) or pf.px
+        local sy = pt and lerp(pf.py, pt.py, et) or pf.py
+
+        love.graphics.setColor(0.30, 0.18, 0.45, 0.6)
+        love.graphics.rectangle("fill", sx + 4, sy + 4, cs - 8, cs - 8, 6, 6)
+        love.graphics.setColor(0.80, 0.60, 1.0, 0.8)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", sx + 4, sy + 4, cs - 8, cs - 8, 6, 6)
+        love.graphics.setLineWidth(1)
+        love.graphics.setFont(self._font_cell)
+        love.graphics.setColor(0.80, 0.60, 1.0, 0.8)
+        love.graphics.printf(string.char(64 + (pf.id or 1)), sx, sy + cs / 2 - 8, cs, "center")
+    end
+
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
 function SolutionRecapScene:_draw_stats()
     -- Right panel background
     love.graphics.setColor(0.07, 0.07, 0.12, 1)
@@ -282,6 +313,7 @@ end
 
 function SolutionRecapScene:draw()
     self:_draw_grid()
+    self:_draw_pushers()
     self:_draw_matrix()
     self:_draw_stats()
 

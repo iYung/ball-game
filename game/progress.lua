@@ -38,8 +38,9 @@ end
 
 local function _load()
     if not love.filesystem or not love.filesystem.read then return end
+    if love.filesystem.getInfo and not love.filesystem.getInfo(SAVE_FILE) then return end
     local ok, data = pcall(love.filesystem.read, SAVE_FILE)
-    if not ok or not data then return end
+    if not ok or type(data) ~= "string" then return end
     local chunk, err = load(data)
     if not chunk then return end
     local ok2, tbl = pcall(chunk)

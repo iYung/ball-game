@@ -53,6 +53,9 @@ end
 -- ── Lifecycle ────────────────────────────────────────────────────────────────
 
 function SolutionRecapScene:on_enter()
+    local Progress = require("game/progress")
+    Progress.mark_solved(self._stats.puzzle_index)
+
     self._font_title  = love.graphics.newFont(36)
     self._font_stat   = love.graphics.newFont(64)
     self._font_label  = love.graphics.newFont(16)

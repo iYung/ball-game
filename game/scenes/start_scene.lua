@@ -16,7 +16,9 @@ function StartScene:on_enter()
     self._font_title   = love.graphics.newFont(64)
     self._font_tagline = love.graphics.newFont(18)
     self._font_prompt  = love.graphics.newFont(16)
+    self._font_debug   = love.graphics.newFont(14)
     self._time = 0
+    self._unlock_rect  = { x = W / 2 - 80, y = 625, w = 160, h = 22 }
 end
 
 function StartScene:update(dt)
@@ -28,11 +30,26 @@ function StartScene:_advance()
     self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
 end
 
-function StartScene:key_pressed(_)
+function StartScene:_unlock_all()
+    local Progress = require("game/progress")
+    Progress.unlock_all()
     self:_advance()
 end
 
-function StartScene:mouse_pressed(_, _, _)
+function StartScene:key_pressed(key)
+    if key == "d" then
+        self:_unlock_all()
+        return
+    end
+    self:_advance()
+end
+
+function StartScene:mouse_pressed(mx, my, _)
+    local r = self._unlock_rect
+    if mx >= r.x and mx < r.x + r.w and my >= r.y and my < r.y + r.h then
+        self:_unlock_all()
+        return
+    end
     self:_advance()
 end
 
@@ -55,6 +72,11 @@ function StartScene:draw()
     love.graphics.setFont(self._font_prompt)
     love.graphics.setColor(0.60, 0.60, 0.70, alpha)
     love.graphics.printf("[Enter] or click to play", 0, 580, W, "center")
+
+    -- Debug: unlock all
+    love.graphics.setFont(self._font_debug)
+    love.graphics.setColor(0.35, 0.32, 0.42, 0.7)
+    love.graphics.printf("(D) Unlock All", 0, 630, W, "center")
 
     love.graphics.setColor(1, 1, 1, 1)
 end

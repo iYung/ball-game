@@ -7,6 +7,7 @@ local STATUS_COLORS = {
     stuck         = {0.9, 0.6, 0.1, 1},
     timeout       = {0.9, 0.6, 0.1, 1},
     running       = {0.4, 0.6, 1.0, 1},
+    no_pusher     = {0.9, 0.6, 0.1, 1},
 }
 
 local STATUS_LABELS = {
@@ -15,6 +16,7 @@ local STATUS_LABELS = {
     stuck         = "STUCK — nothing is pushing",
     timeout       = "TIMEOUT",
     running       = "Running...",
+    no_pusher     = "Place a pusher first",
 }
 
 function HUD.new(x, y, w, h)

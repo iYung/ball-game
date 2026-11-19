@@ -69,6 +69,24 @@ function love.mousepressed(x, y, btn)
     manager:mouse_pressed(lx, ly, btn)
 end
 
+function love.mousemoved(x, y)
+    local scale = math.min(love.graphics.getWidth() / LOGICAL_W, love.graphics.getHeight() / LOGICAL_H)
+    local ox = (love.graphics.getWidth() - LOGICAL_W * scale) / 2
+    local oy = (love.graphics.getHeight() - LOGICAL_H * scale) / 2
+    local lx = (x - ox) / scale
+    local ly = (y - oy) / scale
+    manager:mouse_moved(lx, ly)
+end
+
+function love.mousereleased(x, y, btn)
+    local scale = math.min(love.graphics.getWidth() / LOGICAL_W, love.graphics.getHeight() / LOGICAL_H)
+    local ox = (love.graphics.getWidth() - LOGICAL_W * scale) / 2
+    local oy = (love.graphics.getHeight() - LOGICAL_H * scale) / 2
+    local lx = (x - ox) / scale
+    local ly = (y - oy) / scale
+    manager:mouse_released(lx, ly, btn)
+end
+
 function love.textinput(text)
     manager:text_input(text)
 end

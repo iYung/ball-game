@@ -134,6 +134,9 @@ function LevelSelectScene:key_pressed(key)
         self:_cycle_world(1)
     elseif key == "return" or key == "space" then
         self:_load_selected()
+    elseif key == "u" then
+        Progress.unlock_world(self._world)
+        self:_rebuild_world_data()
     elseif key == "escape" then
         local StartScene = require("game/scenes/start_scene")
         self.scene_manager:switch(StartScene.new(self.scene_manager))

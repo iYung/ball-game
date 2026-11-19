@@ -88,6 +88,14 @@ function Progress.is_world_unlocked(w)
     return true
 end
 
+function Progress.unlock_world(w)
+    local world = PuzzleLoader.world(w)
+    for _, puzzle in ipairs(world.puzzles) do
+        _solved[puzzle.index] = true
+    end
+    _persist()
+end
+
 function Progress.unlock_all()
     for n = 1, PuzzleLoader.count() do
         _solved[n] = true

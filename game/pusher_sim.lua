@@ -42,6 +42,21 @@ function Sim.blocked(nx, ny, rows, cols, w, h, gaps)
     return false
 end
 
+-- Returns true if the matrix footprint anchored at (x,y) with the given rows/cols
+-- is fully in-bounds, clear of gaps, and does not overlap any pusher.
+function Sim.footprint_clear(x, y, rows, cols, w, h, gaps, pushers)
+    if Sim.blocked(x, y, rows, cols, w, h, gaps) then return false end
+    if pushers then
+        for _, q in ipairs(pushers) do
+            if q.x >= x and q.x <= x + cols - 1
+               and q.y >= y and q.y <= y + rows - 1 then
+                return false
+            end
+        end
+    end
+    return true
+end
+
 -- Run one tick. st: { x, y, rows, cols, w, h, pushers, n, tick } where x,y is the matrix
 -- anchor and pushers is an array of { x, y, cmds }; cmds[slot] is "up"|"down"|"left"|"right"|"idle"|nil.
 -- Pushers act one at a time in array order, each stepping one cell in its command direction:

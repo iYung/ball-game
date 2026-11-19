@@ -340,6 +340,15 @@ function MatrixScene:_process_footprint(old_fp)
         if tile and tile.kind == "op" then
             mat = Sim.apply_op(tile, mat)
             self.occupied_ops[info.akey] = {ax=info.x, ay=info.y}
+            if not Sim.footprint_clear(self.sim.x, self.sim.y,
+                                        mat.rows, mat.cols,
+                                        self.grid.w, self.grid.h,
+                                        self.sim.gaps, self.sim.pushers) then
+                self.running = false
+                self.status  = "fail"
+                self.current_matrix = mat
+                return new_fp
+            end
         end
     end
     self.current_matrix = mat

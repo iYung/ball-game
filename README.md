@@ -1,12 +1,20 @@
 # Matrix Circuit
 
-A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to transform an input matrix into a target matrix using elementary matrix operations. Choose from 11 puzzles on the level-select screen; completing a puzzle returns you there.
+A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to transform an input matrix into a target matrix using elementary matrix operations. Choose from 16 puzzles on the level-select screen; completing a puzzle shows a solution recap screen then proceeds to the next puzzle.
 
 ## How to play
 
 The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue) fixed by each puzzle. The Source tile spans the same number of cells as the input matrix (rows × cols), showing exactly where the matrix will sit at the start of a run. The matrix does not move on its own — you place **pushers** and program them on a shared **timeline**. Pushers walk around the board and shove the matrix when they walk into it. Op tiles in its path transform it; any matrix cell touching the Sink ends the run.
 
-**Controls:**
+**Level select:**
+
+| Key | Action |
+|-----|--------|
+| `Up / Down` | Navigate puzzle list |
+| `Enter` | Play selected puzzle |
+| `Esc` | Return to start screen |
+
+**In-game controls:**
 
 | Key | Action |
 |-----|--------|
@@ -23,7 +31,7 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 
 **Tile types:**
 
-- **P** (Pusher) — a 1×1 mobile unit labelled A–H (up to 8). The tile you place is its start cell. Each tick its timeline command (`^ v < >`, or `.` idle) moves it one cell. Walking into a matrix cell shoves the whole matrix one cell the same way (a pusher starting under the matrix rides along inside it). Pushers stay put at the grid edge and gap cells, and can't walk into each other; a shove that would push the matrix off the grid, onto a gap, or onto another pusher (even one already inside the matrix footprint) does nothing. If a transform (e.g. transpose) produces a footprint that extends off the grid, overlaps a gap, or overlaps a pusher, the run ends as **FAIL**. Pushers act in letter order each tick, so A moves before B.
+- **P** (Pusher) — a 1×1 mobile unit labelled A–H (up to 8). The tile you place is its start cell. Each tick its timeline command (`^ v < >`, or `.` idle) moves it one cell. Walking into a matrix cell shoves the whole matrix one cell the same way (a pusher starting under the matrix rides along inside it). Any non-idle command that cannot be executed — hitting the grid edge, a gap, another pusher, or trying to shove the matrix when it has nowhere to go — immediately ends the run as **FAIL**. If a transform (e.g. transpose) produces a footprint that extends off the grid, overlaps a gap, or overlaps a pusher, the run also ends as **FAIL**. Idle (`.`) commands never cause a fail. Pushers act in letter order each tick, so A moves before B.
 - **×** (Gap) — dark impassable cells placed by the puzzle. Neither pushers nor any part of the matrix can enter them. Some puzzles require reshaping the matrix (e.g. transposing a 2×3 into a 3×2) to fit through a narrow gap corridor.
 - **×R** (Scale Row) — vertical tile spanning the matrix's row count; click a band to select the target row, then click left/right thirds of the selected band to adjust the scalar
 - **⇅R** (Swap Rows) — 1×2 vertical tile; click left/right thirds of each strip to adjust the row index
@@ -44,7 +52,7 @@ Op tiles span one board cell for the op plus one per parameter. Click the left t
 
 **Timeline:** the panel in the right column has one row per pusher and `len` slots (default 8, adjustable 1–500, loops). When the loop is longer than the visible window, click `<` / `>` to scroll, or just run — the view auto-scrolls to follow the current slot and rewinds when the loop wraps. Edit it while stopped. Every pusher runs the same loop, so offset the commands to choreograph them.
 
-**Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. A run with no movement for a full timeline loop ends as **STUCK**, and a run past 500 ticks ends as **TIMEOUT**.
+**Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. After a brief pause, a **solution recap screen** appears showing the number of ticks your solution took, the number of pieces you placed, and a looping animated playback of your solution — matrix ball and pushers moving in sync — on the board. Press `Enter` to advance to the next puzzle, `R` to replay the animation, or `Esc` to return to the level-select screen. A run with no movement for a full timeline loop ends as **STUCK**, and a run past 500 ticks ends as **TIMEOUT**.
 
 **16 puzzles** — from a simple identity check (puzzle 1) through increasingly complex matrix transformations. Puzzles 1–11 each introduce or practice a single operation; puzzles 12–16 require two or three different operations in sequence (e.g. transpose then scale, Gaussian elimination, or a three-step chain). Puzzles can use non-square (n×m) matrices.
 

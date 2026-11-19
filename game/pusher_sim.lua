@@ -66,8 +66,9 @@ end
 -- Mutates st.tick, st.x/st.y and each pusher's x/y. Returns moved (bool): anything moved.
 function Sim.advance(st)
     st.tick = st.tick + 1
-    local slot  = Sim.slot(st.tick, st.n)
-    local moved = false
+    local slot    = Sim.slot(st.tick, st.n)
+    local moved   = false
+    local blocked = false
     for _, p in ipairs(st.pushers) do
         local d = Sim.DIRS[(p.cmds and p.cmds[slot]) or "idle"]
         if d then
@@ -88,10 +89,10 @@ function Sim.advance(st)
                     if ok then st.x, st.y = nx, ny end
                 end
             end
-            if ok then p.x, p.y = tx, ty; moved = true end
+            if ok then p.x, p.y = tx, ty; moved = true else blocked = true end
         end
     end
-    return moved
+    return moved, blocked
 end
 
 -- Applies an op tile to a matrix; row params are clamped to the matrix size.

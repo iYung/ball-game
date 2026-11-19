@@ -137,4 +137,24 @@ do
     print("PASS: no_pusher guard")
 end
 
+-- A pusher that walks into the grid wall is a blocked move → puzzle fail.
+do
+    local scene = new_scene()
+    add_pusher(scene, 1, 6, { "left" })
+    run_to_end(scene)
+    assert(scene.status == "fail", "blocked pusher (wall) fails run, got " .. tostring(scene.status))
+    print("PASS: blocked pusher wall fails run")
+end
+
+-- A pusher that tries to shove the matrix off the grid is a blocked move → puzzle fail.
+-- Push the 2x2 matrix from (2,5) down 5 times; on tick 5 the matrix is at (2,9) and
+-- shoving it to (2,10) would put row 11 off the grid.
+do
+    local scene = new_scene()
+    add_pusher(scene, 2, 4, { "down", "down", "down", "down", "down" })
+    run_to_end(scene)
+    assert(scene.status == "fail", "blocked pusher (matrix at wall) fails run, got " .. tostring(scene.status))
+    print("PASS: blocked pusher matrix-at-wall fails run")
+end
+
 print("ALL TESTS PASSED")

@@ -1,5 +1,6 @@
 local Scene        = require("lua/core/scene")
 local PuzzleLoader = require("game/puzzle_loader")
+local Progress     = require("game/progress")
 
 local W, H        = 1280, 720
 local ROW_H       = 54
@@ -80,7 +81,14 @@ end
 
 function LevelSelectScene:_cycle_world(delta)
     local n = PuzzleLoader.world_count()
-    self._world   = ((self._world - 1 + delta) % n) + 1
+    local candidate = self._world
+    for _ = 1, n do
+        candidate = ((candidate - 1 + delta) % n) + 1
+        if Progress.is_world_unlocked(candidate) then
+            break
+        end
+    end
+    self._world   = candidate
     self.selected = 1
     self:_rebuild_world_data()
 end
@@ -182,6 +190,8 @@ function LevelSelectScene:draw()
     for w = 1, n_worlds do
         if w == self._world then
             love.graphics.setColor(0.55, 0.65, 0.90, 1)
+        elseif not Progress.is_world_unlocked(w) then
+            love.graphics.setColor(0.30, 0.22, 0.28, 1)
         else
             love.graphics.setColor(0.25, 0.30, 0.45, 1)
         end

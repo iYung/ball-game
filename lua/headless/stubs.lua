@@ -62,6 +62,8 @@ love.window.setFullscreen = function() end
 
 love.filesystem = love.filesystem or {}
 love.filesystem.getInfo = function() return nil end
+love.filesystem.read    = function() return nil end
+love.filesystem.write   = function() end
 
 love.audio = love.audio or {}
 

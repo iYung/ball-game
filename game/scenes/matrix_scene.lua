@@ -229,10 +229,25 @@ function MatrixScene:load_puzzle(n)
 
     if p.locked then
         for _, t in ipairs(p.locked) do
-            self.grid:set(t.x, t.y, {
-                kind=t.kind, dir=t.dir, op=t.op,
-                params=t.params or {}, locked=true,
-            })
+            local w = t.width  or op_width(t.op or "", t)
+            local h = t.height or op_height(t.op or "", t)
+            local tile = {
+                kind      = t.kind,
+                dir       = t.dir,
+                op        = t.op,
+                params    = t.params or {},
+                locked    = true,
+                width     = w,
+                height    = h,
+                tile_rows = t.tile_rows,
+                tile_cols = t.tile_cols,
+                values    = t.values,
+            }
+            if w > 1 or h > 1 then
+                self.grid:set_multi_2d(t.x, t.y, tile, w, h)
+            else
+                self.grid:set(t.x, t.y, tile)
+            end
         end
     end
     local src_cols = p.input.cols
@@ -259,6 +274,10 @@ function MatrixScene:_build_palette()
         allowed = {}
         for _, op in ipairs(self.puzzle.ops) do allowed[op] = true end
     end
+    local fixed_allowed = {}
+    if self.puzzle.fixed_ops then
+        for _, op in ipairs(self.puzzle.fixed_ops) do fixed_allowed[op] = true end
+    end
     self._btn_rects = {}
     local bx, by = 10, PALETTE_Y + 6
     local bw, bh, gap = 48, 48, 56
@@ -272,9 +291,27 @@ function MatrixScene:_build_palette()
             bx = bx + gap
         end
     end
+    -- Fixed op buttons (ops listed in puzzle.fixed_ops)
+    if self.puzzle.fixed_ops and #self.puzzle.fixed_ops > 0 then
+        bx = bx + 20  -- separator gap
+        for _, op in ipairs(self.puzzle.fixed_ops) do
+            local label = nil
+            for _, btn in ipairs(PALETTE_BUTTONS) do
+                if btn.op == op then label = btn.label .. "!"; break end
+            end
+            if label then
+                local idx = "fixed_" .. op
+                self._btn_rects[idx] = {
+                    x=bx, y=by, w=bw, h=bh,
+                    btn={ kind="op", op=op, label=label, fixed=true }
+                }
+                bx = bx + gap
+            end
+        end
+    end
     local sel = self.palette:selected()
     if sel and sel.kind == "op" and allowed and not allowed[sel.op] then
-        self.palette:select(nil)
+        if not fixed_allowed[sel.op] then self.palette:select(nil) end
     end
 end
 
@@ -629,7 +666,7 @@ function MatrixScene:draw_grid()
             local is_r2, _, _ = self.grid:is_ref(cx2, cy2)
             if not is_r2 then
                 local tile2 = self.grid:get(cx2, cy2)
-                if tile2 and tile2.kind == "op" and EXPAND_OPS[tile2.op] and not tile2.locked then
+                if tile2 and tile2.kind == "op" and EXPAND_OPS[tile2.op] and not tile2.locked and not tile2.fixed then
                     local ax2, ay2 = cx2, cy2
                     local tc = tile2.tile_cols or 1
                     local tr = tile2.tile_rows
@@ -896,6 +933,11 @@ function MatrixScene:draw_tile(tile, cx, cy)
         love.graphics.circle("fill", sx + cs - 8, sy + 7, 3)
         love.graphics.rectangle("fill", sx + cs - 10, sy + 7, 4, 5)
     end
+    if tile.fixed then
+        love.graphics.setColor(0.5, 0.75, 1.0, 0.8)
+        love.graphics.setFont(self.font_ui)
+        love.graphics.printf("=", sx + (tile.width or 1)*CELL_SIZE - 14, sy + 4, 12, "right")
+    end
 end
 
 -- Draw a parameter cell for a multi-cell op tile.
@@ -907,6 +949,8 @@ function MatrixScene:draw_param_cell(tile, param_index, cx, cy)
     if not defs or not defs[param_index] then return end
     local def = defs[param_index]
     local val = tostring((tile.params or {})[def.key] or 0)
+    local immutable = tile.fixed or tile.locked
+    local val_color = immutable and {0.65,0.65,0.4,1} or {0.95,0.85,0.5,1}
 
     -- Param label
     love.graphics.setColor(0.65, 0.5, 0.15, 1)
@@ -914,15 +958,17 @@ function MatrixScene:draw_param_cell(tile, param_index, cx, cy)
     love.graphics.printf(def.label, sx, sy + 5, cs, "center")
 
     -- Value
-    love.graphics.setColor(0.95, 0.85, 0.5, 1)
+    love.graphics.setColor(unpack(val_color))
     love.graphics.setFont(self.font_cell)
     love.graphics.printf(val, sx, sy + cs / 2 - 10, cs, "center")
 
-    -- [-] / [+] affordances in the bottom area; left and right thirds
-    love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
-    love.graphics.setFont(self.font_ui)
-    love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-    love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+    -- [-] / [+] affordances (omitted for fixed/locked tiles)
+    if not immutable then
+        love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
+        love.graphics.setFont(self.font_ui)
+        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
+        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+    end
 end
 
 function MatrixScene:draw_matrix_value_cell(tile, col_1, row_1, cx, cy)
@@ -933,19 +979,23 @@ function MatrixScene:draw_matrix_value_cell(tile, col_1, row_1, cx, cy)
         v = tile.values[row_1][col_1] or 0
     end
     local val = tostring(v)
+    local immutable = tile.fixed or tile.locked
+    local val_color = immutable and {0.65,0.65,0.4,1} or {0.95,0.85,0.5,1}
 
     love.graphics.setColor(0.65, 0.5, 0.15, 1)
     love.graphics.setFont(self.font_ui)
     love.graphics.printf(col_1 .. "," .. row_1, sx, sy + 5, cs, "center")
 
-    love.graphics.setColor(0.95, 0.85, 0.5, 1)
+    love.graphics.setColor(unpack(val_color))
     love.graphics.setFont(self.font_cell)
     love.graphics.printf(val, sx, sy + cs / 2 - 10, cs, "center")
 
-    love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
-    love.graphics.setFont(self.font_ui)
-    love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-    love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+    if not immutable then
+        love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
+        love.graphics.setFont(self.font_ui)
+        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
+        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+    end
 end
 
 function MatrixScene:draw_scale_band(tile, band, cx, cy)
@@ -953,19 +1003,23 @@ function MatrixScene:draw_scale_band(tile, band, cx, cy)
     local cs = CELL_SIZE
     local selected = (band == (tile.params or {}).row)
     local scalar = (tile.params or {}).scalar or 2
+    local immutable = tile.fixed or tile.locked
 
     if selected then
         love.graphics.setColor(0.35, 0.22, 0.04, 1)
         love.graphics.rectangle("fill", sx, sy, cs, cs)
-        love.graphics.setColor(1.0, 0.85, 0.4, 1)
+        local val_color = immutable and {0.65,0.65,0.4,1} or {1.0,0.85,0.4,1}
+        love.graphics.setColor(unpack(val_color))
         love.graphics.setFont(self.font_ui)
         love.graphics.print("R" .. band, sx + 4, sy + cs / 2 - 7)
         love.graphics.setFont(self.font_cell)
         love.graphics.printf("×" .. scalar, sx, sy + cs / 2 - 9, cs, "right")
-        love.graphics.setColor(0.7, 0.55, 0.2, 0.9)
-        love.graphics.setFont(self.font_ui)
-        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+        if not immutable then
+            love.graphics.setColor(0.7, 0.55, 0.2, 0.9)
+            love.graphics.setFont(self.font_ui)
+            love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
+            love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+        end
     else
         love.graphics.setColor(0.55, 0.40, 0.12, 1)
         love.graphics.setFont(self.font_ui)
@@ -978,15 +1032,19 @@ function MatrixScene:draw_swap_strip(tile, strip, cx, cy)
     local cs = CELL_SIZE
     local params = tile.params or {}
     local row_n = (strip == 1) and (params.row_a or 1) or (params.row_b or 2)
+    local immutable = tile.fixed or tile.locked
+    local val_color = immutable and {0.65,0.65,0.4,1} or {0.95,0.85,0.5,1}
 
-    love.graphics.setColor(0.95, 0.85, 0.5, 1)
+    love.graphics.setColor(unpack(val_color))
     love.graphics.setFont(self.font_cell)
     love.graphics.printf("R" .. row_n, sx, sy + cs / 2 - 9, cs, "center")
 
-    love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
-    love.graphics.setFont(self.font_ui)
-    love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-    love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+    if not immutable then
+        love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
+        love.graphics.setFont(self.font_ui)
+        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
+        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+    end
 end
 
 function MatrixScene:draw_set_row_value_cell(tile, dc, cx, cy)
@@ -996,19 +1054,23 @@ function MatrixScene:draw_set_row_value_cell(tile, dc, cx, cy)
     if tile.values and tile.values[1] then
         v = tile.values[1][dc] or 0
     end
+    local immutable = tile.fixed or tile.locked
+    local val_color = immutable and {0.65,0.65,0.4,1} or {0.95,0.85,0.5,1}
 
     love.graphics.setColor(0.65, 0.5, 0.15, 1)
     love.graphics.setFont(self.font_ui)
     love.graphics.printf("c" .. dc, sx, sy + 5, cs, "center")
 
-    love.graphics.setColor(0.95, 0.85, 0.5, 1)
+    love.graphics.setColor(unpack(val_color))
     love.graphics.setFont(self.font_cell)
     love.graphics.printf(tostring(v), sx, sy + cs / 2 - 10, cs, "center")
 
-    love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
-    love.graphics.setFont(self.font_ui)
-    love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-    love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+    if not immutable then
+        love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
+        love.graphics.setFont(self.font_ui)
+        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
+        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+    end
 end
 
 function MatrixScene:draw_scale_col_band(tile, band, cx, cy)
@@ -1016,19 +1078,23 @@ function MatrixScene:draw_scale_col_band(tile, band, cx, cy)
     local cs = CELL_SIZE
     local selected = (band == (tile.params or {}).col)
     local scalar = (tile.params or {}).scalar or 2
+    local immutable = tile.fixed or tile.locked
 
     if selected then
         love.graphics.setColor(0.35, 0.22, 0.04, 1)
         love.graphics.rectangle("fill", sx, sy, cs, cs)
-        love.graphics.setColor(1.0, 0.85, 0.4, 1)
+        local val_color = immutable and {0.65,0.65,0.4,1} or {1.0,0.85,0.4,1}
+        love.graphics.setColor(unpack(val_color))
         love.graphics.setFont(self.font_ui)
         love.graphics.print("C" .. band, sx + 4, sy + 5)
         love.graphics.setFont(self.font_cell)
         love.graphics.printf("×" .. scalar, sx, sy + cs / 2 - 9, cs, "center")
-        love.graphics.setColor(0.7, 0.55, 0.2, 0.9)
-        love.graphics.setFont(self.font_ui)
-        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+        if not immutable then
+            love.graphics.setColor(0.7, 0.55, 0.2, 0.9)
+            love.graphics.setFont(self.font_ui)
+            love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
+            love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+        end
     else
         love.graphics.setColor(0.55, 0.40, 0.12, 1)
         love.graphics.setFont(self.font_ui)
@@ -1041,15 +1107,19 @@ function MatrixScene:draw_swap_col_strip(tile, strip, cx, cy)
     local cs = CELL_SIZE
     local params = tile.params or {}
     local col_n = (strip == 1) and (params.col_a or 1) or (params.col_b or 2)
+    local immutable = tile.fixed or tile.locked
+    local val_color = immutable and {0.65,0.65,0.4,1} or {0.95,0.85,0.5,1}
 
-    love.graphics.setColor(0.95, 0.85, 0.5, 1)
+    love.graphics.setColor(unpack(val_color))
     love.graphics.setFont(self.font_cell)
     love.graphics.printf("C" .. col_n, sx, sy + cs / 2 - 9, cs, "center")
 
-    love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
-    love.graphics.setFont(self.font_ui)
-    love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-    love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+    if not immutable then
+        love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
+        love.graphics.setFont(self.font_ui)
+        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
+        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+    end
 end
 
 function MatrixScene:draw_set_col_value_cell(tile, dr, cx, cy)
@@ -1059,19 +1129,23 @@ function MatrixScene:draw_set_col_value_cell(tile, dr, cx, cy)
     if tile.values and tile.values[dr] then
         v = tile.values[dr][1] or 0
     end
+    local immutable = tile.fixed or tile.locked
+    local val_color = immutable and {0.65,0.65,0.4,1} or {0.95,0.85,0.5,1}
 
     love.graphics.setColor(0.65, 0.5, 0.15, 1)
     love.graphics.setFont(self.font_ui)
     love.graphics.printf("r" .. dr, sx, sy + 5, cs, "center")
 
-    love.graphics.setColor(0.95, 0.85, 0.5, 1)
+    love.graphics.setColor(unpack(val_color))
     love.graphics.setFont(self.font_cell)
     love.graphics.printf(tostring(v), sx, sy + cs / 2 - 10, cs, "center")
 
-    love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
-    love.graphics.setFont(self.font_ui)
-    love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-    love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+    if not immutable then
+        love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
+        love.graphics.setFont(self.font_ui)
+        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
+        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
+    end
 end
 
 function MatrixScene:draw_travelling_matrix()
@@ -1125,7 +1199,8 @@ function MatrixScene:draw_palette()
             is_sel = true
         elseif sel and btn.kind == sel.kind then
             if btn.kind == "pusher" then is_sel = true
-            elseif btn.kind == "op" then is_sel = (btn.op == sel.op)
+            elseif btn.kind == "op" then
+                is_sel = (btn.op == sel.op) and ((btn.fixed or false) == (sel.fixed or false))
             elseif btn.kind == "drag" then is_sel = true end
         end
 
@@ -1373,6 +1448,7 @@ function MatrixScene:_place_tile_at(cx, cy, spec)
     local tile = {
         kind=spec.kind, dir=spec.dir, op=spec.op, id=pusher_id,
         params=params, locked=false,
+        fixed=spec.fixed or false,
         width=w, height=h,
         tile_rows=tile_rows, tile_cols=tile_cols,
         values=values,
@@ -1389,7 +1465,7 @@ end
 
 function MatrixScene:_resize_tile(ax, ay, action)
     local tile = self.grid:get(ax, ay)
-    if not tile or tile.locked then return end
+    if not tile or tile.locked or tile.fixed then return end
 
     local old_w = tile.width  or 1
     local old_h = tile.height or 1
@@ -1480,7 +1556,7 @@ function MatrixScene:mouse_pressed(mx, my, btn)
                 elseif b.kind == "pusher" then
                     self.palette:select({kind="pusher"})
                 elseif b.kind == "op" then
-                    self.palette:select({kind="op", op=b.op})
+                    self.palette:select({kind="op", op=b.op, fixed=b.fixed})
                 elseif b.kind == "drag" then
                     self.palette:select({kind="drag"})
                 end
@@ -1548,6 +1624,8 @@ function MatrixScene:mouse_pressed(mx, my, btn)
 
         -- Handle op-specific clicks
         if anchor_tile and anchor_tile.kind == "op" then
+            -- Fixed and locked tiles can't have params edited
+            if anchor_tile.fixed or anchor_tile.locked then return end
             if op == "add_matrix" or op == "sub_matrix" or op == "mul_matrix" then
                 if is_r or (dc == 0 and dr == 0) then
                     -- value cell: left/right third = dec/inc

@@ -157,4 +157,69 @@ do
     print("PASS: blocked pusher matrix-at-wall fails run")
 end
 
+-- Fixed player-placed tile has fixed=true and param edits are blocked.
+do
+    local scene = new_scene()
+    -- Place a swap_rows tile with fixed=true directly.
+    scene:_place_tile_at(5, 5, { kind="op", op="swap_rows", fixed=true })
+    local tile = scene.grid:get(5, 5)
+    assert(tile ~= nil, "fixed swap_rows placed")
+    assert(tile.fixed == true, "tile.fixed is true, got " .. tostring(tile.fixed))
+    assert(tile.params.row_a == 1, "default row_a=1, got " .. tostring(tile.params.row_a))
+
+    -- Simulate clicking the right-third of the first strip (dc=0, would normally increment row_a).
+    -- GRID_X=95, CELL_SIZE=63: sx = 95+(5-1)*63 = 347, sy = 20+(5-1)*63 = 272
+    -- Right-third x: 347 + 42 = 389+, use 395; strip-1 y mid: 272+32 = 304
+    scene:mouse_pressed(395, 304, 1)
+    assert(tile.params.row_a == 1,
+        "fixed tile param unchanged after click, got row_a=" .. tostring(tile.params.row_a))
+    print("PASS: fixed player-placed tile blocks param edits")
+end
+
+-- Puzzle-placed locked op loads as a multi-cell tile (scale_row spans 4 rows).
+do
+    local ctx = runner.setup(function() return require("game/scenes/matrix_scene").new(23) end)
+    local scene = ctx.sm.current
+
+    -- Anchor at (5,3)
+    local anchor = scene.grid:get(5, 3)
+    assert(anchor ~= nil, "locked scale_row anchor present at (5,3)")
+    assert(anchor.kind == "op",    "anchor kind=op, got " .. tostring(anchor.kind))
+    assert(anchor.op   == "scale_row", "anchor op=scale_row, got " .. tostring(anchor.op))
+    assert(anchor.locked == true,  "anchor is locked")
+    assert(anchor.params.scalar == 3, "anchor scalar=3, got " .. tostring(anchor.params.scalar))
+
+    -- Ref cells at rows 4, 5, 6 (tile_rows=4 → rows 3..6)
+    local ok4, ax4, ay4 = scene.grid:is_ref(5, 4)
+    assert(ok4 and ax4==5 and ay4==3, "row 4 is ref → anchor (5,3)")
+    local ok5, ax5, ay5 = scene.grid:is_ref(5, 5)
+    assert(ok5 and ax5==5 and ay5==3, "row 5 is ref → anchor (5,3)")
+    local ok6, ax6, ay6 = scene.grid:is_ref(5, 6)
+    assert(ok6 and ax6==5 and ay6==3, "row 6 is ref → anchor (5,3)")
+
+    -- Row 2 (y=4 in grid coords is *above* the tile, i.e. y=2 in grid) should be empty.
+    local ok2 = scene.grid:is_ref(5, 2)
+    assert(not ok2, "row above tile (5,2) is not a ref")
+
+    print("PASS: locked multi-cell op loads correctly")
+end
+
+-- Puzzle-placed locked op fires with correct params in simulation.
+do
+    local Sim = require("game/pusher_sim")
+    local Matrix = require("game/matrix_math")
+    local ctx = runner.setup(function() return require("game/scenes/matrix_scene").new(23) end)
+    local scene = ctx.sm.current
+
+    local tile = scene.grid:get(5, 3)
+    local inp  = Matrix.new(2, 2, {{1,2},{3,4}})
+    local out  = Sim.apply_op(tile, inp)
+    -- scale_row(row=1, scalar=3): row 1 → {3,6}; row 2 unchanged
+    assert(out.values[1][1] == 3, "scale_row row1 col1 = 3, got " .. tostring(out.values[1][1]))
+    assert(out.values[1][2] == 6, "scale_row row1 col2 = 6, got " .. tostring(out.values[1][2]))
+    assert(out.values[2][1] == 3, "scale_row row2 col1 unchanged = 3, got " .. tostring(out.values[2][1]))
+    assert(out.values[2][2] == 4, "scale_row row2 col2 unchanged = 4, got " .. tostring(out.values[2][2]))
+    print("PASS: locked op fires with correct params")
+end
+
 print("ALL TESTS PASSED")

@@ -61,7 +61,7 @@ local OP_SIZES = {
 }
 
 -- Timeline panel: one row per pusher, one slot per tick, shared length n.
-local TL = { ROW_H=15, SLOT_W=22, SLOT_GAP=2, LABEL_W=26, MIN_N=1, MAX_N=16, DEFAULT_N=8, MAX_PUSHERS=8 }
+local TL = { ROW_H=15, SLOT_W=22, SLOT_GAP=2, LABEL_W=26, MIN_N=1, DEFAULT_N=8, MAX_PUSHERS=8 }
 local CMD_ORDER = { "idle", "up", "right", "down", "left" }
 local CMD_GLYPH = { idle=".", up="^", down="v", left="<", right=">" }
 local MAX_TICKS = 500
@@ -168,6 +168,7 @@ function MatrixScene:load_puzzle(n)
     self.cur_slot       = nil
     self.timeline       = {}
     self.timeline_n     = TL.DEFAULT_N
+    self.timeline_scroll = 0
     self._win_timer     = nil
     self.grid           = Grid.new(p.grid_w, p.grid_h)
 
@@ -227,7 +228,8 @@ function MatrixScene:do_reset()
     self.status         = nil
     self.running        = false
     self.sim            = nil
-    self.cur_slot       = nil
+    self.cur_slot        = nil
+    self.timeline_scroll = 0
     self.occupied_ops   = {}
     self._last_fp       = {}
     self.anim_t         = 1
@@ -283,13 +285,14 @@ function MatrixScene:start_run()
     self.current_matrix = self.input_matrix:copy()
     self.sim            = { x=p.source.x, y=p.source.y, tick=0, idle=0,
                             pushers=self:_pusher_list(), gaps=self.gaps }
-    self.status         = "running"
-    self.running        = true
-    self.occupied_ops   = {}
-    self._last_fp       = {}
-    self.cur_slot       = nil
-    self.anim_t         = 1
-    self.anim_ready     = true
+    self.status          = "running"
+    self.running         = true
+    self.occupied_ops    = {}
+    self._last_fp        = {}
+    self.cur_slot        = nil
+    self.timeline_scroll = 0
+    self.anim_t          = 1
+    self.anim_ready      = true
     self:_snap_anim_to_matrix()
     -- Ops under the starting footprint fire immediately.
     self:_process_footprint({})
@@ -387,6 +390,22 @@ function MatrixScene:do_step()
     sim.x, sim.y, sim.tick = st.x, st.y, st.tick
     sim.idle     = moved and 0 or sim.idle + 1
     self.cur_slot = Sim.slot(sim.tick, self.timeline_n)
+
+    -- Auto-scroll the timeline to keep cur_slot visible during a run.
+    do
+        local L = self:_timeline_layout()
+        if L then
+            local scroll = self.timeline_scroll or 0
+            if self.cur_slot == 1 then
+                -- Loop wrapped — rewind to start.
+                self.timeline_scroll = 0
+            elseif self.cur_slot > scroll + L.vis then
+                self.timeline_scroll = self.cur_slot - L.vis
+            elseif self.cur_slot <= scroll then
+                self.timeline_scroll = self.cur_slot - 1
+            end
+        end
+    end
 
     local to_x, to_y = cell_top_left(sim.x, sim.y)
     local new_fp     = self:_process_footprint(self._last_fp)
@@ -949,14 +968,25 @@ local function cycle_cmd(cur, delta)
     return CMD_ORDER[((idx - 1 + delta) % #CMD_ORDER) + 1]
 end
 
--- Rects for the length controls and every pusher row/slot; nil until the HUD has drawn once.
+-- Rects for the length controls and every visible pusher slot; nil until the HUD has drawn once.
+-- Slots are windowed: only the visible subset is returned, each carrying its actual index in .s.
 function MatrixScene:_timeline_layout()
     local top = self._tl_top
     if not top then return nil end
-    local x0    = HUD_X + 20
-    local len_x = HUD_X + 460 - 20 - 78
+    local x0           = HUD_X + 20
+    local len_x        = HUD_X + 460 - 20 - 78
+    local slot_x       = x0 + TL.LABEL_W
+    local slot_w_total = len_x - slot_x - 24  -- leave 12px each side for scroll buttons
+    local vis          = math.max(1, math.floor(slot_w_total / (TL.SLOT_W + TL.SLOT_GAP)))
+    local scroll       = self.timeline_scroll or 0
+    local first        = scroll + 1
+    local last         = math.min(first + vis - 1, self.timeline_n)
     local L = {
         x0 = x0, top = top, rows = {},
+        vis = vis, first = first, last = last,
+        slot_x = slot_x, slot_w = slot_w_total,
+        scroll_left  = { x = slot_x - 14, y = top, w = 12, h = 16 },
+        scroll_right = { x = slot_x + slot_w_total + 2, y = top, w = 12, h = 16 },
         dec = { x=len_x,      y=top, w=18, h=16 },
         val = { x=len_x + 18, y=top, w=42, h=16 },
         inc = { x=len_x + 60, y=top, w=18, h=16 },
@@ -964,10 +994,12 @@ function MatrixScene:_timeline_layout()
     for i, p in ipairs(self:_pusher_list()) do
         local ry  = top + 20 + (i - 1) * TL.ROW_H
         local row = { id=p.id, y=ry, slots={} }
-        for s = 1, self.timeline_n do
-            row.slots[s] = {
-                x = x0 + TL.LABEL_W + (s - 1) * (TL.SLOT_W + TL.SLOT_GAP),
+        for s = first, last do
+            local col = s - first
+            row.slots[#row.slots + 1] = {
+                x = slot_x + col * (TL.SLOT_W + TL.SLOT_GAP),
                 y = ry, w = TL.SLOT_W, h = TL.ROW_H - 1,
+                s = s,
             }
         end
         L.rows[i] = row
@@ -983,6 +1015,7 @@ function MatrixScene:draw_timeline()
     love.graphics.setColor(0.6, 0.75, 1.0, 1)
     love.graphics.print("TIMELINE", L.x0, L.top + 2)
 
+    -- Length controls
     for _, b in ipairs({ { L.dec, "-" }, { L.inc, "+" } }) do
         love.graphics.setColor(0.25, 0.25, 0.4, 1)
         love.graphics.rectangle("fill", b[1].x, b[1].y, b[1].w, b[1].h, 2, 2)
@@ -992,27 +1025,40 @@ function MatrixScene:draw_timeline()
     love.graphics.setColor(0.85, 0.85, 0.95, 1)
     love.graphics.printf("len " .. self.timeline_n, L.val.x, L.val.y + 2, L.val.w, "center")
 
+    -- Scroll buttons
+    local can_left  = (self.timeline_scroll or 0) > 0
+    local can_right = L.last < self.timeline_n
+    for _, b in ipairs({ { L.scroll_left, "<", can_left }, { L.scroll_right, ">", can_right } }) do
+        love.graphics.setColor(b[3] and 0.25 or 0.15, b[3] and 0.25 or 0.15, b[3] and 0.4 or 0.25, 1)
+        love.graphics.rectangle("fill", b[1].x, b[1].y, b[1].w, b[1].h, 2, 2)
+        love.graphics.setColor(b[3] and 0.85 or 0.4, b[3] and 0.85 or 0.4, b[3] and 0.95 or 0.5, 1)
+        love.graphics.printf(b[2], b[1].x, b[1].y + 2, b[1].w, "center")
+    end
+
     if #L.rows == 0 then
         love.graphics.setColor(0.45, 0.45, 0.6, 1)
         love.graphics.print("Place a pusher [P], then program it here", L.x0, L.top + 24)
         return
     end
 
+    -- Clip slot drawing to the slot area
+    love.graphics.setScissor(L.slot_x, L.top, L.slot_w, 720 - L.top)
     for _, row in ipairs(L.rows) do
         love.graphics.setColor(0.80, 0.60, 1.0, 1)
         love.graphics.printf(string.char(64 + row.id), L.x0, row.y + 1, TL.LABEL_W - 6, "right")
         local cmds = self.timeline[row.id] or {}
-        for s, r in ipairs(row.slots) do
-            local current = self.sim and self.cur_slot == s
+        for _, r in ipairs(row.slots) do
+            local current = self.sim and self.cur_slot == r.s
             love.graphics.setColor(current and 0.35 or 0.14, current and 0.30 or 0.14, current and 0.15 or 0.22, 1)
             love.graphics.rectangle("fill", r.x, r.y, r.w, r.h, 2, 2)
             love.graphics.setColor(0.3, 0.3, 0.45, 1)
             love.graphics.rectangle("line", r.x, r.y, r.w, r.h, 2, 2)
-            local cmd = cmds[s] or "idle"
+            local cmd = cmds[r.s] or "idle"
             love.graphics.setColor(cmd == "idle" and 0.4 or 1, cmd == "idle" and 0.4 or 0.9, cmd == "idle" and 0.5 or 0.4, 1)
             love.graphics.printf(CMD_GLYPH[cmd], r.x, r.y + 1, r.w, "center")
         end
     end
+    love.graphics.setScissor()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -1023,15 +1069,22 @@ function MatrixScene:_timeline_click(mx, my, btn)
 
     if btn == 1 and in_rect(L.dec, mx, my) then
         self.timeline_n = math.max(TL.MIN_N, self.timeline_n - 1)
+        -- keep scroll in bounds after shrink
+        self.timeline_scroll = math.min(self.timeline_scroll or 0, math.max(0, self.timeline_n - L.vis))
     elseif btn == 1 and in_rect(L.inc, mx, my) then
-        self.timeline_n = math.min(TL.MAX_N, self.timeline_n + 1)
+        self.timeline_n = math.min(MAX_TICKS, self.timeline_n + 1)
+    elseif btn == 1 and in_rect(L.scroll_left, mx, my) then
+        self.timeline_scroll = math.max(0, (self.timeline_scroll or 0) - 1)
+    elseif btn == 1 and in_rect(L.scroll_right, mx, my) then
+        local max_scroll = math.max(0, self.timeline_n - L.vis)
+        self.timeline_scroll = math.min(max_scroll, (self.timeline_scroll or 0) + 1)
     else
         for _, row in ipairs(L.rows) do
-            for s, r in ipairs(row.slots) do
+            for _, r in ipairs(row.slots) do
                 if in_rect(r, mx, my) then
                     local cmds = self.timeline[row.id] or {}
                     self.timeline[row.id] = cmds
-                    cmds[s] = cycle_cmd(cmds[s], btn == 2 and -1 or 1)
+                    cmds[r.s] = cycle_cmd(cmds[r.s], btn == 2 and -1 or 1)
                     return
                 end
             end

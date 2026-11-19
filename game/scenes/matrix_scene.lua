@@ -406,7 +406,12 @@ function MatrixScene:do_step()
         w=grid.w, h=grid.h, pushers=sim.pushers,
         n=self.timeline_n, tick=sim.tick, gaps=sim.gaps,
     }
-    local moved = Sim.advance(st)
+    local moved, blocked = Sim.advance(st)
+    if blocked then
+        self.running = false
+        self.status  = "fail"
+        return
+    end
     sim.x, sim.y, sim.tick = st.x, st.y, st.tick
     sim.idle     = moved and 0 or sim.idle + 1
     self.cur_slot = Sim.slot(sim.tick, self.timeline_n)

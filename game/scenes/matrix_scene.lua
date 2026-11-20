@@ -143,7 +143,6 @@ local PALETTE_BUTTONS = {
 
 local CMD_BUTTONS = {
     { id="run",   label="Run"   },
-    { id="step",  label="Step"  },
     { id="reset", label="Reset" },
     { id="menu",  label="Menu"  },
 }
@@ -1286,8 +1285,6 @@ end
 function MatrixScene:_cmd_enabled(id)
     if id == "run" then
         return not self.running and self.status ~= "running" and self.status ~= "win"
-    elseif id == "step" then
-        return not self.running and (self.status == nil or self.status == "running" or self.status == "no_pusher")
     elseif id == "reset" then
         return self.sim ~= nil or self.status ~= nil
     elseif id == "menu" then
@@ -1303,14 +1300,6 @@ function MatrixScene:_cmd_activate(id)
             self.status = "no_pusher"
         else
             self:start_run()
-        end
-    elseif id == "step" then
-        if #self:_pusher_list() == 0 then
-            self.status = "no_pusher"
-        else
-            self.anim_t = 1
-            self:do_step()
-            self.anim_t = 1
         end
     elseif id == "reset" then
         self:do_reset()
@@ -2102,7 +2091,7 @@ function MatrixScene:mouse_released(mx, my, btn)
 end
 
 function MatrixScene:key_pressed(key)
-    local KEY_CMD = { r = "run", space = "step", backspace = "reset" }
+    local KEY_CMD = { r = "run", backspace = "reset" }
     local cmd = KEY_CMD[key]
     if cmd then
         if self:_cmd_enabled(cmd) then self:_cmd_activate(cmd) end

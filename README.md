@@ -33,6 +33,7 @@ Puzzles are grouped into five worlds — **Basics** (1–5), **Combos** (6–11)
 | Click `<` / `>` in palette | Scroll the palette one button left / right (only shown when it doesn't fit) |
 | Left / right-click timeline slot | Cycle that slot's command forward / back |
 | Click `<` / `>` in timeline | Scroll the visible slot window left / right |
+| Click `^` / `v` in timeline | Scroll pusher rows up / down (shown when rows overflow the zone) |
 | `Esc` | Return to level select (from puzzle) or start screen (from level select) |
 
 The bottom bar spans the full screen width: the palette on the left, **Run**, **Step**, **Reset**, and **Menu** on the right. When the palette doesn't fit, `<` / `>` arrows appear at the edges of the palette section and scroll it one button at a time (an arrow is dimmed when you can't scroll further that way). Your selected tile stays selected while scrolling. Buttons that aren't applicable in the current state are shown dimmed, and the keyboard shortcuts follow the same rules as the buttons. The current puzzle number (`Puzzle N/23`) is shown at the top-left of the right-hand panel.

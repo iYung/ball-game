@@ -222,4 +222,18 @@ do
     print("PASS: locked op fires with correct params")
 end
 
+-- Timeout: a pusher that oscillates (right/left) moves every tick so it never
+-- triggers "stuck", but after 500 ticks the sim hits MAX_TICKS → "timeout".
+do
+    local scene = new_scene()
+    scene.timeline_n = 2
+    add_pusher(scene, 5, 2, { "right", "left" })
+    run_to_end(scene)
+    assert(scene.status == "timeout",
+        "oscillating pusher times out after 500 ticks, got " .. tostring(scene.status))
+    assert(scene.sim.tick >= 500,
+        "sim ran at least 500 ticks, got " .. tostring(scene.sim.tick))
+    print("PASS: timeout status")
+end
+
 print("ALL TESTS PASSED")

@@ -25,15 +25,11 @@ local PUZZLES = {
 }
 
 local WORLDS = {
-    { name = "Basics",   puzzles = { 1,  2,  3,  4,  5 } },
-    { name = "Combos",   puzzles = { 6,  7,  8,  9, 10, 11 } },
-    { name = "Advanced", puzzles = { 12, 13, 14, 15, 16 } },
-}
-
-local WORLDS = {
-    { name = "Basics",   puzzles = { 1,  2,  3,  4,  5 } },
-    { name = "Combos",   puzzles = { 6,  7,  8,  9, 10, 11 } },
-    { name = "Advanced", puzzles = { 12, 13, 14, 15, 16 } },
+    { name = "Basics",       puzzles = { 1,  2,  3,  4,  5 } },
+    { name = "Combos",       puzzles = { 6,  7,  8,  9, 10, 11 } },
+    { name = "Advanced",     puzzles = { 12, 13, 14, 15, 16 } },
+    { name = "Transforms",   puzzles = { 17, 18, 19, 20 } },
+    { name = "Fixed Pieces", puzzles = { 21, 22, 23 } },
 }
 
 local PuzzleLoader = {}

@@ -5,6 +5,7 @@ local Sim          = require("game/pusher_sim")
 local Palette      = require("game/palette")
 local HUD          = require("game/hud")
 local PuzzleLoader = require("game/puzzle_loader")
+local UI           = require("lua/core/ui")
 
 local function cell_key(x, y) return x .. "," .. y end
 
@@ -278,7 +279,34 @@ function MatrixScene:load_puzzle(n)
     self:_build_palette()
 end
 
--- Lays out the palette: pusher, the puzzle's available ops (all when it lists none), erase.
+-- Bottom-bar palette (layout from #33: one full-width bar, palette left, Run/Step/Reset/Menu
+-- right-aligned at CMD_BTN_X). Positions are computed here, never in draw, so the
+-- registry, hit-testing and drawing all read the same rects. Constants only, no font metrics.
+local PAL_LEFT      = 10
+local PAL_STEP      = 56    -- 48 wide + 8 gap
+local PAL_BTN_W     = 48
+local PAL_SEP       = 20    -- extra gap at each separator
+local BAR_BTN_Y     = PALETTE_Y + 6
+local BAR_BTN_H     = 48
+local SCROLL_W      = 14
+local SCROLL_L_X    = PAL_LEFT                              -- 10..24
+local SCROLLED_LEFT = SCROLL_L_X + SCROLL_W + 4             -- buttons start here when the bar overflows
+local SCROLL_R_X    = PALETTE_REGION_W + 10                 -- 1047..1061, clear of cmd buttons at 1087
+
+local function find_btn(pred)
+    for _, btn in ipairs(PALETTE_BUTTONS) do
+        if pred(btn) then return btn end
+    end
+end
+
+local function palette_id(btn)
+    if btn.fixed then return "palette:fixed:" .. btn.op end
+    if btn.erase then return "palette:erase" end
+    if btn.kind == "op" then return "palette:" .. btn.op end
+    return "palette:" .. btn.kind
+end
+
+-- Collects every palette item (PALETTE_BUTTONS order, then fixed ops) with its separator offset.
 function MatrixScene:_build_palette()
     local allowed
     if self.puzzle.ops then
@@ -286,58 +314,84 @@ function MatrixScene:_build_palette()
         for _, op in ipairs(self.puzzle.ops) do allowed[op] = true end
     end
     local fixed_allowed = {}
-    if self.puzzle.fixed_ops then
-        for _, op in ipairs(self.puzzle.fixed_ops) do fixed_allowed[op] = true end
+    local items, sep_px, pending = {}, 0, false
+    local function push(btn)
+        if pending then sep_px = sep_px + PAL_SEP; pending = false end
+        items[#items + 1] = { id = palette_id(btn), btn = btn, sep = sep_px }
     end
-    self._btn_rects = {}
-    local bx, by = 10, PALETTE_Y + 6
-    local bw, bh, gap = 48, 48, 56
-    local pending_sep   = false
-    local slot          = 0   -- 0-based button index (separators don't count as slots)
-    local sep_offset_px = 0   -- accumulated extra px from separator gaps
-    for i, btn in ipairs(PALETTE_BUTTONS) do
+    for _, btn in ipairs(PALETTE_BUTTONS) do
         if btn.sep then
-            pending_sep = true
+            pending = true
         elseif not btn.op or not allowed or allowed[btn.op] then
-            if pending_sep then
-                bx = bx + 20
-                sep_offset_px = sep_offset_px + 20
-                pending_sep = false
-            end
-                self._btn_rects[i] = { x=bx, y=by, w=bw, h=bh, btn=btn,
-                                   slot=slot, sep_offset=sep_offset_px }
-            bx   = bx + gap
-            slot = slot + 1
+            push(btn)
         end
     end
-    -- Fixed op buttons (ops listed in puzzle.fixed_ops)
     if self.puzzle.fixed_ops and #self.puzzle.fixed_ops > 0 then
-        bx            = bx + 20
-        sep_offset_px = sep_offset_px + 20
+        pending = true
         for _, op in ipairs(self.puzzle.fixed_ops) do
-            local label = nil
-            for _, btn in ipairs(PALETTE_BUTTONS) do
-                if btn.op == op then label = btn.label .. "!"; break end
-            end
-            if label then
-                local idx = "fixed_" .. op
-                self._btn_rects[idx] = {
-                    x=bx, y=by, w=bw, h=bh,
-                    btn={ kind="op", op=op, label=label, fixed=true },
-                    slot=slot, sep_offset=sep_offset_px,
-                }
-                bx   = bx + gap
-                slot = slot + 1
-            end
+            fixed_allowed[op] = true
+            local base = find_btn(function(b) return b.op == op end)
+            if base then push({ kind="op", op=op, label=base.label .. "!", fixed=true }) end
         end
     end
-    self._palette_total_btns = slot
-    self._palette_vis_slots  = math.floor(PALETTE_REGION_W / gap)
+    self._palette_items  = items
+    self._palette_scroll = 0
+    self:_layout_palette()
+
     local sel = self.palette:selected()
     if sel and sel.kind == "op" and allowed and not allowed[sel.op] then
         if not fixed_allowed[sel.op] then self.palette:select(nil) end
     end
     self:_build_cmd_buttons()
+end
+
+-- Rebuilds _palette_rects (visible palette buttons left to right, plus scroll arrows when
+-- the bar overflows) for the current _palette_scroll. _btn_rects stays the full item list.
+function MatrixScene:_layout_palette()
+    local items = self._palette_items or {}
+    local n     = #items
+    local function x_of(i, scroll, left)
+        return left + items[i].sep - items[scroll + 1].sep + (i - 1 - scroll) * PAL_STEP
+    end
+    local fits = n == 0 or (PAL_LEFT + items[n].sep + (n - 1) * PAL_STEP + PAL_BTN_W <= PALETTE_REGION_W)
+    local left = fits and PAL_LEFT or SCROLLED_LEFT
+
+    -- Largest scroll that still shows the last item.
+    local max_scroll = 0
+    if not fits then
+        while max_scroll < n - 1 and x_of(n, max_scroll, left) + PAL_BTN_W > PALETTE_REGION_W do
+            max_scroll = max_scroll + 1
+        end
+    end
+    local scroll = math.max(0, math.min(self._palette_scroll or 0, max_scroll))
+    self._palette_scroll     = scroll
+    self._palette_max_scroll = max_scroll
+
+    local rects = {}
+    local function add(id, x, w, btn, enabled)
+        rects[#rects + 1] = { id=id, x=x, y=BAR_BTN_Y, w=w, h=BAR_BTN_H, btn=btn, enabled=enabled }
+    end
+    if not fits then
+        add("palette:scroll_left", SCROLL_L_X, SCROLL_W, { kind="scroll", dir=-1, label="<" }, scroll > 0)
+    end
+    for i = scroll + 1, n do
+        local x = x_of(i, scroll, left)
+        if x + PAL_BTN_W > PALETTE_REGION_W then break end
+        add(items[i].id, x, PAL_BTN_W, items[i].btn)
+    end
+    if not fits then
+        add("palette:scroll_right", SCROLL_R_X, SCROLL_W, { kind="scroll", dir=1, label=">" }, scroll < max_scroll)
+    end
+    self._palette_rects = rects
+    self._btn_rects     = items
+end
+
+-- Scrolls the palette by dir (-1/+1) slots when that arrow is enabled.
+function MatrixScene:_palette_scroll_by(dir)
+    local s = (self._palette_scroll or 0) + dir
+    if s < 0 or s > (self._palette_max_scroll or 0) then return end
+    self._palette_scroll = s
+    self:_layout_palette()
 end
 
 function MatrixScene:_build_cmd_buttons()
@@ -1228,19 +1282,50 @@ function MatrixScene:draw_travelling_matrix()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+-- Single source of truth for command enabled state (buttons, clicks, keys, registry).
+function MatrixScene:_cmd_enabled(id)
+    if id == "run" then
+        return not self.running and self.status ~= "running" and self.status ~= "win"
+    elseif id == "step" then
+        return not self.running and (self.status == nil or self.status == "running" or self.status == "no_pusher")
+    elseif id == "reset" then
+        return self.sim ~= nil or self.status ~= nil
+    elseif id == "menu" then
+        return true
+    end
+    return false
+end
+
+-- Performs a command's action. Callers check _cmd_enabled first.
+function MatrixScene:_cmd_activate(id)
+    if id == "run" then
+        if #self:_pusher_list() == 0 then
+            self.status = "no_pusher"
+        else
+            self:start_run()
+        end
+    elseif id == "step" then
+        if #self:_pusher_list() == 0 then
+            self.status = "no_pusher"
+        else
+            self.anim_t = 1
+            self:do_step()
+            self.anim_t = 1
+        end
+    elseif id == "reset" then
+        self:do_reset()
+    elseif id == "menu" then
+        if self._scene_manager then
+            local LevelSelectScene = require("game/scenes/level_select_scene")
+            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
+        end
+    end
+end
+
 function MatrixScene:_draw_cmd_buttons()
     if not self._cmd_btn_rects then return end
     for _, r in ipairs(self._cmd_btn_rects) do
-        local enabled
-        if r.id == "run" then
-            enabled = not self.running and self.status ~= "running" and self.status ~= "win"
-        elseif r.id == "step" then
-            enabled = not self.running and (self.status == nil or self.status == "running" or self.status == "no_pusher")
-        elseif r.id == "reset" then
-            enabled = self.sim ~= nil or self.status ~= nil
-        else
-            enabled = true
-        end
+        local enabled = self:_cmd_enabled(r.id)
 
         if enabled then
             love.graphics.setColor(0.25, 0.25, 0.4, 1)
@@ -1268,88 +1353,66 @@ function MatrixScene:_draw_cmd_buttons()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+-- True when the palette selection is the tool this button represents.
+function MatrixScene:_palette_is_selected(btn)
+    local sel = self.palette:selected()
+    if sel == nil then return btn.erase == true end
+    if btn.kind ~= sel.kind then return false end
+    if btn.kind == "pusher" or btn.kind == "drag" then return true end
+    if btn.kind == "op" then
+        return (btn.op == sel.op) and ((btn.fixed or false) == (sel.fixed or false))
+    end
+    return false
+end
+
+-- Applies a palette button click (same semantics as before the registry).
+function MatrixScene:_palette_select(btn)
+    if btn.erase then
+        self.palette:select(nil)
+    elseif btn.kind == "pusher" then
+        self.palette:select({kind="pusher"})
+    elseif btn.kind == "op" then
+        self.palette:select({kind="op", op=btn.op, fixed=btn.fixed})
+    elseif btn.kind == "drag" then
+        self.palette:select({kind="drag"})
+    end
+end
+
 function MatrixScene:draw_palette()
     love.graphics.setColor(0.06, 0.06, 0.10, 1)
     love.graphics.rectangle("fill", 0, PALETTE_Y, SCREEN_W, 60)
 
-    local sel        = self.palette:selected()
-    local gap        = 56
-    local bw         = 48
-    local scroll     = self._palette_scroll or 0
-    local max_scroll = math.max(0, (self._palette_total_btns or 0) - (self._palette_vis_slots or 99))
+    for _, rect in ipairs(self._palette_rects) do
+        local btn     = rect.btn
+        local is_sel  = self:_palette_is_selected(btn)
+        local enabled = rect.enabled ~= false
 
-    -- Slot-based palette buttons: skip those scrolled off-screen or beyond cmd region
-    for _, rect in pairs(self._btn_rects) do
-        local btn      = rect.btn
-        local screen_x = 10 + (rect.sep_offset or 0) + (rect.slot - scroll) * gap
-        if screen_x >= 10 and screen_x + bw <= PALETTE_REGION_W then
-            local is_sel = false
-            if sel == nil and btn.erase then
-                is_sel = true
-            elseif sel and btn.kind == sel.kind then
-                if btn.kind == "pusher" then is_sel = true
-                elseif btn.kind == "op" then
-                    is_sel = (btn.op == sel.op) and ((btn.fixed or false) == (sel.fixed or false))
-                elseif btn.kind == "drag" then is_sel = true end
-            end
-
-            love.graphics.setColor(0.12, 0.12, 0.20, 1)
-            love.graphics.rectangle("fill", screen_x, rect.y, bw, rect.h, 4, 4)
+        love.graphics.setColor(0.12, 0.12, 0.20, enabled and 1 or 0.5)
+        love.graphics.rectangle("fill", rect.x, rect.y, rect.w, rect.h, 4, 4)
+        if not enabled then
+            love.graphics.setColor(0.2, 0.2, 0.3, 0.35)
+        else
             love.graphics.setColor(is_sel and {0.8,0.9,1.0,1} or {0.3,0.3,0.45,1})
-            love.graphics.setLineWidth(is_sel and 2 or 1)
-            love.graphics.rectangle("line", screen_x, rect.y, bw, rect.h, 4, 4)
-            love.graphics.setLineWidth(1)
+        end
+        love.graphics.setLineWidth(is_sel and 2 or 1)
+        love.graphics.rectangle("line", rect.x, rect.y, rect.w, rect.h, 4, 4)
+        love.graphics.setLineWidth(1)
+        if enabled then
             love.graphics.setColor(0.85, 0.85, 0.9, 1)
-            love.graphics.setFont(self.font_ui)
-            love.graphics.printf(btn.label, screen_x, rect.y + 17, bw, "center")
+        else
+            love.graphics.setColor(0.4, 0.4, 0.5, 1)
         end
-    end
-
-    -- Scroll arrows (only when palette overflows)
-    self._palette_scroll_left_rect  = nil
-    self._palette_scroll_right_rect = nil
-    if max_scroll > 0 then
-        local by = PALETTE_Y + 6
-        if scroll > 0 then
-            local r = { x=4, y=by, w=14, h=48 }
-            self._palette_scroll_left_rect = r
-            love.graphics.setColor(0.14, 0.14, 0.22, 1)
-            love.graphics.rectangle("fill", r.x, r.y, r.w, r.h, 2, 2)
-            love.graphics.setColor(0.3, 0.3, 0.45, 1)
-            love.graphics.rectangle("line", r.x, r.y, r.w, r.h, 2, 2)
-            love.graphics.setColor(0.7, 0.7, 0.85, 1)
-            love.graphics.setFont(self.font_ui)
-            love.graphics.printf("<", r.x, r.y + 17, r.w, "center")
-        end
-        if scroll < max_scroll then
-            local r = { x=PALETTE_REGION_W + 10, y=by, w=14, h=48 }
-            self._palette_scroll_right_rect = r
-            love.graphics.setColor(0.14, 0.14, 0.22, 1)
-            love.graphics.rectangle("fill", r.x, r.y, r.w, r.h, 2, 2)
-            love.graphics.setColor(0.3, 0.3, 0.45, 1)
-            love.graphics.rectangle("line", r.x, r.y, r.w, r.h, 2, 2)
-            love.graphics.setColor(0.7, 0.7, 0.85, 1)
-            love.graphics.setFont(self.font_ui)
-            love.graphics.printf(">", r.x, r.y + 17, r.w, "center")
-        end
+        love.graphics.setFont(self.font_ui)
+        love.graphics.printf(btn.label, rect.x, rect.y + 17, rect.w, "center")
     end
 
     self:_draw_cmd_buttons()
-
-    love.graphics.setColor(0.5, 0.65, 0.5, 1)
-    love.graphics.setFont(self.font_key)
-    local nav = string.format("Puzzle %d/%d  [Esc] Menu", self.puzzle_index, PuzzleLoader.count())
-    love.graphics.printf(nav, 0, PALETTE_Y + 50, PALETTE_REGION_W, "right")
     love.graphics.setColor(1, 1, 1, 1)
 end
 
 -- ── Draw ───────────────────────────────────────────────────────────────────
 
 -- ── Timeline panel ─────────────────────────────────────────────────────────
-
-local function in_rect(r, mx, my)
-    return mx >= r.x and mx < r.x + r.w and my >= r.y and my < r.y + r.h
-end
 
 local function cycle_cmd(cur, delta)
     local idx = 1
@@ -1417,8 +1480,7 @@ function MatrixScene:draw_timeline()
     love.graphics.printf("len " .. self.timeline_n, L.val.x, L.val.y + 2, L.val.w, "center")
 
     -- Scroll buttons
-    local can_left  = (self.timeline_scroll or 0) > 0
-    local can_right = L.last < self.timeline_n
+    local can_left, can_right = self:_tl_can_scroll(L)
     for _, b in ipairs({ { L.scroll_left, "<", can_left }, { L.scroll_right, ">", can_right } }) do
         love.graphics.setColor(b[3] and 0.25 or 0.15, b[3] and 0.25 or 0.15, b[3] and 0.4 or 0.25, 1)
         love.graphics.rectangle("fill", b[1].x, b[1].y, b[1].w, b[1].h, 2, 2)
@@ -1453,33 +1515,112 @@ function MatrixScene:draw_timeline()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
--- Left-click cycles a slot forward, right-click backward; -/+ change the timeline length.
-function MatrixScene:_timeline_click(mx, my, btn)
-    local L = self:_timeline_layout()
-    if not L or self.running then return end
+-- Whether the timeline window can scroll left / right (shared by draw and registry).
+function MatrixScene:_tl_can_scroll(L)
+    return (self.timeline_scroll or 0) > 0, L.last < self.timeline_n
+end
 
-    if btn == 1 and in_rect(L.dec, mx, my) then
-        self.timeline_n = math.max(TL.MIN_N, self.timeline_n - 1)
-        -- keep scroll in bounds after shrink
-        self.timeline_scroll = math.min(self.timeline_scroll or 0, math.max(0, self.timeline_n - L.vis))
-    elseif btn == 1 and in_rect(L.inc, mx, my) then
-        self.timeline_n = math.min(MAX_TICKS, self.timeline_n + 1)
-    elseif btn == 1 and in_rect(L.scroll_left, mx, my) then
-        self.timeline_scroll = math.max(0, (self.timeline_scroll or 0) - 1)
-    elseif btn == 1 and in_rect(L.scroll_right, mx, my) then
-        local max_scroll = math.max(0, self.timeline_n - L.vis)
-        self.timeline_scroll = math.min(max_scroll, (self.timeline_scroll or 0) + 1)
-    else
+function MatrixScene:_tl_dec(L)
+    self.timeline_n = math.max(TL.MIN_N, self.timeline_n - 1)
+    -- keep scroll in bounds after shrink
+    self.timeline_scroll = math.min(self.timeline_scroll or 0, math.max(0, self.timeline_n - L.vis))
+end
+
+function MatrixScene:_tl_inc()
+    self.timeline_n = math.min(MAX_TICKS, self.timeline_n + 1)
+end
+
+function MatrixScene:_tl_scroll_left()
+    self.timeline_scroll = math.max(0, (self.timeline_scroll or 0) - 1)
+end
+
+function MatrixScene:_tl_scroll_right(L)
+    local max_scroll = math.max(0, self.timeline_n - L.vis)
+    self.timeline_scroll = math.min(max_scroll, (self.timeline_scroll or 0) + 1)
+end
+
+-- Left-click cycles a slot forward, right-click backward.
+function MatrixScene:_tl_cycle_slot(pusher_id, s, btn)
+    local cmds = self.timeline[pusher_id] or {}
+    self.timeline[pusher_id] = cmds
+    cmds[s] = cycle_cmd(cmds[s], btn == 2 and -1 or 1)
+end
+
+-- ── UI element registry (see docs/checklists/ui-tests.md, C1/C2) ───────────
+
+local function el(id, label, kind, r, enabled, selected)
+    return { id = id, label = label, kind = kind,
+             rect = { x = r.x, y = r.y, w = r.w, h = r.h },
+             enabled = enabled, selected = selected }
+end
+
+function MatrixScene:ui_elements()
+    local out = {}
+    for _, r in ipairs(self._palette_rects or {}) do
+        local enabled = r.enabled ~= false
+        out[#out + 1] = el(r.id, r.btn.label, "button", r, enabled, self:_palette_is_selected(r.btn))
+    end
+    for _, r in ipairs(self._cmd_btn_rects or {}) do
+        out[#out + 1] = el("cmd:" .. r.id, r.label, "button", r, self:_cmd_enabled(r.id))
+    end
+    for y = 1, self.grid.h do
+        for x = 1, self.grid.w do
+            local sx, sy = cell_top_left(x, y)
+            local id = "cell:" .. x .. "," .. y
+            out[#out + 1] = el(id, id, "cell", { x = sx, y = sy, w = CELL_SIZE, h = CELL_SIZE }, true)
+        end
+    end
+    local L = self:_timeline_layout()
+    if L then
+        local idle = not self.running
+        local can_left, can_right = self:_tl_can_scroll(L)
+        out[#out + 1] = el("tl:scroll_left",  "<", "button", L.scroll_left,  can_left and idle)
+        out[#out + 1] = el("tl:scroll_right", ">", "button", L.scroll_right, can_right and idle)
+        out[#out + 1] = el("tl:dec", "-", "button", L.dec, idle)
+        out[#out + 1] = el("tl:inc", "+", "button", L.inc, idle)
         for _, row in ipairs(L.rows) do
+            local letter = string.char(64 + row.id)
             for _, r in ipairs(row.slots) do
-                if in_rect(r, mx, my) then
-                    local cmds = self.timeline[row.id] or {}
-                    self.timeline[row.id] = cmds
-                    cmds[r.s] = cycle_cmd(cmds[r.s], btn == 2 and -1 or 1)
-                    return
-                end
+                local id = "slot:" .. letter .. ":" .. r.s
+                out[#out + 1] = el(id, id, "slot", r, idle)
             end
         end
+    end
+    return out
+end
+
+-- C6 query: matrix values currently shown, as plain rows.
+function MatrixScene:ui_matrix()
+    local m = self.current_matrix or self.input_matrix
+    local rows = {}
+    for r = 1, m.rows do
+        rows[r] = {}
+        for c = 1, m.cols do rows[r][c] = m.values[r][c] end
+    end
+    return rows
+end
+
+-- C6 query: tile at a grid cell (ref cells resolve to their anchor tile), or nil.
+function MatrixScene:ui_tile(x, y)
+    if not self.grid:in_bounds(x, y) then return nil end
+    local tile = self.grid:get(x, y)
+    if tile == nil then return nil end
+    return { kind = tile.kind, op = tile.op, dir = tile.dir }
+end
+
+-- Handles a click on a tl:* or slot element. Kept as a helper for the registry dispatch.
+function MatrixScene:_timeline_element_click(e, btn)
+    if not e.enabled then return end
+    local L = self:_timeline_layout()
+    if not L then return end
+    if e.kind == "slot" then
+        local letter, s = e.id:match("^slot:(%u):(%d+)$")
+        self:_tl_cycle_slot(string.byte(letter) - 64, tonumber(s), btn)
+    elseif btn == 1 then
+        if e.id == "tl:dec" then self:_tl_dec(L)
+        elseif e.id == "tl:inc" then self:_tl_inc()
+        elseif e.id == "tl:scroll_left" then self:_tl_scroll_left()
+        elseif e.id == "tl:scroll_right" then self:_tl_scroll_right(L) end
     end
 end
 
@@ -1489,6 +1630,10 @@ function MatrixScene:draw()
     self:draw_travelling_matrix()
     self:draw_palette()
     self._tl_top = self.hud:draw(self.input_matrix, self.target_matrix, self.puzzle.name, self.status)
+    love.graphics.setColor(0.5, 0.65, 0.5, 1)
+    love.graphics.setFont(self.font_key)
+    love.graphics.print(string.format("Puzzle %d/%d", self.puzzle_index, PuzzleLoader.count()), HUD_X + 8, 12)
+    love.graphics.setColor(1, 1, 1, 1)
     self:draw_timeline()
 end
 
@@ -1656,88 +1801,35 @@ function MatrixScene:mouse_moved(mx, my)
 end
 
 function MatrixScene:mouse_pressed(mx, my, btn)
-    -- Palette bar spans full screen width — check before HUD column guard
-    if my >= PALETTE_Y then
-        -- Command buttons
-        if self._cmd_btn_rects then
-            for _, r in ipairs(self._cmd_btn_rects) do
-                if mx >= r.x and mx < r.x + r.w and my >= r.y and my < r.y + r.h then
-                    local enabled = false
-                    if r.id == "run" then
-                        enabled = not self.running and self.status ~= "running" and self.status ~= "win"
-                    elseif r.id == "step" then
-                        enabled = not self.running and (self.status == nil or self.status == "running" or self.status == "no_pusher")
-                    elseif r.id == "reset" then
-                        enabled = self.sim ~= nil or self.status ~= nil
-                    elseif r.id == "menu" then
-                        enabled = true
-                    end
-                    if enabled then
-                        if r.id == "run" then
-                            if #self:_pusher_list() == 0 then
-                                self.status = "no_pusher"
-                            else
-                                self:start_run()
-                            end
-                        elseif r.id == "step" then
-                            if #self:_pusher_list() == 0 then
-                                self.status = "no_pusher"
-                            else
-                                self.anim_t = 1
-                                self:do_step()
-                                self.anim_t = 1
-                            end
-                        elseif r.id == "reset" then
-                            self:do_reset()
-                        elseif r.id == "menu" then
-                            if self._scene_manager then
-                                local LevelSelectScene = require("game/scenes/level_select_scene")
-                                self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
-                            end
-                        end
-                    end
-                    return
-                end
-            end
-        end
-        -- Palette scroll arrows
-        local max_scroll = math.max(0, (self._palette_total_btns or 0) - (self._palette_vis_slots or 999))
-        if self._palette_scroll_left_rect and in_rect(self._palette_scroll_left_rect, mx, my) then
-            self._palette_scroll = math.max(0, (self._palette_scroll or 0) - 1)
-            return
-        end
-        if self._palette_scroll_right_rect and in_rect(self._palette_scroll_right_rect, mx, my) then
-            self._palette_scroll = math.min(max_scroll, (self._palette_scroll or 0) + 1)
-            return
-        end
+    -- All hit-testing goes through the UI element registry.
+    local e = UI.element_at(self:ui_elements(), mx, my)
+    if e == nil then return end
 
-        for _, rect in pairs(self._btn_rects) do
-            local screen_x = 10 + (rect.sep_offset or 0) + (rect.slot - (self._palette_scroll or 0)) * 56
-            if mx >= screen_x and mx < screen_x + rect.w
-            and my >= rect.y and my < rect.y + rect.h
-            and screen_x >= 10 and screen_x + rect.w <= PALETTE_REGION_W then
-                local b = rect.btn
-                if b.erase then
-                    self.palette:select(nil)
-                elseif b.kind == "pusher" then
-                    self.palette:select({kind="pusher"})
-                elseif b.kind == "op" then
-                    self.palette:select({kind="op", op=b.op, fixed=b.fixed})
-                elseif b.kind == "drag" then
-                    self.palette:select({kind="drag"})
+    local id = e.id
+    if id:sub(1, 4) == "cmd:" then
+        local cmd = id:sub(5)
+        if self:_cmd_enabled(cmd) then self:_cmd_activate(cmd) end
+        return
+    elseif id:sub(1, 8) == "palette:" then
+        for _, r in ipairs(self._palette_rects) do
+            if r.id == id then
+                if r.btn.kind == "scroll" then
+                    if e.enabled then self:_palette_scroll_by(r.btn.dir) end
+                else
+                    self:_palette_select(r.btn)
                 end
-                return
+                break
             end
         end
         return
-    end
-
-    if mx >= HUD_X then
-        self:_timeline_click(mx, my, btn)
+    elseif id:sub(1, 3) == "tl:" or e.kind == "slot" then
+        self:_timeline_element_click(e, btn)
+        return
+    elseif e.kind ~= "cell" then
         return
     end
 
-    if not in_grid_panel(mx, my) then return end
+    -- Grid cell: existing grid logic (resize strips, clear, drag, params, placement).
     local cx, cy = screen_to_cell(mx, my)
     if not self.grid:in_bounds(cx, cy) then return end
 
@@ -2010,29 +2102,10 @@ function MatrixScene:mouse_released(mx, my, btn)
 end
 
 function MatrixScene:key_pressed(key)
-    if key == "r" then
-        if not self.running and (self.status == nil or self.status == "fail"
-                              or self.status == "stuck" or self.status == "timeout"
-                              or self.status == "no_pusher") then
-            if #self:_pusher_list() == 0 then
-                self.status = "no_pusher"
-            else
-                self:start_run()
-            end
-        end
-    elseif key == "space" then
-        if not self.running and (self.status == nil or self.status == "running"
-                              or self.status == "no_pusher") then
-            if #self:_pusher_list() == 0 then
-                self.status = "no_pusher"
-            else
-                self.anim_t = 1
-                self:do_step()
-                self.anim_t = 1
-            end
-        end
-    elseif key == "backspace" then
-        self:do_reset()
+    local KEY_CMD = { r = "run", space = "step", backspace = "reset" }
+    local cmd = KEY_CMD[key]
+    if cmd then
+        if self:_cmd_enabled(cmd) then self:_cmd_activate(cmd) end
     elseif key == "escape" then
         if self._scene_manager then
             local LevelSelectScene = require("game/scenes/level_select_scene")

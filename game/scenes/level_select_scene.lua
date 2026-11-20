@@ -1,6 +1,7 @@
 local Scene        = require("lua/core/scene")
 local PuzzleLoader = require("game/puzzle_loader")
 local Progress     = require("game/progress")
+local UI           = require("lua/core/ui")
 
 local W, H        = 1280, 720
 local ROW_H       = 54
@@ -58,27 +59,6 @@ function LevelSelectScene:on_enter()
     self:_rebuild_world_data()
 end
 
-local function _row_at(rects, lx, ly)
-    for i, r in ipairs(rects) do
-        if lx >= r.x and lx < r.x + r.w and ly >= r.y and ly < r.y + r.h then
-            return i
-        end
-    end
-    return nil
-end
-
-local function _hit(r, lx, ly)
-    return lx >= r.x and lx < r.x + r.w and ly >= r.y and ly < r.y + r.h
-end
-
-local function _logical_mouse()
-    local scale = math.min(love.graphics.getWidth() / W, love.graphics.getHeight() / H)
-    local ox    = (love.graphics.getWidth()  - W * scale) / 2
-    local oy    = (love.graphics.getHeight() - H * scale) / 2
-    return (love.mouse.getX() - ox) / scale,
-           (love.mouse.getY() - oy) / scale
-end
-
 function LevelSelectScene:_cycle_world(delta)
     local n = PuzzleLoader.world_count()
     local candidate = self._world
@@ -108,11 +88,42 @@ function LevelSelectScene:_cycle_world(delta)
     self:_rebuild_world_data()
 end
 
-function LevelSelectScene:update(_dt)
-    local lx, ly = _logical_mouse()
-    local hovered = _row_at(self._row_rects, lx, ly)
-    if hovered then
-        self.selected = hovered
+-- Registry of clickable elements (see docs/design/ui-tests.md section 2):
+-- world arrows first, then one row per puzzle in row order.
+function LevelSelectScene:ui_elements()
+    local els = {}
+    local function rect(r) return { x = r.x, y = r.y, w = r.w, h = r.h } end
+    if self._arrow_left.x then
+        els[#els + 1] = { id = "world:prev", label = "<", kind = "button",
+                          rect = rect(self._arrow_left), enabled = true }
+        els[#els + 1] = { id = "world:next", label = ">", kind = "button",
+                          rect = rect(self._arrow_right), enabled = true }
+    end
+    for i, puzzle in ipairs(self._world_puzzles) do
+        els[#els + 1] = { id = "puzzle:" .. puzzle.index, label = puzzle.name, kind = "button",
+                          rect = rect(self._row_rects[i]), enabled = true,
+                          selected = (i == self.selected) }
+    end
+    return els
+end
+
+-- Row number (1-based) of a puzzle element, or nil for other elements.
+function LevelSelectScene:_row_of(e)
+    if not e then return nil end
+    for i, puzzle in ipairs(self._world_puzzles) do
+        if e.id == "puzzle:" .. puzzle.index then return i end
+    end
+    return nil
+end
+
+-- Hover only changes the selection when the mouse actually moves, so a
+-- resting cursor never overrides Up/Down navigation.
+function LevelSelectScene:update(_dt) end
+
+function LevelSelectScene:mouse_moved(x, y)
+    local row = self:_row_of(UI.element_at(self:ui_elements(), x, y))
+    if row then
+        self.selected = row
     end
 end
 
@@ -145,17 +156,14 @@ end
 
 function LevelSelectScene:mouse_pressed(mx, my, btn)
     if btn ~= 1 then return end
-    if _hit(self._arrow_left, mx, my) then
+    local e = UI.element_at(self:ui_elements(), mx, my)
+    if not e then return end
+    if e.id == "world:prev" then
         self:_cycle_world(-1)
-        return
-    end
-    if _hit(self._arrow_right, mx, my) then
+    elseif e.id == "world:next" then
         self:_cycle_world(1)
-        return
-    end
-    local hit = _row_at(self._row_rects, mx, my)
-    if hit then
-        self.selected = hit
+    elseif self:_row_of(e) then
+        self.selected = self:_row_of(e)
         self:_load_selected()
     end
 end
@@ -218,9 +226,11 @@ function LevelSelectScene:draw()
 
     -- Rows
     love.graphics.setFont(self._font_row)
-    for i, puzzle in ipairs(self._world_puzzles) do
-        local r   = self._row_rects[i]
-        local sel = (i == self.selected)
+    local elements = self:ui_elements()
+    for _, puzzle in ipairs(self._world_puzzles) do
+        local e   = UI.find(elements, "puzzle:" .. puzzle.index)
+        local r   = e.rect
+        local sel = e.selected
 
         if sel then
             love.graphics.setColor(0.35, 0.45, 0.80, 1)

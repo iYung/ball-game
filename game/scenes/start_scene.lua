@@ -1,4 +1,5 @@
 local Scene = require("lua/core/scene")
+local UI    = require("lua/core/ui")
 
 local W, H = 1280, 720
 
@@ -18,7 +19,19 @@ function StartScene:on_enter()
     self._font_prompt  = love.graphics.newFont(16)
     self._font_debug   = love.graphics.newFont(14)
     self._time = 0
+    self._play_rect    = { x = W / 2 - 120, y = 572, w = 240, h = 32 }
     self._unlock_rect  = { x = W / 2 - 80, y = 625, w = 160, h = 22 }
+end
+
+-- UI element registry (see docs/design/ui-tests.md). Fresh table each call.
+function StartScene:ui_elements()
+    local p, u = self._play_rect, self._unlock_rect
+    return {
+        { id = "start:play", label = "Play", kind = "button",
+          rect = { x = p.x, y = p.y, w = p.w, h = p.h }, enabled = true },
+        { id = "start:unlock_all", label = "Unlock All", kind = "button",
+          rect = { x = u.x, y = u.y, w = u.w, h = u.h }, enabled = true },
+    }
 end
 
 function StartScene:update(dt)
@@ -45,8 +58,8 @@ function StartScene:key_pressed(key)
 end
 
 function StartScene:mouse_pressed(mx, my, _)
-    local r = self._unlock_rect
-    if mx >= r.x and mx < r.x + r.w and my >= r.y and my < r.y + r.h then
+    local e = UI.element_at(self:ui_elements(), mx, my)
+    if e and e.id == "start:unlock_all" then
         self:_unlock_all()
         return
     end

@@ -29,6 +29,10 @@ function SceneManager:switch(scene)
     end
 end
 
+function SceneManager:is_idle()
+    return self._fade_state == "idle"
+end
+
 function SceneManager:update(dt)
     if self.current then self.current:update(dt) end
 

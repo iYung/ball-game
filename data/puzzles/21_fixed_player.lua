@@ -2,6 +2,7 @@ return {
     name      = "Fixed Tools",
     grid_w    = 10, grid_h = 10,
     source    = { x=2, y=5 },
+    ops       = {},
     fixed_ops = { "swap_rows", "negate" },
     sink      = { x=10, y=5 },
     input     = { rows=2, cols=2, values={ {1,2}, {3,4} } },

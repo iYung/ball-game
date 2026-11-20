@@ -1,6 +1,6 @@
 # Matrix Circuit
 
-A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to transform an input matrix into a target matrix using elementary matrix operations. Choose from 16 puzzles on the level-select screen; completing a puzzle shows a solution recap screen then proceeds to the next puzzle.
+A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to transform an input matrix into a target matrix using elementary matrix operations. Choose from 23 puzzles, grouped into five worlds, on the level-select screen; completing a puzzle shows a solution recap screen then proceeds to the next puzzle.
 
 ## How to play
 
@@ -14,26 +14,28 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 | `Up / Down` | Navigate puzzle list within world |
 | `Enter` | Play selected puzzle |
 | `Esc` | Return to start screen |
+| Click a row | Play that puzzle |
 
-Puzzles are grouped into three worlds — **Basics** (1–5), **Combos** (6–11), and **Advanced** (12–16) — shown in a top bar. Click the `<` / `>` arrows or press Left/Right to cycle worlds. Worlds 2 and 3 are **locked** until all puzzles in the previous world are solved. On the start screen, press `D` or click **(D) Unlock All** to mark every puzzle solved (useful for testing or jumping ahead).
+Puzzles are grouped into five worlds — **Basics** (1–5), **Combos** (6–11), **Advanced** (12–16), **Transforms** (17–20), and **Fixed Pieces** (21–23) — shown in a top bar. Click the `<` / `>` arrows or press Left/Right to cycle worlds. World 1 is always open; every later world is **locked** until all puzzles in the previous world are solved, and locked worlds are skipped when cycling. Click a puzzle row to play it. Hovering highlights a row only when the mouse actually moves, so a resting cursor never overrides Up/Down navigation. On the start screen, press `D` or click **(D) Unlock All** to mark every puzzle solved (useful for testing or jumping ahead).
 
 **In-game controls:**
 
 | Key / Button | Action |
 |-------------|--------|
-| `R` or **Run** button | Run — one timeline tick at a time, animated |
+| `R` or **Run** button | Run — one timeline tick at a time, animated (not available while running or after a win) |
 | `Space` or **Step** button | Step — advance one tick |
-| `Backspace` or **Reset** button | Reset — return the matrix to the source |
+| `Backspace` or **Reset** button | Reset — return the matrix to the source (no-op when there is nothing to reset) |
 | `Esc` or **Menu** button | Return to level select (from puzzle) or start screen (from level select) |
 | `← →` | Previous / next puzzle |
 | Left-click grid | Place selected tile (or pick up a tile in **[Mv]** mode) |
 | Right-click grid | Erase tile (or cancel an in-progress drag) |
 | Left-click palette | Select a tile type |
+| Click `<` / `>` in palette | Scroll the palette one button left / right (only shown when it doesn't fit) |
 | Left / right-click timeline slot | Cycle that slot's command forward / back |
 | Click `<` / `>` in timeline | Scroll the visible slot window left / right |
 | `Esc` | Return to level select (from puzzle) or start screen (from level select) |
 
-The bottom bar spans the full screen width: op tiles on the left, **Run**, **Step**, **Reset**, and **Menu** on the right. When more ops are available than fit, `<` / `>` arrows appear at the edges of the op section to scroll through them. Buttons that aren't applicable in the current state are shown dimmed.
+The bottom bar spans the full screen width: the palette on the left, **Run**, **Step**, **Reset**, and **Menu** on the right. When the palette doesn't fit, `<` / `>` arrows appear at the edges of the palette section and scroll it one button at a time (an arrow is dimmed when you can't scroll further that way). Your selected tile stays selected while scrolling. Buttons that aren't applicable in the current state are shown dimmed, and the keyboard shortcuts follow the same rules as the buttons. The current puzzle number (`Puzzle N/23`) is shown at the top-left of the right-hand panel.
 
 **Tile types:**
 
@@ -69,9 +71,9 @@ Op tiles span one board cell for the op plus one per parameter. Click the left t
 
 **Timeline:** the panel in the right column has one row per pusher and `len` slots (default 8, adjustable 1–500, loops). When the loop is longer than the visible window, click `<` / `>` to scroll, or just run — the view auto-scrolls to follow the current slot and rewinds when the loop wraps. Edit it while stopped. Every pusher runs the same loop, so offset the commands to choreograph them.
 
-**Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. After a brief pause, a **solution recap screen** appears showing the number of ticks your solution took, the number of pieces you placed, and a looping animated playback of your solution — matrix ball and pushers moving in sync — on the board. Press `Enter` to advance to the next puzzle, `R` to replay the animation, or `Esc` to return to the level-select screen. A run with no movement for a full timeline loop ends as **STUCK**, and a run past 500 ticks ends as **TIMEOUT**.
+**Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. After a brief pause, a **solution recap screen** appears showing the number of ticks your solution took, the number of pieces you placed, and a looping animated playback of your solution — matrix ball and pushers moving in sync — on the board. Click the **Next puzzle**, **Replay**, or **Menu** button (or press `Enter`, `R`, or `Esc`) to advance to the next puzzle, replay the animation, or return to the level-select screen. Clicks outside the three buttons do nothing. A run with no movement for a full timeline loop ends as **STUCK**, and a run past 500 ticks ends as **TIMEOUT**.
 
-**23 puzzles** — from a simple identity check (puzzle 1) through increasingly complex matrix transformations. Puzzles 1–11 each introduce or practice a single operation; puzzles 12–16 require two or three operations in sequence (e.g. transpose then scale, Gaussian elimination, or a three-step chain); puzzles 17–20 introduce the new ops: row reduction, column operations, flips, and absolute value with rotation; puzzles 21–23 introduce fixed ops (player-placed fixed tools and puzzle-placed locked ops). Puzzles can use non-square (n×m) matrices.
+**23 puzzles** — from a simple identity check (puzzle 1) through increasingly complex matrix transformations. Puzzles 1–11 each introduce or practice a single operation; puzzles 12–16 require two or three operations in sequence (e.g. transpose then scale, Gaussian elimination, or a three-step chain); puzzles 17–20 introduce the new ops: row reduction, column operations, flips, and absolute value with rotation; puzzles 21–23 introduce fixed ops (player-placed fixed tools and puzzle-placed locked ops; puzzle 21 offers only its fixed `!` ops, no editable ones). Puzzles can use non-square (n×m) matrices.
 
 ## Structure
 
@@ -79,8 +81,9 @@ Op tiles span one board cell for the op plus one per parameter. Click the left t
 core/lua/       Engine classes — no game knowledge (Camera, Drawer, Input, Scene,
                 SceneManager, Sprite, SpriteSet, Timer, Fonts)
 game/           Game-specific code (Player, GameScene)
-lua/headless/   Headless test infrastructure (stubs, HeadlessInput, runner)
-tests/          Test files — run with: love . --headless
+lua/headless/   Headless test infrastructure (stubs, HeadlessInput, runner, ui_runner)
+tests/          Unit test files — run with: love . --headless
+tests/ui/       UI spec files (scripted player sessions), run by the same command
 assets/         Images and other assets
 conf.lua        Window config; suppresses graphics/audio modules under --headless
 main.lua        Entry point — canvas rendering with letterboxing, pixel-art filter
@@ -94,6 +97,18 @@ See [`core/lua/README.md`](core/lua/README.md) for API docs on each engine class
 love .                  # normal window
 love . --headless       # run tests and exit
 ```
+
+## Testing
+
+```bash
+love . --headless                                   # all unit tests (tests/*.lua) and UI specs (tests/ui/*.lua)
+love . --headless tests/test_worlds.lua             # one unit test file
+love . --headless tests/ui/01_solve_puzzle_1.lua    # one UI spec file
+```
+
+Unit tests print `PASS  tests/x.lua` / `FAIL  tests/x.lua — <error>`. UI specs drive the real scenes headlessly from the title screen (key presses, clicks on named buttons, cells and timeline slots) and print `PASS  tests/ui/x.lua :: <name>` or the failing step and reason. On every frame the runner also checks each scene's UI element registry (`scene:ui_elements()`): every clickable element must be well-formed, on screen, and must not overlap any other. The run ends with `<passed>/<total> passed` and exits non-zero on any failure.
+
+See [`docs/testing.md`](docs/testing.md) for the spec format, the full step vocabulary, the element registry contract, and the mandatory process rules (for example, any edit to a pre-existing test is flagged as a potential regression).
 
 ## Web build
 
@@ -126,4 +141,4 @@ PR previews are deployed automatically and linked in a PR comment. Production de
 
 - **Fixed logical resolution** — game renders to a `1280×720` canvas; `main.lua` scales it to the window with letterboxing. Works with any window size.
 - **Scene transitions** — `SceneManager` fades through black (0.3 s) between scene switches.
-- **Headless tests** — `lua/headless/stubs.lua` installs no-op love API replacements so test files run without a window. `HeadlessInput` lets tests script action presses frame-by-frame. See `tests/test_basics.lua` for a minimal example.
+- **Headless tests** — there is no third-party framework. `lua/headless/stubs.lua` installs no-op love API replacements so tests run without a window. `runner.lua` runs the unit tests (plain `assert` scripts, optionally scripted with `HeadlessInput`), then `ui_runner.lua` plays the UI specs through real input. Neither covers real rendering, saves or the web build. See [`docs/testing.md`](docs/testing.md).

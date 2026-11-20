@@ -96,8 +96,39 @@ function runner.run(test_file)
             end
         end
 
+        -- UI specs: tests/ui/*.lua, run after the unit tests.
+        local UIRunner = require("lua/headless/ui_runner")
+        local ui_items = love.filesystem.getDirectoryItems("tests/ui") or {}
+        local ui_files = {}
+        for _, name in ipairs(ui_items) do
+            if name:sub(-4) == ".lua" then
+                ui_files[#ui_files + 1] = name
+            end
+        end
+        table.sort(ui_files)
+        for _, filename in ipairs(ui_files) do
+            local path = "tests/ui/" .. filename
+            local p, t = UIRunner.report(path, UIRunner.run_file(path))
+            passed = passed + p
+            total  = total + t
+            if p < t then any_failed = true end
+        end
+
         print(passed .. "/" .. total .. " passed")
         love.event.quit(any_failed and 1 or 0)
+        return
+    end
+
+    if test_file:sub(1, 9) == "tests/ui/" then
+        local UIRunner = require("lua/headless/ui_runner")
+        local p, t = UIRunner.report(test_file, UIRunner.run_file(test_file))
+        if p == t then
+            print("PASS")
+            love.event.quit(0)
+        else
+            print("FAIL")
+            love.event.quit(1)
+        end
         return
     end
 

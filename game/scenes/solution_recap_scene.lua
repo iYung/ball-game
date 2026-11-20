@@ -1,5 +1,6 @@
 local Scene        = require("lua/core/scene")
 local PuzzleLoader = require("game/puzzle_loader")
+local UI           = require("lua/core/ui")
 
 local W, H = 1280, 720
 
@@ -32,6 +33,13 @@ local function cell_top_left(cx, cy)
 end
 
 local function lerp(a, b, t) return a + (b - a) * t end
+
+-- Recap buttons (right panel, below the PIECES label). Fixed layout constants.
+local RECAP_BUTTONS = {
+    { id = "recap:next",   label = "Next puzzle", hint = "[Enter]", rect = { x = 850,  y = 600, w = 150, h = 44 } },
+    { id = "recap:replay", label = "Replay",      hint = "[R]",     rect = { x = 1015, y = 600, w = 110, h = 44 } },
+    { id = "recap:menu",   label = "Menu",        hint = "[Esc]",   rect = { x = 1140, y = 600, w = 110, h = 44 } },
+}
 
 -- ── Constructor ──────────────────────────────────────────────────────────────
 
@@ -304,10 +312,26 @@ function SolutionRecapScene:_draw_stats()
     love.graphics.setColor(0.60, 0.50, 0.80, 1)
     love.graphics.printf("PIECES", cx, 435, panel_w, "center")
 
-    -- Bottom hint bar
-    love.graphics.setFont(self._font_hint)
-    love.graphics.setColor(0.35, 0.40, 0.55, 1)
-    love.graphics.printf("[Enter] Next puzzle   [R] Replay   [Esc] Menu", cx, H - 36, panel_w, "center")
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function SolutionRecapScene:_draw_buttons()
+    local hints = {}
+    for _, b in ipairs(RECAP_BUTTONS) do hints[b.id] = b.hint end
+
+    for _, e in ipairs(self:ui_elements()) do
+        local r = e.rect
+        love.graphics.setColor(0.18, 0.22, 0.36, 1)
+        love.graphics.rectangle("fill", r.x, r.y, r.w, r.h, 6, 6)
+        love.graphics.setColor(0.45, 0.55, 0.85, 1)
+        love.graphics.rectangle("line", r.x, r.y, r.w, r.h, 6, 6)
+        love.graphics.setFont(self._font_label)
+        love.graphics.setColor(0.90, 0.92, 1.0, 1)
+        love.graphics.printf(e.label, r.x, r.y + r.h / 2 - 9, r.w, "center")
+        love.graphics.setFont(self._font_hint)
+        love.graphics.setColor(0.35, 0.40, 0.55, 1)
+        love.graphics.printf(hints[e.id] or "", r.x, r.y + r.h + 6, r.w, "center")
+    end
 
     love.graphics.setColor(1, 1, 1, 1)
 end
@@ -319,36 +343,67 @@ function SolutionRecapScene:draw()
     self:_draw_pushers()
     self:_draw_matrix()
     self:_draw_stats()
+    self:_draw_buttons()
+end
 
-    -- Clip left panel bottom hint
-    love.graphics.setFont(self._font_hint)
-    love.graphics.setColor(0.35, 0.40, 0.55, 1)
-    love.graphics.printf("[Enter] Next puzzle   [R] Replay   [Esc] Menu", 0, H - 36, HUD_X, "center")
+-- ── UI registry ───────────────────────────────────────────────────────────────
+
+function SolutionRecapScene:ui_elements()
+    local out = {}
+    for _, b in ipairs(RECAP_BUTTONS) do
+        out[#out + 1] = {
+            id      = b.id,
+            label   = b.label,
+            kind    = "button",
+            rect    = { x = b.rect.x, y = b.rect.y, w = b.rect.w, h = b.rect.h },
+            enabled = true,
+        }
+    end
+    return out
 end
 
 -- ── Input ─────────────────────────────────────────────────────────────────────
 
+function SolutionRecapScene:_next()
+    local next_idx = (self._stats.puzzle_index % self._puzzle_count) + 1
+    local MatrixScene = require("game/scenes/matrix_scene")
+    self._scene_manager:switch(MatrixScene.new(next_idx, self._scene_manager))
+end
+
+function SolutionRecapScene:_replay()
+    self._frame_idx = 1
+    self._anim_t    = 0
+    self._holding   = false
+    self._end_hold  = 0
+end
+
+function SolutionRecapScene:_menu()
+    local LevelSelectScene = require("game/scenes/level_select_scene")
+    self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
+end
+
+local ACTIONS = {
+    ["recap:next"]   = SolutionRecapScene._next,
+    ["recap:replay"] = SolutionRecapScene._replay,
+    ["recap:menu"]   = SolutionRecapScene._menu,
+}
+
 function SolutionRecapScene:key_pressed(key)
     if key == "return" then
-        local next_idx = (self._stats.puzzle_index % self._puzzle_count) + 1
-        local MatrixScene = require("game/scenes/matrix_scene")
-        self._scene_manager:switch(MatrixScene.new(next_idx, self._scene_manager))
+        self:_next()
     elseif key == "r" then
-        self._frame_idx = 1
-        self._anim_t    = 0
-        self._holding   = false
-        self._end_hold  = 0
+        self:_replay()
     elseif key == "escape" then
-        local LevelSelectScene = require("game/scenes/level_select_scene")
-        self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
+        self:_menu()
     end
 end
 
-function SolutionRecapScene:mouse_pressed(_, _, btn)
-    if btn == 1 then
-        local next_idx = (self._stats.puzzle_index % self._puzzle_count) + 1
-        local MatrixScene = require("game/scenes/matrix_scene")
-        self._scene_manager:switch(MatrixScene.new(next_idx, self._scene_manager))
+-- Left click on a recap button runs its action; any other click does nothing.
+function SolutionRecapScene:mouse_pressed(mx, my, btn)
+    if btn ~= 1 then return end
+    local e = UI.element_at(self:ui_elements(), mx, my)
+    if e and e.enabled and ACTIONS[e.id] then
+        ACTIONS[e.id](self)
     end
 end
 

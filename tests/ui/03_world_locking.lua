@@ -18,7 +18,7 @@ return {
             { press = "right" },
             { assert_text = "WORLD 2: COMBOS" },
             { click_button = { id = "puzzle:6" } },
-            { assert_text = "Row Swap" },
+            { assert_text = "Z-Bend" },
         },
     },
 }

@@ -4,6 +4,40 @@
 
 local noop = function() end
 
+local Stubs = {}
+
+-- Text log ---------------------------------------------------------------
+local TEXT_CAP = 5000
+local _text = {}
+
+local function _record(t)
+  local s
+  if type(t) == "string" then
+    s = t
+  elseif type(t) == "number" then
+    s = tostring(t)
+  elseif type(t) == "table" then
+    -- LOVE coloured text: { color, "str", color, "str", ... }
+    local parts = {}
+    for _, v in ipairs(t) do
+      if type(v) == "string" then parts[#parts + 1] = v
+      elseif type(v) == "number" then parts[#parts + 1] = tostring(v) end
+    end
+    s = table.concat(parts)
+  else
+    return
+  end
+  if #_text >= TEXT_CAP then _text = {} end
+  _text[#_text + 1] = s
+end
+
+function Stubs.drawn_text() return _text end
+function Stubs.clear_text() _text = {} end
+
+-- Virtual cursor ---------------------------------------------------------
+local _mx, _my = 0, 0
+function Stubs.set_mouse(x, y) _mx, _my = x, y end
+
 -- Stub image returned by any love.graphics.new*() call.
 local function make_stub_image()
   return {
@@ -28,8 +62,8 @@ graphics_stub.setBlendMode     = noop
 graphics_stub.setFilter        = noop
 graphics_stub.draw             = noop
 graphics_stub.rectangle        = noop
-graphics_stub.print            = noop
-graphics_stub.printf           = noop
+graphics_stub.print            = function(t) _record(t) end
+graphics_stub.printf           = function(t) _record(t) end
 graphics_stub.push             = noop
 graphics_stub.pop              = noop
 graphics_stub.translate        = noop
@@ -39,6 +73,8 @@ graphics_stub.getFont          = function() return {} end
 
 -- Global screen dimension query (not the stub-image version).
 graphics_stub.getDimensions = function() return 1280, 720 end
+graphics_stub.getWidth      = function() return 1280 end
+graphics_stub.getHeight     = function() return 720 end
 
 -- Catch-all: any unknown key returns a no-op, except new* returns a factory.
 setmetatable(graphics_stub, {
@@ -55,6 +91,14 @@ love.graphics = graphics_stub
 
 love.keyboard = love.keyboard or {}
 love.keyboard.isDown = function() return false end
+
+love.mouse = love.mouse or {}
+love.mouse.getX        = function() return _mx end
+love.mouse.getY        = function() return _my end
+love.mouse.getPosition = function() return _mx, _my end
+love.mouse.isDown      = function() return false end
+love.mouse.setVisible  = noop
+love.mouse.setCursor   = noop
 
 love.window = love.window or {}
 love.window.getFullscreen = function() return false end
@@ -82,3 +126,5 @@ end
 
 love.audio.newSource  = function(path, type) return make_stub_source() end
 love.audio.play       = noop
+
+return Stubs

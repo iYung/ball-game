@@ -52,6 +52,7 @@ In practice:
 love . --headless                                      # all unit tests, then all UI specs
 love . --headless tests/ui/02_level_select_keyboard.lua  # one UI spec file (every spec in it)
 love . --headless tests/test_ui_runner.lua             # one unit test file
+love . --headless --coverage                           # all tests + per-file coverage report for lua/game/
 ```
 
 - Any path that starts with `tests/ui/` runs as a spec file. Any other path runs as a unit test.

@@ -3,16 +3,27 @@ local _visual_mode = false
 local _visual_co   = nil
 local _runner      = nil
 do
-    local headless, visual, test_file = false, false, nil
+    local headless, visual, coverage, test_file = false, false, false, nil
     for _, v in ipairs(arg or {}) do
-        if     v == "--headless" then headless = true
-        elseif v == "--visual"   then visual   = true
+        if     v == "--headless"  then headless  = true
+        elseif v == "--visual"    then visual    = true
+        elseif v == "--coverage"  then coverage  = true
         elseif (headless or visual) and not test_file and v:sub(1, 1) ~= "-" then
             test_file = v
         end
     end
     if headless then
         require("lua/headless/stubs")
+        local cov
+        if coverage then
+            cov = require("lua/headless/coverage")
+            cov.start()
+            local orig_quit = love.event.quit
+            love.event.quit = function(code)
+                cov.report()
+                orig_quit(code)
+            end
+        end
         require("lua/headless/runner").run(test_file)
         return
     end

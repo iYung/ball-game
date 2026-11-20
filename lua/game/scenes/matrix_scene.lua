@@ -1695,7 +1695,6 @@ function MatrixScene:_place_tile_at(cx, cy, spec)
     local matrix_cols = self.input_matrix and self.input_matrix.cols or 4
     local w = op_width(spec.op or "", {tile_cols = matrix_cols})
     local h = op_height(spec.op or "", {matrix_rows = matrix_rows})
-    if spec.kind == "arrow" then w = 1; h = 1 end
 
     if not self.grid:in_bounds_multi_2d(cx, cy, w, h) then return end
 

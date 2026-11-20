@@ -411,6 +411,23 @@ function UIRunner.run_spec(spec, opts)
             for _, i in ipairs(given.solved) do Progress.mark_solved(i) end
         end
 
+        -- Mark all cutscenes as seen by default so navigating between worlds
+        -- doesn't unexpectedly trigger cutscenes in unrelated specs.
+        -- Specs that intentionally test cutscene triggering must list the
+        -- worlds whose cutscene should remain unseen in given.cutscenes_unseen.
+        local PuzzleLoader   = require("lua/game/puzzle_loader")
+        local unseen_cutscenes = {}
+        if type(given.cutscenes_unseen) == "table" then
+            for _, w in ipairs(given.cutscenes_unseen) do
+                unseen_cutscenes[w] = true
+            end
+        end
+        for w = 1, PuzzleLoader.world_count() do
+            if not unseen_cutscenes[w] then
+                Progress.mark_cutscene_seen(w)
+            end
+        end
+
         local sm = SceneManager.new(SCREEN_W, SCREEN_H)
         sm:switch(make_scene(sm))
         Stubs.set_mouse(0, 0)

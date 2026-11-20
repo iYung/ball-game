@@ -105,7 +105,14 @@ love.window.getFullscreen = function() return false end
 love.window.setFullscreen = function() end
 
 love.filesystem = love.filesystem or {}
-love.filesystem.getInfo = function() return nil end
+love.filesystem.getInfo = function(path)
+    -- Return a minimal file-info table for files that actually exist on disk
+    -- (e.g. data/cutscenes/). The save file lives in LÖVE's write directory,
+    -- which io.open cannot reach with a relative path, so it stays nil.
+    local f = io.open(path, "r")
+    if f then f:close(); return { type = "file", size = 0 } end
+    return nil
+end
 love.filesystem.read    = function() return nil end
 love.filesystem.write   = function() end
 

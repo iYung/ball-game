@@ -166,4 +166,56 @@ do
     print("PASS: frame matrix shows pre-op values (not one step early)")
 end
 
+-- SolutionRecapScene draw: exercises _draw_tile for op/gap kinds and _draw_buttons.
+do
+    local SolutionRecapScene = require("lua/game/scenes/solution_recap_scene")
+    local Grid   = require("lua/game/grid")
+    local Matrix = require("lua/game/matrix_math")
+
+    -- Build a 4×4 grid with one gap tile, one op tile, one source, one sink.
+    local grid = Grid.new(4, 4)
+    grid.cells[1][1] = { kind = "gap" }
+    grid.cells[1][2] = { kind = "op", op = "scale_row", width = 1, height = 1 }
+    grid.cells[1][3] = { kind = "source", width = 1, height = 1 }
+    grid.cells[1][4] = { kind = "sink" }
+    -- Add a pusher so _draw_tile pusher branch runs.
+    grid.cells[2][1] = { kind = "pusher", id = 1 }
+
+    local board = { grid = grid }
+
+    local mat = Matrix.new(1, 1, {{7}})
+    local frames = {
+        {
+            from_x = 95, from_y = 20, to_x = 95, to_y = 20,
+            matrix = mat,
+            pushers_from = { { id = 1, px = 95, py = 83 } },
+            pushers_to   = { { id = 1, px = 95, py = 83 } },
+        },
+    }
+
+    local stats = { ticks = 5, pieces = 1, puzzle_name = "Draw Test", puzzle_index = 1 }
+    local recap  = SolutionRecapScene.new(stats, board, frames, 0.1, nil)
+    recap:on_enter()
+
+    -- First draw: _frame_idx=1, _anim_t=0 — covers all draw helpers including
+    -- op, gap, source, sink, pusher kinds in _draw_tile and the pushers_from path.
+    recap:draw()
+
+    -- Advance into _holding, then draw while holding (covers _end_hold countdown path visually).
+    -- With run_speed=0.1 and dt=0.15 each tick advances the frame immediately; after 1 tick
+    -- _holding becomes true. PAUSE_AT_END=0.6s and dt=0.15 means hold expires after 4 more
+    -- ticks, so we stop at 4 total to stay within the hold window.
+    for _ = 1, 4 do recap:update(0.15) end
+    assert(recap._holding, "should be holding after advancing past single frame")
+    recap:draw()
+
+    -- Expire the hold so _frame_idx resets to 1 (loop-back), then draw once more.
+    recap:update(1.0)
+    assert(not recap._holding, "hold expired")
+    assert(recap._frame_idx == 1, "loop-back to frame 1, got " .. tostring(recap._frame_idx))
+    recap:draw()
+
+    print("PASS: SolutionRecapScene draw (op/gap/source/sink/pusher tiles + loop-back)")
+end
+
 print("ALL TESTS PASSED")

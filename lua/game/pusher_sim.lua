@@ -12,11 +12,6 @@ function Sim.slot(tick, n)
     return ((tick - 1) % n) + 1
 end
 
-local function sign(v)
-    if v > 0 then return 1 elseif v < 0 then return -1 end
-    return 0
-end
-
 local function covers(x, y, rows, cols, cx, cy)
     return cx >= x and cx <= x + cols - 1 and cy >= y and cy <= y + rows - 1
 end

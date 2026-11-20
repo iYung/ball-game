@@ -325,4 +325,40 @@ do
     print("PASS: apply_op abs")
 end
 
+-- sub_matrix
+do
+    local m = Matrix.new(2, 2, { {3, 4}, {5, 6} })
+    local r = Sim.apply_op({ kind = "op", op = "sub_matrix",
+        tile_rows = 2, tile_cols = 2, values = { {1, 2}, {3, 4} } }, m)
+    assert(r:equals(Matrix.new(2, 2, { {2, 2}, {2, 2} })), "apply_op sub_matrix")
+    print("PASS: apply_op sub_matrix")
+end
+
+-- mul_matrix (element-wise)
+do
+    local m = Matrix.new(2, 2, { {2, 3}, {4, 5} })
+    local r = Sim.apply_op({ kind = "op", op = "mul_matrix",
+        tile_rows = 2, tile_cols = 2, values = { {2, 2}, {2, 2} } }, m)
+    assert(r:equals(Matrix.new(2, 2, { {4, 6}, {8, 10} })), "apply_op mul_matrix")
+    print("PASS: apply_op mul_matrix")
+end
+
+-- set_row (row=2)
+do
+    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
+    local r = Sim.apply_op({ kind = "op", op = "set_row",
+        params = { row = 2 }, tile_cols = 2, values = { {10, 20} } }, m)
+    assert(r:equals(Matrix.new(2, 2, { {1, 2}, {10, 20} })), "apply_op set_row row=2")
+    print("PASS: apply_op set_row")
+end
+
+-- add_cols src==dst is a no-op
+do
+    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
+    local r = Sim.apply_op({ kind = "op", op = "add_cols",
+        params = { src = 1, dst = 1, scalar = 5 } }, m)
+    assert(r == m, "add_cols same col is a no-op")
+    print("PASS: apply_op add_cols src==dst no-op")
+end
+
 print("ALL TESTS PASSED")

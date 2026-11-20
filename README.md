@@ -102,6 +102,7 @@ love . --headless       # run tests and exit
 love . --headless                                   # all unit tests (tests/*.lua) and UI specs (tests/ui/*.lua)
 love . --headless tests/test_worlds.lua             # one unit test file
 love . --headless tests/ui/01_solve_puzzle_1.lua    # one UI spec file
+love . --headless --coverage                        # all tests + per-file lua/game/ line-coverage report
 ```
 
 Unit tests print `PASS  tests/x.lua` / `FAIL  tests/x.lua — <error>`. UI specs drive the real scenes headlessly from the title screen (key presses, clicks on named buttons, cells and timeline slots) and print `PASS  tests/ui/x.lua :: <name>` or the failing step and reason. On every frame the runner also checks each scene's UI element registry (`scene:ui_elements()`): every clickable element must be well-formed, on screen, and must not overlap any other. The run ends with `<passed>/<total> passed` and exits non-zero on any failure.

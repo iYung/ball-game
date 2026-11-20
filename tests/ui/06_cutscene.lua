@@ -15,7 +15,7 @@ return {
             { press = "return" },                       -- advance to beat 3
             { assert_text = "WORLD 2: COMBOS" },        -- beat 3 text
             { press = "return" },                       -- advance past final beat → level select (world 2)
-            { assert_text = "Double Flip" },            -- unique to world 2 (puzzle 7)
+            { assert_text = "Ordered Ops" },            -- unique to world 2 (puzzle 7)
         },
     },
     {
@@ -26,7 +26,7 @@ return {
             { press = "right" },                        -- cycle to world 2 → cutscene loads
             { assert_text = "SYSTEM" },
             { press = "escape" },                       -- skip → level select (world 2)
-            { assert_text = "Double Flip" },
+            { assert_text = "Ordered Ops" },
         },
     },
 }

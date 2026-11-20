@@ -52,6 +52,7 @@ In practice:
 love . --headless                                      # all unit tests, then all UI specs
 love . --headless tests/ui/02_level_select_keyboard.lua  # one UI spec file (every spec in it)
 love . --headless tests/test_ui_runner.lua             # one unit test file
+love . --headless --coverage                           # all tests + per-file coverage report for lua/game/
 ```
 
 - Any path that starts with `tests/ui/` runs as a spec file. Any other path runs as a unit test.
@@ -74,6 +75,14 @@ FAIL  tests/ui/99_broken.lua — tests/ui/99_broken.lua:3: '}' expected near 'st
 - Each unit file and each **spec** counts once toward the total. A spec file that fails to load counts as one failure.
 - A single-file run prints the per-spec lines and then a bare `PASS` or `FAIL`.
 
+### Measuring coverage
+
+`love . --headless --coverage` runs the full suite and then prints a per-file line-coverage report for `lua/game/`. Each row shows the number of lines the hook observed executing versus the estimated executable-line count (non-blank, non-comment, non-structural-keyword lines). Files at 0 % were never `require`d during the run.
+
+`lua/core/` is excluded intentionally — its files are mostly rendering infrastructure (`shader.lua`, `sprite.lua`, `spriteset.lua`, `fonts.lua`) stubbed out in headless mode and cannot be meaningfully measured.
+
+The tool uses `debug.sethook` from the standard Lua `debug` library — no third-party tools required. CI does not run with `--coverage`; it is a local developer tool.
+
 ---
 
 ## Spec file format
@@ -95,6 +104,7 @@ return {
 |---|---|
 | `name` | Shown in the report. Defaults to `spec <n>`. |
 | `given.solved` | `{1, 2, 3}` marks those puzzle indices solved before the spec starts. `"all"` calls `Progress.unlock_all()`. Omit it or use `{}` to start with nothing solved. |
+| `given.cutscenes_unseen` | By default **all** cutscenes are marked as already seen so that navigating between worlds does not unexpectedly trigger cutscenes in unrelated specs. Pass `{2}` (or any list of world numbers) to leave those worlds' cutscenes unseen, allowing them to trigger. Only needed in specs that explicitly test cutscene flow (see `tests/ui/06_cutscene.lua`). |
 | `steps` | An array of steps. Each step is a table with **exactly one** key from the vocabulary below. |
 
 A spec is Lua, so you may build `steps` with loops (for example a sweep over every puzzle). The file must still evaluate to plain data.
@@ -138,7 +148,7 @@ A full play-through looks like this (puzzle 1: a pusher at (1,5) pushing right f
 { assert_text = "Flip It" },
 ```
 
-See the files in `tests/ui/` for more: `01_solve_puzzle_1.lua`, `02_level_select_keyboard.lua`, `03_world_locking.lua`, `04_sweep_all_puzzles.lua` (generated steps, all 23 puzzles) and `05_start_screen.lua`.
+See the files in `tests/ui/` for more: `01_solve_puzzle_1.lua`, `02_level_select_keyboard.lua`, `03_world_locking.lua`, `04_sweep_all_puzzles.lua` (generated steps, all 23 puzzles), `05_start_screen.lua`, `06_cutscene.lua` (CutsceneScene end-to-end), `07_drag_drop.lua` (Mv drag tool), and `08_matrix_scene_ops.lua` (all op-tile param cell click paths).
 
 ---
 

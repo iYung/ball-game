@@ -135,4 +135,87 @@ do
     print("PASS: SolutionRecapScene replay loop")
 end
 
+-- Frame matrix shows PRE-op values: the frame recorded for the step that moves
+-- the matrix into an op tile must carry the values BEFORE the op fires.
+do
+    -- Puzzle 3 (negate): 2×2 input [[1,-2],[3,0]], source (2,5), sink (10,5).
+    local ctx3 = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(3) end)
+    local scene3 = ctx3.sm.current
+
+    -- Pusher at (1,6) pushes the matrix one cell right per tick.
+    add_pusher(scene3, 1, 6, { "right","right","right","right","right","right","right","right" })
+    -- Negate op at (8,5): the 2×2 matrix first covers (8,5) on step 5
+    -- (top-left at (7,5), right column = col 8).
+    scene3:_place_tile_at(8, 5, { kind="op", op="negate" })
+    run_to_end(scene3)
+    assert(scene3.status == "win",
+        "precondition: negate run wins, got " .. tostring(scene3.status))
+
+    local frames3 = scene3._run_frames
+    -- Frame 5 is the step entering (7,5), which newly covers (8,5) where the negate fires.
+    -- The fix requires this frame to hold the PRE-negate matrix (values[1][1] == 1).
+    local nf = frames3[5]
+    assert(nf ~= nil, "frame 5 exists")
+    local v = nf.matrix.values[1][1]
+    assert(v == 1, "frame entering negate op carries pre-op value (1), got " .. tostring(v))
+    -- The following frame (top-left at (8,5), no new op) must carry the POST-negate value.
+    local pf = frames3[6]
+    assert(pf ~= nil, "frame 6 exists")
+    local v2 = pf.matrix.values[1][1]
+    assert(v2 == -1, "frame after negate op carries post-op value (-1), got " .. tostring(v2))
+    print("PASS: frame matrix shows pre-op values (not one step early)")
+end
+
+-- SolutionRecapScene draw: exercises _draw_tile for op/gap kinds and _draw_buttons.
+do
+    local SolutionRecapScene = require("lua/game/scenes/solution_recap_scene")
+    local Grid   = require("lua/game/grid")
+    local Matrix = require("lua/game/matrix_math")
+
+    -- Build a 4×4 grid with one gap tile, one op tile, one source, one sink.
+    local grid = Grid.new(4, 4)
+    grid.cells[1][1] = { kind = "gap" }
+    grid.cells[1][2] = { kind = "op", op = "scale_row", width = 1, height = 1 }
+    grid.cells[1][3] = { kind = "source", width = 1, height = 1 }
+    grid.cells[1][4] = { kind = "sink" }
+    -- Add a pusher so _draw_tile pusher branch runs.
+    grid.cells[2][1] = { kind = "pusher", id = 1 }
+
+    local board = { grid = grid }
+
+    local mat = Matrix.new(1, 1, {{7}})
+    local frames = {
+        {
+            from_x = 95, from_y = 20, to_x = 95, to_y = 20,
+            matrix = mat,
+            pushers_from = { { id = 1, px = 95, py = 83 } },
+            pushers_to   = { { id = 1, px = 95, py = 83 } },
+        },
+    }
+
+    local stats = { ticks = 5, pieces = 1, puzzle_name = "Draw Test", puzzle_index = 1 }
+    local recap  = SolutionRecapScene.new(stats, board, frames, 0.1, nil)
+    recap:on_enter()
+
+    -- First draw: _frame_idx=1, _anim_t=0 — covers all draw helpers including
+    -- op, gap, source, sink, pusher kinds in _draw_tile and the pushers_from path.
+    recap:draw()
+
+    -- Advance into _holding, then draw while holding (covers _end_hold countdown path visually).
+    -- With run_speed=0.1 and dt=0.15 each tick advances the frame immediately; after 1 tick
+    -- _holding becomes true. PAUSE_AT_END=0.6s and dt=0.15 means hold expires after 4 more
+    -- ticks, so we stop at 4 total to stay within the hold window.
+    for _ = 1, 4 do recap:update(0.15) end
+    assert(recap._holding, "should be holding after advancing past single frame")
+    recap:draw()
+
+    -- Expire the hold so _frame_idx resets to 1 (loop-back), then draw once more.
+    recap:update(1.0)
+    assert(not recap._holding, "hold expired")
+    assert(recap._frame_idx == 1, "loop-back to frame 1, got " .. tostring(recap._frame_idx))
+    recap:draw()
+
+    print("PASS: SolutionRecapScene draw (op/gap/source/sink/pusher tiles + loop-back)")
+end
+
 print("ALL TESTS PASSED")

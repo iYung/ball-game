@@ -6,7 +6,7 @@ Prevent the op palette buttons and the cmd buttons (Run/Step/Reset/Menu) from ov
 
 ## Affected files
 
-- `game/scenes/matrix_scene.lua` — `_build_palette`, `_build_cmd_buttons`, `draw_palette`, `_draw_cmd_buttons`
+- `lua/game/scenes/matrix_scene.lua` — `_build_palette`, `_build_cmd_buttons`, `draw_palette`, `_draw_cmd_buttons`
 
 ## What changes
 

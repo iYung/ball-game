@@ -1,5 +1,5 @@
 local Scene        = require("lua/core/scene")
-local PuzzleLoader = require("game/puzzle_loader")
+local PuzzleLoader = require("lua/game/puzzle_loader")
 local UI           = require("lua/core/ui")
 
 local W, H = 1280, 720
@@ -61,7 +61,7 @@ end
 -- ── Lifecycle ────────────────────────────────────────────────────────────────
 
 function SolutionRecapScene:on_enter()
-    local Progress = require("game/progress")
+    local Progress = require("lua/game/progress")
     Progress.mark_solved(self._stats.puzzle_index)
 
     self._font_title  = love.graphics.newFont(36)
@@ -366,7 +366,7 @@ end
 
 function SolutionRecapScene:_next()
     local next_idx = (self._stats.puzzle_index % self._puzzle_count) + 1
-    local MatrixScene = require("game/scenes/matrix_scene")
+    local MatrixScene = require("lua/game/scenes/matrix_scene")
     self._scene_manager:switch(MatrixScene.new(next_idx, self._scene_manager))
 end
 
@@ -378,7 +378,7 @@ function SolutionRecapScene:_replay()
 end
 
 function SolutionRecapScene:_menu()
-    local LevelSelectScene = require("game/scenes/level_select_scene")
+    local LevelSelectScene = require("lua/game/scenes/level_select_scene")
     self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
 end
 

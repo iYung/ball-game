@@ -2,8 +2,8 @@
 -- Every puzzle is reachable through exactly one world, puzzle 21 offers no
 -- editable ops, and worlds 4/5 lock according to the progression rule.
 
-local PuzzleLoader = require("game/puzzle_loader")
-local Progress     = require("game/progress")
+local PuzzleLoader = require("lua/game/puzzle_loader")
+local Progress     = require("lua/game/progress")
 
 -- ── Reachability: every index 1..count() is in exactly one world ─────────────
 

@@ -39,12 +39,12 @@ function StartScene:update(dt)
 end
 
 function StartScene:_advance()
-    local LevelSelectScene = require("game/scenes/level_select_scene")
+    local LevelSelectScene = require("lua/game/scenes/level_select_scene")
     self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
 end
 
 function StartScene:_unlock_all()
-    local Progress = require("game/progress")
+    local Progress = require("lua/game/progress")
     Progress.unlock_all()
     self:_advance()
 end

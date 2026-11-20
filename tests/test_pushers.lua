@@ -1,5 +1,5 @@
-local Sim    = require("game/pusher_sim")
-local Matrix = require("game/matrix_math")
+local Sim    = require("lua/game/pusher_sim")
+local Matrix = require("lua/game/matrix_math")
 
 -- slot() loops
 do

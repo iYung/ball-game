@@ -2,8 +2,8 @@
 -- Tests for game/progress.lua: mark_solved, is_solved, is_world_unlocked,
 -- unlock_all, reset.
 
-local Progress     = require("game/progress")
-local PuzzleLoader = require("game/puzzle_loader")
+local Progress     = require("lua/game/progress")
+local PuzzleLoader = require("lua/game/puzzle_loader")
 
 -- Always start clean so test order doesn't matter.
 Progress.reset()

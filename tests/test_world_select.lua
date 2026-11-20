@@ -1,4 +1,4 @@
-local PuzzleLoader = require("game/puzzle_loader")
+local PuzzleLoader = require("lua/game/puzzle_loader")
 
 -- world_count returns a positive integer
 local n = PuzzleLoader.world_count()

@@ -1,7 +1,7 @@
 local Scene  = require("lua/core/scene")
 local Sprite = require("lua/core/sprite")
 local Timer  = require("lua/core/timer")
-local Player = require("game/player")
+local Player = require("lua/game/player")
 
 local GameScene = {}
 GameScene.__index = GameScene

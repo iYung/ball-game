@@ -7,7 +7,7 @@
 local runner = require("lua/headless/runner")
 
 local function new_scene()
-    local ctx = runner.setup(function() return require("game/scenes/matrix_scene").new(1) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
     return ctx.sm.current
 end
 
@@ -84,7 +84,7 @@ end
 
 -- After a win, the scene switches to SolutionRecapScene (not LevelSelectScene).
 do
-    local MatrixScene = require("game/scenes/matrix_scene")
+    local MatrixScene = require("lua/game/scenes/matrix_scene")
     local ctx = runner.setup(function(_, sm) return MatrixScene.new(1, sm) end)
     local scene = ctx.sm.current
     add_pusher(scene, 1, 6, { "right", "right", "right", "right", "right", "right", "right", "right" })
@@ -107,10 +107,10 @@ end
 
 -- SolutionRecapScene replay loop: frame_idx advances over time and loops back.
 do
-    local SolutionRecapScene = require("game/scenes/solution_recap_scene")
+    local SolutionRecapScene = require("lua/game/scenes/solution_recap_scene")
 
     -- Build minimal fake frames.
-    local Matrix = require("game/matrix_math")
+    local Matrix = require("lua/game/matrix_math")
     local mat = Matrix.new(1, 1, {{1}})
     local frames = {}
     for i = 1, 4 do

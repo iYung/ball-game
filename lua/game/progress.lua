@@ -1,4 +1,4 @@
-local PuzzleLoader = require("game/puzzle_loader")
+local PuzzleLoader = require("lua/game/puzzle_loader")
 
 local SAVE_FILE = "progress.lua"
 

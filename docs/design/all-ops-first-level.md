@@ -11,7 +11,7 @@ Make puzzle 01 (Identity Check) show every operation in the palette so developer
 
 Removing the `ops` field entirely (or setting it to `nil`) leaves `allowed = nil`, which the existing `_build_palette` logic already interprets as "show all ops".
 
-No other files need to change — the palette-building logic in `game/scenes/matrix_scene.lua` already handles the nil case correctly.
+No other files need to change — the palette-building logic in `lua/game/scenes/matrix_scene.lua` already handles the nil case correctly.
 
 ## What stays the same
 - Puzzle name, grid size, source/sink positions, input matrix, target matrix — all unchanged.

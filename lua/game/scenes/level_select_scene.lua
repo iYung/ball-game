@@ -1,6 +1,6 @@
 local Scene        = require("lua/core/scene")
-local PuzzleLoader = require("game/puzzle_loader")
-local Progress     = require("game/progress")
+local PuzzleLoader = require("lua/game/puzzle_loader")
+local Progress     = require("lua/game/progress")
 local UI           = require("lua/core/ui")
 
 local W, H        = 1280, 720
@@ -76,8 +76,8 @@ function LevelSelectScene:_cycle_world(delta)
         and not Progress.is_cutscene_seen(self._world)
     then
         Progress.mark_cutscene_seen(self._world)
-        local CutsceneScene    = require("game/scenes/cutscene_scene")
-        local LevelSelectScene = require("game/scenes/level_select_scene")
+        local CutsceneScene    = require("lua/game/scenes/cutscene_scene")
+        local LevelSelectScene = require("lua/game/scenes/level_select_scene")
         local next_scene       = LevelSelectScene.new(self.scene_manager)
         next_scene._world      = self._world
         self.scene_manager:switch(CutsceneScene.new(self._world, next_scene, self.scene_manager))
@@ -128,7 +128,7 @@ function LevelSelectScene:mouse_moved(x, y)
 end
 
 function LevelSelectScene:_load_selected()
-    local MatrixScene = require("game/scenes/matrix_scene")
+    local MatrixScene = require("lua/game/scenes/matrix_scene")
     local puzzle_index = self._world_puzzles[self.selected].index
     self.scene_manager:switch(MatrixScene.new(puzzle_index, self.scene_manager))
 end
@@ -149,7 +149,7 @@ function LevelSelectScene:key_pressed(key)
         Progress.unlock_world(self._world)
         self:_rebuild_world_data()
     elseif key == "escape" then
-        local StartScene = require("game/scenes/start_scene")
+        local StartScene = require("lua/game/scenes/start_scene")
         self.scene_manager:switch(StartScene.new(self.scene_manager))
     end
 end

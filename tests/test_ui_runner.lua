@@ -5,7 +5,7 @@
 local UI       = require("lua/core/ui")
 local UIRunner = require("lua/headless/ui_runner")
 local Stubs    = require("lua/headless/stubs")
-local Progress = require("game/progress")
+local Progress = require("lua/game/progress")
 
 -- Builds a fake scene. `elements` is the list ui_elements() returns.
 local function fake_scene(elements)

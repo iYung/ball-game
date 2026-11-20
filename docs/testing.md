@@ -331,7 +331,7 @@ FAIL  tests/ui/<file>.lua :: <spec name> â€” step <i> <step serialised as Lua> â
 A unit test is a plain Lua script in `tests/test_<thing>.lua`. Any uncaught error fails the file. That includes a failed `assert`, so give every `assert` a message. Printing `PASS: <case>` lines is a convention, not a requirement.
 
 ```lua
-local Progress = require("game/progress")
+local Progress = require("lua/game/progress")
 Progress.reset()                          -- module state is shared across files; reset it
 Progress.mark_solved(1)
 assert(Progress.is_solved(1), "puzzle 1 solved after mark_solved")
@@ -342,7 +342,7 @@ To test a scene, build it through the runner so it gets a real `SceneManager` an
 
 ```lua
 local runner = require("lua/headless/runner")
-local ctx = runner.setup(function(input, sm) return require("game/scenes/matrix_scene").new(1, sm) end)
+local ctx = runner.setup(function(input, sm) return require("lua/game/scenes/matrix_scene").new(1, sm) end)
 runner.tick(ctx.input, ctx.sm, 10)        -- 10 frames of update (dt 1/60)
 local scene = ctx.sm.current
 ```

@@ -25,7 +25,7 @@ end
 love.graphics.setDefaultFilter("nearest", "nearest")
 
 local SceneManager  = require("lua/core/scene_manager")
-local StartScene    = require("game/scenes/start_scene")
+local StartScene    = require("lua/game/scenes/start_scene")
 
 local LOGICAL_W, LOGICAL_H = 1280, 720
 local canvas

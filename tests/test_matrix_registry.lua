@@ -6,7 +6,7 @@ local UIRunner = require("lua/headless/ui_runner")
 
 local function new_scene(n)
     local ctx = runner.setup(function(_, sm)
-        return require("game/scenes/matrix_scene").new(n or 2, sm)
+        return require("lua/game/scenes/matrix_scene").new(n or 2, sm)
     end)
     local scene = ctx.sm.current
     scene:draw()  -- sets _tl_top so timeline elements exist

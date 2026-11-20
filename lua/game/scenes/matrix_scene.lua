@@ -1,10 +1,10 @@
 local Scene        = require("lua/core/scene")
-local Matrix       = require("game/matrix_math")
-local Grid         = require("game/grid")
-local Sim          = require("game/pusher_sim")
-local Palette      = require("game/palette")
-local HUD          = require("game/hud")
-local PuzzleLoader = require("game/puzzle_loader")
+local Matrix       = require("lua/game/matrix_math")
+local Grid         = require("lua/game/grid")
+local Sim          = require("lua/game/pusher_sim")
+local Palette      = require("lua/game/palette")
+local HUD          = require("lua/game/hud")
+local PuzzleLoader = require("lua/game/puzzle_loader")
 local UI           = require("lua/core/ui")
 
 local function cell_key(x, y) return x .. "," .. y end
@@ -706,7 +706,7 @@ function MatrixScene:update(dt)
     if self.status == "win" and self._scene_manager then
         self._win_timer = (self._win_timer or 0) + dt
         if self._win_timer >= 0.8 then
-            local SolutionRecapScene = require("game/scenes/solution_recap_scene")
+            local SolutionRecapScene = require("lua/game/scenes/solution_recap_scene")
             local stats = {
                 ticks        = self.sim.tick,
                 pieces       = self:_count_pieces(),
@@ -1323,7 +1323,7 @@ function MatrixScene:_cmd_activate(id)
         self:do_reset()
     elseif id == "menu" then
         if self._scene_manager then
-            local LevelSelectScene = require("game/scenes/level_select_scene")
+            local LevelSelectScene = require("lua/game/scenes/level_select_scene")
             self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
         end
     end
@@ -2129,7 +2129,7 @@ function MatrixScene:key_pressed(key)
         if self:_cmd_enabled(cmd) then self:_cmd_activate(cmd) end
     elseif key == "escape" then
         if self._scene_manager then
-            local LevelSelectScene = require("game/scenes/level_select_scene")
+            local LevelSelectScene = require("lua/game/scenes/level_select_scene")
             self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
         end
     end

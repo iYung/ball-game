@@ -78,9 +78,9 @@ Op tiles span one board cell for the op plus one per parameter. Click the left t
 ## Structure
 
 ```
-core/lua/       Engine classes — no game knowledge (Camera, Drawer, Input, Scene,
+lua/core/       Engine classes — no game knowledge (Camera, Drawer, Input, Scene,
                 SceneManager, Sprite, SpriteSet, Timer, Fonts)
-game/           Game-specific code (Player, GameScene)
+lua/game/       Game-specific code (Player, Grid, HUD, scenes, etc.)
 lua/headless/   Headless test infrastructure (stubs, HeadlessInput, runner, ui_runner)
 tests/          Unit test files — run with: love . --headless
 tests/ui/       UI spec files (scripted player sessions), run by the same command
@@ -88,8 +88,6 @@ assets/         Images and other assets
 conf.lua        Window config; suppresses graphics/audio modules under --headless
 main.lua        Entry point — canvas rendering with letterboxing, pixel-art filter
 ```
-
-See [`core/lua/README.md`](core/lua/README.md) for API docs on each engine class.
 
 ## Running
 

@@ -118,19 +118,19 @@ function Sim.apply_op(tile, matrix)
     elseif op == "add_matrix" then
         local rows = tile.tile_rows or 1
         local cols = tile.tile_cols or 1
-        local Matrix = require("game/matrix_math")
+        local Matrix = require("lua/game/matrix_math")
         local addend = Matrix.new(rows, cols, tile.values)
         return matrix:add_matrix(addend)
     elseif op == "sub_matrix" then
         local rows = tile.tile_rows or 1
         local cols = tile.tile_cols or 1
-        local Matrix = require("game/matrix_math")
+        local Matrix = require("lua/game/matrix_math")
         local operand = Matrix.new(rows, cols, tile.values)
         return matrix:sub_matrix(operand)
     elseif op == "mul_matrix" then
         local rows = tile.tile_rows or 1
         local cols = tile.tile_cols or 1
-        local Matrix = require("game/matrix_math")
+        local Matrix = require("lua/game/matrix_math")
         local factor = Matrix.new(rows, cols, tile.values)
         return matrix:mul_matrix(factor)
     elseif op == "set_row" then

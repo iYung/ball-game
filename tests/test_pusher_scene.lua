@@ -1,7 +1,7 @@
 local runner = require("lua/headless/runner")
 
 local function new_scene()
-    local ctx = runner.setup(function() return require("game/scenes/matrix_scene").new(1) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
     return ctx.sm.current
 end
 
@@ -92,7 +92,7 @@ end
 
 -- No puzzle starts its matrix on the grid edge (room for a pusher behind it).
 do
-    local PuzzleLoader = require("game/puzzle_loader")
+    local PuzzleLoader = require("lua/game/puzzle_loader")
     for i = 1, PuzzleLoader.count() do
         local pz = PuzzleLoader.load(i)
         assert(pz.source.x > 1 and pz.source.y > 1 and pz.source.x < pz.grid_w and pz.source.y < pz.grid_h,
@@ -178,7 +178,7 @@ end
 
 -- Puzzle-placed locked op loads as a multi-cell tile (scale_row spans 4 rows).
 do
-    local ctx = runner.setup(function() return require("game/scenes/matrix_scene").new(23) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(23) end)
     local scene = ctx.sm.current
 
     -- Anchor at (5,3)
@@ -206,9 +206,9 @@ end
 
 -- Puzzle-placed locked op fires with correct params in simulation.
 do
-    local Sim = require("game/pusher_sim")
-    local Matrix = require("game/matrix_math")
-    local ctx = runner.setup(function() return require("game/scenes/matrix_scene").new(23) end)
+    local Sim = require("lua/game/pusher_sim")
+    local Matrix = require("lua/game/matrix_math")
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(23) end)
     local scene = ctx.sm.current
 
     local tile = scene.grid:get(5, 3)

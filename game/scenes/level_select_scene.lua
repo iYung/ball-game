@@ -88,7 +88,22 @@ function LevelSelectScene:_cycle_world(delta)
             break
         end
     end
-    self._world   = candidate
+    self._world = candidate
+
+    local cs_path = string.format("data/cutscenes/world_%d.lua", self._world)
+    if self._world ~= 1
+        and love.filesystem.getInfo(cs_path)
+        and not Progress.is_cutscene_seen(self._world)
+    then
+        Progress.mark_cutscene_seen(self._world)
+        local CutsceneScene    = require("game/scenes/cutscene_scene")
+        local LevelSelectScene = require("game/scenes/level_select_scene")
+        local next_scene       = LevelSelectScene.new(self.scene_manager)
+        next_scene._world      = self._world
+        self.scene_manager:switch(CutsceneScene.new(self._world, next_scene, self.scene_manager))
+        return
+    end
+
     self.selected = 1
     self:_rebuild_world_data()
 end
@@ -119,6 +134,9 @@ function LevelSelectScene:key_pressed(key)
         self:_cycle_world(1)
     elseif key == "return" or key == "space" then
         self:_load_selected()
+    elseif key == "u" then
+        Progress.unlock_world(self._world)
+        self:_rebuild_world_data()
     elseif key == "escape" then
         local StartScene = require("game/scenes/start_scene")
         self.scene_manager:switch(StartScene.new(self.scene_manager))

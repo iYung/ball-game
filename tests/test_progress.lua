@@ -75,4 +75,32 @@ end
 assert(not Progress.is_world_unlocked(2), "world 2 locked after reset")
 print("PASS: reset clears all progress")
 
+-- ── is_cutscene_seen / mark_cutscene_seen ────────────────────────────────────
+
+Progress.reset()
+
+-- Unseen by default after reset.
+assert(not Progress.is_cutscene_seen(2), "world 2 cutscene not seen after reset")
+assert(not Progress.is_cutscene_seen(3), "world 3 cutscene not seen after reset")
+print("PASS: cutscenes unseen after reset")
+
+-- Seen after mark.
+Progress.mark_cutscene_seen(2)
+assert(Progress.is_cutscene_seen(2), "world 2 cutscene seen after mark")
+print("PASS: mark_cutscene_seen sets seen")
+
+-- Other worlds unaffected.
+assert(not Progress.is_cutscene_seen(3), "world 3 cutscene still unseen")
+print("PASS: mark_cutscene_seen does not affect other worlds")
+
+-- Idempotent: marking twice does not error.
+Progress.mark_cutscene_seen(2)
+assert(Progress.is_cutscene_seen(2), "world 2 still seen after second mark")
+print("PASS: mark_cutscene_seen idempotent")
+
+-- reset clears cutscene state.
+Progress.reset()
+assert(not Progress.is_cutscene_seen(2), "world 2 cutscene cleared by reset")
+print("PASS: reset clears cutscene seen state")
+
 print("ALL PROGRESS TESTS PASSED")

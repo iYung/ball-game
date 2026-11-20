@@ -33,7 +33,7 @@ Puzzles are grouped into three worlds — **Basics** (1–5), **Combos** (6–11
 | Click `<` / `>` in timeline | Scroll the visible slot window left / right |
 | `Esc` | Return to level select (from puzzle) or start screen (from level select) |
 
-The **Run**, **Step**, **Reset**, and **Menu** buttons appear in the bottom palette bar. Buttons that aren't applicable in the current state are shown dimmed.
+The bottom bar spans the full screen width: op tiles on the left, **Run**, **Step**, **Reset**, and **Menu** on the right. When more ops are available than fit, `<` / `>` arrows appear at the edges of the op section to scroll through them. Buttons that aren't applicable in the current state are shown dimmed.
 
 **Tile types:**
 

@@ -75,6 +75,14 @@ FAIL  tests/ui/99_broken.lua — tests/ui/99_broken.lua:3: '}' expected near 'st
 - Each unit file and each **spec** counts once toward the total. A spec file that fails to load counts as one failure.
 - A single-file run prints the per-spec lines and then a bare `PASS` or `FAIL`.
 
+### Measuring coverage
+
+`love . --headless --coverage` runs the full suite and then prints a per-file line-coverage report for `lua/game/`. Each row shows the number of lines the hook observed executing versus the estimated executable-line count (non-blank, non-comment, non-structural-keyword lines). Files at 0 % were never `require`d during the run.
+
+`lua/core/` is excluded intentionally — its files are mostly rendering infrastructure (`shader.lua`, `sprite.lua`, `spriteset.lua`, `fonts.lua`) stubbed out in headless mode and cannot be meaningfully measured.
+
+The tool uses `debug.sethook` from the standard Lua `debug` library — no third-party tools required. CI does not run with `--coverage`; it is a local developer tool.
+
 ---
 
 ## Spec file format

@@ -745,9 +745,9 @@ Path fires: locked scale_row(r=1,s=3) → `{{3,6},{0,1}}`. Then player places tr
 
 ---
 
-## Task H — New UI spec: solve a routed puzzle end-to-end
+## Task H — New UI spec: solve a routed puzzle end-to-end [x]
 
-**File**: `tests/ui/05_solve_routed_puzzle.lua`
+**File**: `tests/ui/06_solve_routed_puzzle.lua` (05 was already taken by start_screen spec)
 
 Write a UI spec that:
 1. Opens puzzle 3 ("Sharp Left") from level select.

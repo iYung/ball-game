@@ -5,7 +5,7 @@ return {
         given = { solved = {} },
         steps = {
             { press = "return" },
-            { hover_button = "Sign Change" },
+            { hover_button = "Sharp Left" },
             { press = "down" },
             { assert_button = { id = "puzzle:4", selected = true } },
             { wait = 30 },

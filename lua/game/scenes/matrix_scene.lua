@@ -160,9 +160,9 @@ local PALETTE_BUTTONS = {
 }
 
 local CMD_BUTTONS = {
-    { id="run",   label="Run"   },
-    { id="reset", label="Reset" },
-    { id="menu",  label="Menu"  },
+    { id="run",   label="Run",   color_fill={0.12,0.28,0.12}, color_border={0.30,0.75,0.30} },
+    { id="reset", label="Reset", color_fill={0.28,0.16,0.06}, color_border={0.85,0.55,0.20} },
+    { id="menu",  label="Menu",  color_fill={0.12,0.15,0.28}, color_border={0.35,0.45,0.72} },
 }
 
 -- ── Helpers ────────────────────────────────────────────────────────────────
@@ -417,12 +417,14 @@ function MatrixScene:_build_cmd_buttons()
     local step   = 47
     for i, btn in ipairs(CMD_BUTTONS) do
         self._cmd_btn_rects[i] = {
-            id    = btn.id,
-            label = btn.label,
-            x     = CMD_BTN_X + (i - 1) * step,
-            y     = PALETTE_Y + 6,
-            w     = bw,
-            h     = bh,
+            id           = btn.id,
+            label        = btn.label,
+            color_fill   = btn.color_fill,
+            color_border = btn.color_border,
+            x            = CMD_BTN_X + (i - 1) * step,
+            y            = PALETTE_Y + 6,
+            w            = bw,
+            h            = bh,
         }
     end
 end
@@ -1333,16 +1335,18 @@ function MatrixScene:_draw_cmd_buttons()
     if not self._cmd_btn_rects then return end
     for _, r in ipairs(self._cmd_btn_rects) do
         local enabled = self:_cmd_enabled(r.id)
+        local cf = r.color_fill   or {0.25, 0.25, 0.40}
+        local cb = r.color_border or {0.45, 0.45, 0.65}
 
         if enabled then
-            love.graphics.setColor(0.25, 0.25, 0.4, 1)
+            love.graphics.setColor(cf[1], cf[2], cf[3], 1)
         else
-            love.graphics.setColor(0.12, 0.12, 0.20, 1)
+            love.graphics.setColor(cf[1] * 0.5, cf[2] * 0.5, cf[3] * 0.5, 1)
         end
         love.graphics.rectangle("fill", r.x, r.y, r.w, r.h, 4, 4)
 
         if enabled then
-            love.graphics.setColor(0.45, 0.45, 0.65, 1)
+            love.graphics.setColor(cb[1], cb[2], cb[3], 1)
         else
             love.graphics.setColor(0.2, 0.2, 0.3, 0.35)
         end

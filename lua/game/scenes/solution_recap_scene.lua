@@ -36,9 +36,9 @@ local function lerp(a, b, t) return a + (b - a) * t end
 
 -- Recap buttons (right panel, below the PIECES label). Fixed layout constants.
 local RECAP_BUTTONS = {
-    { id = "recap:next",   label = "Next puzzle", hint = "[Enter]", rect = { x = 850,  y = 600, w = 150, h = 44 } },
-    { id = "recap:replay", label = "Replay",      hint = "[R]",     rect = { x = 1015, y = 600, w = 110, h = 44 } },
-    { id = "recap:menu",   label = "Menu",        hint = "[Esc]",   rect = { x = 1140, y = 600, w = 110, h = 44 } },
+    { id = "recap:next",   label = "Next puzzle", hint = "[Enter]", rect = { x = 850,  y = 600, w = 150, h = 44 }, color_fill = {0.12,0.28,0.12}, color_border = {0.30,0.75,0.30} },
+    { id = "recap:replay", label = "Replay",      hint = "[R]",     rect = { x = 1015, y = 600, w = 110, h = 44 }, color_fill = {0.28,0.20,0.06}, color_border = {0.85,0.65,0.20} },
+    { id = "recap:menu",   label = "Menu",        hint = "[Esc]",   rect = { x = 1140, y = 600, w = 110, h = 44 }, color_fill = {0.12,0.15,0.28}, color_border = {0.35,0.45,0.72} },
 }
 
 -- ── Constructor ──────────────────────────────────────────────────────────────
@@ -316,21 +316,24 @@ function SolutionRecapScene:_draw_stats()
 end
 
 function SolutionRecapScene:_draw_buttons()
-    local hints = {}
-    for _, b in ipairs(RECAP_BUTTONS) do hints[b.id] = b.hint end
+    local meta = {}
+    for _, b in ipairs(RECAP_BUTTONS) do meta[b.id] = b end
 
     for _, e in ipairs(self:ui_elements()) do
-        local r = e.rect
-        love.graphics.setColor(0.18, 0.22, 0.36, 1)
+        local r  = e.rect
+        local b  = meta[e.id] or {}
+        local cf = b.color_fill   or {0.18, 0.22, 0.36}
+        local cb = b.color_border or {0.45, 0.55, 0.85}
+        love.graphics.setColor(cf[1], cf[2], cf[3], 1)
         love.graphics.rectangle("fill", r.x, r.y, r.w, r.h, 6, 6)
-        love.graphics.setColor(0.45, 0.55, 0.85, 1)
+        love.graphics.setColor(cb[1], cb[2], cb[3], 1)
         love.graphics.rectangle("line", r.x, r.y, r.w, r.h, 6, 6)
         love.graphics.setFont(self._font_label)
         love.graphics.setColor(0.90, 0.92, 1.0, 1)
         love.graphics.printf(e.label, r.x, r.y + r.h / 2 - 9, r.w, "center")
         love.graphics.setFont(self._font_hint)
         love.graphics.setColor(0.35, 0.40, 0.55, 1)
-        love.graphics.printf(hints[e.id] or "", r.x, r.y + r.h + 6, r.w, "center")
+        love.graphics.printf(b.hint or "", r.x, r.y + r.h + 6, r.w, "center")
     end
 
     love.graphics.setColor(1, 1, 1, 1)

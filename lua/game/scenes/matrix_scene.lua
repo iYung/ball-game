@@ -1264,7 +1264,33 @@ end
 
 function MatrixScene:draw_travelling_matrix()
     local mat = self.current_matrix
-    if not mat then return end
+    if not mat then
+        if self.sim == nil and self.input_matrix then
+            local px, py = cell_top_left(self.puzzle.source.x, self.puzzle.source.y)
+            local preview = self.input_matrix
+            for r = 1, preview.rows do
+                for c = 1, preview.cols do
+                    local cx = px + (c - 1) * CELL_SIZE
+                    local cy = py + (r - 1) * CELL_SIZE
+                    local v  = preview.values[r][c]
+                    love.graphics.setColor(0.08, 0.08, 0.16, 0.45)
+                    love.graphics.rectangle("fill", cx, cy, CELL_SIZE, CELL_SIZE)
+                    love.graphics.setColor(1, 0.80, 0.15, 0.45)
+                    love.graphics.setLineWidth(2)
+                    love.graphics.rectangle("line", cx+1, cy+1, CELL_SIZE-2, CELL_SIZE-2)
+                    love.graphics.setLineWidth(1)
+                    local s
+                    if v == math.floor(v) then s = tostring(math.floor(v))
+                    else s = string.format("%.1f", v) end
+                    love.graphics.setColor(0.95, 0.95, 1.0, 0.45)
+                    love.graphics.setFont(self.font_cell)
+                    love.graphics.printf(s, cx, cy + CELL_SIZE / 2 - 9, CELL_SIZE, "center")
+                end
+            end
+            love.graphics.setColor(1, 1, 1, 1)
+        end
+        return
+    end
 
     local t  = self.anim_t
     local et = t * t * (3 - 2 * t)  -- smooth-step

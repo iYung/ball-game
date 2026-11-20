@@ -651,7 +651,7 @@ function MatrixScene:do_step()
         self._run_frames[#self._run_frames + 1] = {
             from_x       = from_x,       from_y       = from_y,
             to_x         = to_x,         to_y         = to_y,
-            matrix       = self.current_matrix:copy(),
+            matrix       = mat:copy(),
             pushers_from = pushers_from,
             pushers_to   = pushers_to,
         }

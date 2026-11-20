@@ -135,4 +135,35 @@ do
     print("PASS: SolutionRecapScene replay loop")
 end
 
+-- Frame matrix shows PRE-op values: the frame recorded for the step that moves
+-- the matrix into an op tile must carry the values BEFORE the op fires.
+do
+    -- Puzzle 3 (negate): 2×2 input [[1,-2],[3,0]], source (2,5), sink (10,5).
+    local ctx3 = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(3) end)
+    local scene3 = ctx3.sm.current
+
+    -- Pusher at (1,6) pushes the matrix one cell right per tick.
+    add_pusher(scene3, 1, 6, { "right","right","right","right","right","right","right","right" })
+    -- Negate op at (8,5): the 2×2 matrix first covers (8,5) on step 5
+    -- (top-left at (7,5), right column = col 8).
+    scene3:_place_tile_at(8, 5, { kind="op", op="negate" })
+    run_to_end(scene3)
+    assert(scene3.status == "win",
+        "precondition: negate run wins, got " .. tostring(scene3.status))
+
+    local frames3 = scene3._run_frames
+    -- Frame 5 is the step entering (7,5), which newly covers (8,5) where the negate fires.
+    -- The fix requires this frame to hold the PRE-negate matrix (values[1][1] == 1).
+    local nf = frames3[5]
+    assert(nf ~= nil, "frame 5 exists")
+    local v = nf.matrix.values[1][1]
+    assert(v == 1, "frame entering negate op carries pre-op value (1), got " .. tostring(v))
+    -- The following frame (top-left at (8,5), no new op) must carry the POST-negate value.
+    local pf = frames3[6]
+    assert(pf ~= nil, "frame 6 exists")
+    local v2 = pf.matrix.values[1][1]
+    assert(v2 == -1, "frame after negate op carries post-op value (-1), got " .. tostring(v2))
+    print("PASS: frame matrix shows pre-op values (not one step early)")
+end
+
 print("ALL TESTS PASSED")

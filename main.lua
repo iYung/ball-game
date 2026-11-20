@@ -1,5 +1,7 @@
 local _visual_test = nil
 local _visual_mode = false
+local _visual_co   = nil
+local _runner      = nil
 do
     local headless, visual, test_file = false, false, nil
     for _, v in ipairs(arg or {}) do
@@ -36,18 +38,56 @@ function love.load()
     canvas = love.graphics.newCanvas(LOGICAL_W, LOGICAL_H)
     canvas:setFilter("nearest", "nearest")
 
+    if _visual_mode then
+        if _visual_test == nil then
+            print("FAIL: --visual requires a test file path")
+            love.event.quit(1)
+            return
+        end
+        if _visual_test:sub(1, 9) == "tests/ui/" then
+            print("FAIL: --visual does not work with UI specs; use --headless for those")
+            love.event.quit(1)
+            return
+        end
+        _runner = require("lua/headless/runner")
+        _runner._visual = true
+        _visual_co = coroutine.create(function()
+            local ok, err = pcall(dofile, _visual_test)
+            if ok then
+                print("PASS")
+                love.event.quit(0)
+            else
+                print("FAIL: " .. tostring(err))
+                love.event.quit(1)
+            end
+        end)
+        return
+    end
+
     manager = SceneManager.new(LOGICAL_W, LOGICAL_H)
     manager:switch(StartScene.new(manager))
 end
 
 function love.update(dt)
+    if _visual_co then
+        local ok, err = coroutine.resume(_visual_co)
+        if not ok then
+            print("FAIL: " .. tostring(err))
+            love.event.quit(1)
+        end
+        return
+    end
     manager:update(dt)
 end
 
 function love.draw()
     love.graphics.setCanvas(canvas)
     love.graphics.clear(0, 0, 0)
-    manager:draw()
+    if _runner and _runner._active_sm then
+        _runner._active_sm:draw()
+    elseif manager then
+        manager:draw()
+    end
     love.graphics.setCanvas()
 
     local scale = math.min(love.graphics.getWidth() / LOGICAL_W, love.graphics.getHeight() / LOGICAL_H)

@@ -350,7 +350,7 @@ local scene = ctx.sm.current
 - `HeadlessInput` (`lua/headless/input.lua`) scripts actions: `press(action)` fires for one frame, and `hold`/`release` keep an action down.
 - `runner.fast_forward_until(ctx, condition_fn, elapsed, cap)` ticks until the condition holds.
 - Prefer the scene's public input methods (`key_pressed`, `mouse_pressed`, `mouse_moved`) and `ui_elements()` over private `_methods`. Calling private methods is fine for logic, but it does not count as UI coverage.
-- `love . --visual tests/test_<thing>.lua` runs the same test in a real window and renders every frame, so you can watch what it does. It is a debugging aid only; CI never uses it, and it does not work for UI specs.
+- `love . --visual tests/test_<thing>.lua` runs the same test in a real window and renders every frame, so you can watch what it does. It is a debugging aid only; CI never uses it, and it does not work for UI specs (pass a `tests/ui/` path and you get an error message instead of a hang).
 
 ## Unit-testing the runner itself
 

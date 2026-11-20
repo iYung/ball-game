@@ -22,6 +22,24 @@ local SCREEN_W         = 1280
 local CMD_BTN_X        = SCREEN_W - 193   -- right-aligns 4 cmd buttons (183px) with 10px right margin
 local PALETTE_REGION_W = CMD_BTN_X - 50   -- palette slot width, leaving breathing room before cmd buttons
 
+local STATUS_COLORS = {
+    win       = {0.2, 0.8, 0.3, 1},
+    fail      = {0.9, 0.2, 0.2, 1},
+    stuck     = {0.9, 0.6, 0.1, 1},
+    timeout   = {0.9, 0.6, 0.1, 1},
+    running   = {0.4, 0.6, 1.0, 1},
+    no_pusher = {0.9, 0.6, 0.1, 1},
+}
+
+local STATUS_LABELS = {
+    win       = "WIN!",
+    fail      = "FAIL — matrix mismatch",
+    stuck     = "STUCK — nothing is pushing",
+    timeout   = "TIMEOUT",
+    running   = "Running...",
+    no_pusher = "Place a pusher first",
+}
+
 -- Ops that expose editable parameters
 local PARAM_DEFS = {
     scale_row  = { {key="row",    label="row", min=1, max=4},
@@ -1428,7 +1446,7 @@ function MatrixScene:_timeline_layout()
         x0 = x0, top = top, rows = {},
         vis = vis, first = first, last = last,
         slot_x = slot_x, slot_w = slot_w_total,
-        scroll_left  = { x = slot_x - 14, y = top, w = 12, h = 16 },
+        scroll_left  = { x = x0 - 14, y = top, w = 12, h = 16 },
         scroll_right = { x = slot_x + slot_w_total + 2, y = top, w = 12, h = 16 },
         dec = { x=len_x,      y=top, w=18, h=16 },
         val = { x=len_x + 18, y=top, w=42, h=16 },
@@ -1613,17 +1631,31 @@ function MatrixScene:_timeline_element_click(e, btn)
     end
 end
 
+function MatrixScene:_draw_status_banner()
+    local col = self.status and STATUS_COLORS[self.status]
+    if not col then return end
+    local bh = 40
+    local by = PALETTE_Y - bh
+    love.graphics.setColor(col[1], col[2], col[3], 0.9)
+    love.graphics.rectangle("fill", 0, by, HUD_X, bh)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setFont(self.font_ui)
+    love.graphics.printf(STATUS_LABELS[self.status] or self.status, 0, by + 13, HUD_X, "center")
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
 function MatrixScene:draw()
     self:draw_grid()
     self:draw_live_pushers()
     self:draw_travelling_matrix()
     self:draw_palette()
-    self._tl_top = self.hud:draw(self.input_matrix, self.target_matrix, self.puzzle.name, self.status)
+    self._tl_top = self.hud:draw(self.input_matrix, self.target_matrix, self.puzzle.name)
     love.graphics.setColor(0.5, 0.65, 0.5, 1)
     love.graphics.setFont(self.font_key)
     love.graphics.print(string.format("Puzzle %d/%d", self.puzzle_index, PuzzleLoader.count()), HUD_X + 8, 12)
     love.graphics.setColor(1, 1, 1, 1)
     self:draw_timeline()
+    self:_draw_status_banner()
 end
 
 -- ── Input ──────────────────────────────────────────────────────────────────

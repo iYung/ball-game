@@ -167,3 +167,16 @@ do
     assert(scene:ui_tile(5, 2).op == "transpose", "op tile shape")
     print("PASS: ui_tile / ui_matrix")
 end
+
+-- scroll_left button must not overlap the "TIMELINE" header text area (x=840 onwards).
+-- With the fix, scroll_left.x = x0 - 14 = 826, so it ends at 826+12=838 < 840.
+do
+    local scene = new_scene()
+    local L = scene:_timeline_layout()
+    assert(L, "timeline layout available after draw")
+    local sl = L.scroll_left
+    local header_x = L.x0  -- "TIMELINE" text starts here
+    assert(sl.x + sl.w <= header_x,
+        string.format("scroll_left (%d..%d) must not overlap header_x=%d", sl.x, sl.x + sl.w, header_x))
+    print("PASS: scroll_left does not overlap TIMELINE header")
+end

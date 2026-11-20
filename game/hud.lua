@@ -1,24 +1,6 @@
 local HUD = {}
 HUD.__index = HUD
 
-local STATUS_COLORS = {
-    win           = {0.2, 0.8, 0.3, 1},
-    fail          = {0.9, 0.2, 0.2, 1},
-    stuck         = {0.9, 0.6, 0.1, 1},
-    timeout       = {0.9, 0.6, 0.1, 1},
-    running       = {0.4, 0.6, 1.0, 1},
-    no_pusher     = {0.9, 0.6, 0.1, 1},
-}
-
-local STATUS_LABELS = {
-    win           = "WIN!",
-    fail          = "FAIL — matrix mismatch",
-    stuck         = "STUCK — nothing is pushing",
-    timeout       = "TIMEOUT",
-    running       = "Running...",
-    no_pusher     = "Place a pusher first",
-}
-
 function HUD.new(x, y, w, h)
     local self = setmetatable({}, HUD)
     self.x = x
@@ -70,7 +52,7 @@ function HUD:draw_matrix(mat, cx, top_y, font_num)
 end
 
 -- Returns the y just below the divider, where the scene draws the timeline panel.
-function HUD:draw(input_mat, target_mat, puzzle_name, status)
+function HUD:draw(input_mat, target_mat, puzzle_name)
     local x, y, w, h = self.x, self.y, self.w, self.h
 
     -- Background
@@ -120,22 +102,9 @@ function HUD:draw(input_mat, target_mat, puzzle_name, status)
     love.graphics.setColor(0.2, 0.2, 0.3, 1)
     love.graphics.rectangle("fill", x + 20, cursor_y, w - 40, 1)
     cursor_y = cursor_y + 10
-    local panel_top = cursor_y
-
-    -- Status banner at the bottom
-    if status and STATUS_COLORS[status] then
-        local bh = 40
-        local by = y + h - bh
-        local col = STATUS_COLORS[status]
-        love.graphics.setColor(col[1], col[2], col[3], 0.9)
-        love.graphics.rectangle("fill", x, by, w, bh)
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.setFont(self.font_label)
-        love.graphics.printf(STATUS_LABELS[status] or status, x, by + 11, w, "center")
-    end
 
     love.graphics.setColor(1, 1, 1, 1)
-    return panel_top
+    return cursor_y
 end
 
 return HUD

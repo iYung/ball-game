@@ -9,10 +9,10 @@ Op tiles physically span multiple board cells — one anchor cell for the op nam
 
 | File | Why touched |
 |------|-------------|
-| `game/grid.lua` | Multi-cell placement: anchor cell + ref cells; clear propagates to all cells |
-| `game/scenes/matrix_scene.lua` | Placement bounds check, drawing across cells, in-cell click editing, collision by anchor key |
+| `lua/game/grid.lua` | Multi-cell placement: anchor cell + ref cells; clear propagates to all cells |
+| `lua/game/scenes/matrix_scene.lua` | Placement bounds check, drawing across cells, in-cell click editing, collision by anchor key |
 
-`game/cursor.lua` and `game/matrix_math.lua` are **not touched**.
+`lua/game/cursor.lua` and `lua/game/matrix_math.lua` are **not touched**.
 
 ---
 

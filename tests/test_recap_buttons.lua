@@ -5,12 +5,12 @@
 local runner             = require("lua/headless/runner")
 local UI                 = require("lua/core/ui")
 local UIRunner           = require("lua/headless/ui_runner")
-local Progress           = require("game/progress")
-local PuzzleLoader       = require("game/puzzle_loader")
-local Matrix             = require("game/matrix_math")
-local SolutionRecapScene = require("game/scenes/solution_recap_scene")
-local MatrixScene        = require("game/scenes/matrix_scene")
-local LevelSelectScene   = require("game/scenes/level_select_scene")
+local Progress           = require("lua/game/progress")
+local PuzzleLoader       = require("lua/game/puzzle_loader")
+local Matrix             = require("lua/game/matrix_math")
+local SolutionRecapScene = require("lua/game/scenes/solution_recap_scene")
+local MatrixScene        = require("lua/game/scenes/matrix_scene")
+local LevelSelectScene   = require("lua/game/scenes/level_select_scene")
 
 local PUZZLE_INDEX = 1
 

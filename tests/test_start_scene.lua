@@ -1,5 +1,5 @@
-local StartScene = require("game/scenes/start_scene")
-local Progress   = require("game/progress")
+local StartScene = require("lua/game/scenes/start_scene")
+local Progress   = require("lua/game/progress")
 local UI         = require("lua/core/ui")
 local UIRunner   = require("lua/headless/ui_runner")
 
@@ -44,7 +44,7 @@ do
     local ctx = fresh()
     local scene = ctx.sm.current
     ctx.sm:mouse_pressed(5, 5, 1)
-    local LevelSelectScene = require("game/scenes/level_select_scene")
+    local LevelSelectScene = require("lua/game/scenes/level_select_scene")
     assert(getmetatable(ctx.sm.current) == LevelSelectScene, "click at (5,5) switches to level select")
     assert(ctx.sm.current ~= scene, "click at (5,5) advances")
     assert(not Progress.is_world_unlocked(2), "click at (5,5) does not unlock")

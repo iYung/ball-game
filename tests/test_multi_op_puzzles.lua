@@ -1,4 +1,4 @@
-local Matrix = require("game/matrix_math")
+local Matrix = require("lua/game/matrix_math")
 
 local function m(rows, cols, values)
     return Matrix.new(rows, cols, values)

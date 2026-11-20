@@ -1,7 +1,7 @@
 -- Sweep: open every puzzle through level select so the runner's global
 -- layout invariants run on each puzzle's screen. Also checks reachability:
 -- every puzzle index must belong to some world.
-local PuzzleLoader = require("game/puzzle_loader")
+local PuzzleLoader = require("lua/game/puzzle_loader")
 
 local worlds  = {}
 local reached = {}

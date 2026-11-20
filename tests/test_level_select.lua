@@ -4,9 +4,9 @@
 local UI               = require("lua/core/ui")
 local UIRunner         = require("lua/headless/ui_runner")
 local Stubs            = require("lua/headless/stubs")
-local Progress         = require("game/progress")
-local LevelSelectScene = require("game/scenes/level_select_scene")
-local MatrixScene      = require("game/scenes/matrix_scene")
+local Progress         = require("lua/game/progress")
+local LevelSelectScene = require("lua/game/scenes/level_select_scene")
+local MatrixScene      = require("lua/game/scenes/matrix_scene")
 
 local function setup()
     Progress.reset()

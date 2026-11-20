@@ -1,5 +1,5 @@
 local Scene    = require("lua/core/scene")
-local GameScene = require("game/scenes/game_scene")
+local GameScene = require("lua/game/scenes/game_scene")
 
 -- Test 1: Scene.new(w, h) passes dimensions to its camera
 do

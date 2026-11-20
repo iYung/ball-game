@@ -3,11 +3,11 @@
 -- the input matrix dimensions (rows × cols) for each puzzle.
 
 local runner       = require("lua/headless/runner")
-local PuzzleLoader = require("game/puzzle_loader")
+local PuzzleLoader = require("lua/game/puzzle_loader")
 
 local function new_scene(puzzle_index)
     local ctx = runner.setup(function()
-        return require("game/scenes/matrix_scene").new(puzzle_index)
+        return require("lua/game/scenes/matrix_scene").new(puzzle_index)
     end)
     return ctx.sm.current
 end

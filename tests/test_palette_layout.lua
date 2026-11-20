@@ -3,14 +3,14 @@
 local runner       = require("lua/headless/runner")
 local UI           = require("lua/core/ui")
 local UIRunner     = require("lua/headless/ui_runner")
-local PuzzleLoader = require("game/puzzle_loader")
+local PuzzleLoader = require("lua/game/puzzle_loader")
 
 local CMD_X       = 1280 - 193   -- first command button
 local PALETTE_END = CMD_X - 50   -- palette buttons must end by here
 
 local function new_scene(n)
     local ctx = runner.setup(function(_, sm)
-        return require("game/scenes/matrix_scene").new(n, sm)
+        return require("lua/game/scenes/matrix_scene").new(n, sm)
     end)
     local scene = ctx.sm.current
     scene:draw()  -- sets _tl_top so timeline elements exist

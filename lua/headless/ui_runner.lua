@@ -398,9 +398,9 @@ function UIRunner.run_spec(spec, opts)
     local step_index = nil
 
     local ok, err = pcall(function()
-        local Progress   = require("game/progress")
+        local Progress   = require("lua/game/progress")
         local make_scene = opts.make_scene or function(sm)
-            return require("game/scenes/start_scene").new(sm)
+            return require("lua/game/scenes/start_scene").new(sm)
         end
 
         Progress.reset()

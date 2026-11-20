@@ -48,7 +48,7 @@ local function check_bar(scene, label)
                 label .. ": " .. e.id .. " leaves the palette region")
         end
     end
-    for _, id in ipairs({ "cmd:run", "cmd:step", "cmd:reset", "cmd:menu" }) do
+    for _, id in ipairs({ "cmd:run", "cmd:reset", "cmd:menu" }) do
         assert(UI.find(els, id), label .. ": " .. id .. " missing")
     end
 end
@@ -85,7 +85,7 @@ do
     for _, id in ipairs({ "palette:pusher", "palette:drag", "palette:erase" }) do
         assert(UI.find(els, id), id .. " present")
     end
-    for i, id in ipairs({ "cmd:run", "cmd:step", "cmd:reset", "cmd:menu" }) do
+    for i, id in ipairs({ "cmd:run", "cmd:reset", "cmd:menu" }) do
         local r = rx(id)
         assert(r.x == CMD_X + (i - 1) * 47 and r.w == 42 and r.h == 48 and r.y == 666, id .. " position")
     end

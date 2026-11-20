@@ -40,7 +40,7 @@ do
     assert(a[1] == "palette:pusher", "palette first, got " .. tostring(a[1]))
     assert(seen["palette:transpose"] and seen["palette:drag"] and seen["palette:erase"], "palette ids")
     assert(not seen["palette:negate"], "puzzle 2 only offers transpose")
-    for _, c in ipairs({ "cmd:run", "cmd:step", "cmd:reset", "cmd:menu" }) do
+    for _, c in ipairs({ "cmd:run", "cmd:reset", "cmd:menu" }) do
         assert(seen[c], c .. " present")
     end
     assert(seen["cell:1,1"] and seen["cell:10,10"], "cells present")

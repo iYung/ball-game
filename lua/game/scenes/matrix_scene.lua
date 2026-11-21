@@ -525,6 +525,7 @@ end
 -- each newly entered op tile once (deduplicated by anchor). Returns the new footprint.
 function MatrixScene:_process_footprint(old_fp)
     local new_fp  = self:get_footprint()
+    self._last_fp = new_fp
 
     for akey, info in pairs(self.occupied_ops) do
         local tile   = self.grid:get(info.ax, info.ay)
@@ -572,18 +573,11 @@ function MatrixScene:_process_footprint(old_fp)
                 self.running = false
                 self.status  = "fail"
                 self.current_matrix = mat
-                self._last_fp = self:get_footprint()
                 return new_fp
             end
         end
     end
     self.current_matrix = mat
-    -- Refresh _last_fp using the actual post-op footprint.  If any op changed
-    -- the matrix dimensions, the new shape may cover different cells than
-    -- new_fp (which was computed pre-op).  Without this, the next tick would
-    -- treat those newly covered cells as freshly entered and fire their ops
-    -- even if the matrix never moved.
-    self._last_fp = self:get_footprint()
     return new_fp
 end
 

@@ -35,8 +35,10 @@ end
 
 love.graphics.setDefaultFilter("nearest", "nearest")
 
-local SceneManager  = require("lua/core/scene_manager")
-local StartScene    = require("lua/game/scenes/start_scene")
+local SceneManager   = require("lua/core/scene_manager")
+local StartScene     = require("lua/game/scenes/start_scene")
+local SettingsState  = require("lua/game/settings_state")
+local Save           = require("lua/core/save")
 
 local LOGICAL_W, LOGICAL_H = 1280, 720
 local canvas
@@ -75,8 +77,10 @@ function love.load()
         return
     end
 
+    local settings_state = SettingsState.from_save(Save.read_settings())
+
     manager = SceneManager.new(LOGICAL_W, LOGICAL_H)
-    manager:switch(StartScene.new(manager))
+    manager:switch(StartScene.new(manager, settings_state))
 end
 
 function love.update(dt)

@@ -6,10 +6,11 @@ local W, H = 1280, 720
 local StartScene = setmetatable({}, { __index = Scene })
 StartScene.__index = StartScene
 
-function StartScene.new(scene_manager)
+function StartScene.new(scene_manager, settings_state)
     local self = Scene.new(W, H)
     setmetatable(self, StartScene)
-    self._scene_manager = scene_manager
+    self._scene_manager  = scene_manager
+    self._settings_state = settings_state
     return self
 end
 
@@ -40,7 +41,7 @@ end
 
 function StartScene:_advance()
     local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-    self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
+    self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
 end
 
 function StartScene:_unlock_all()

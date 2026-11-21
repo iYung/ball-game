@@ -6,6 +6,7 @@ local Palette      = require("lua/game/palette")
 local HUD          = require("lua/game/hud")
 local PuzzleLoader = require("lua/game/puzzle_loader")
 local UI           = require("lua/core/ui")
+local SettingsMenu = require("lua/game/scenes/settings_menu")
 
 local function cell_key(x, y) return x .. "," .. y end
 
@@ -187,11 +188,12 @@ local function lerp(a, b, t) return a + (b - a) * t end
 
 -- ── Constructor ────────────────────────────────────────────────────────────
 
-function MatrixScene.new(puzzle_index, scene_manager)
+function MatrixScene.new(puzzle_index, scene_manager, settings_state)
     local base = Scene.new(1280, 720)
     local self  = setmetatable(base, MatrixScene)
     self._start_puzzle    = puzzle_index or 1
     self._scene_manager   = scene_manager
+    self._settings_state  = settings_state
     self._win_timer       = nil
     return self
 end
@@ -199,6 +201,7 @@ end
 -- ── Lifecycle ──────────────────────────────────────────────────────────────
 
 function MatrixScene:on_enter()
+    self._settings_menu = SettingsMenu.new(self._settings_state, self._scene_manager)
     self.palette      = Palette.new()
     self.hud          = HUD.new(HUD_X, 0, 460, PALETTE_Y)
     self.font_cell    = love.graphics.newFont(14)
@@ -695,6 +698,10 @@ end
 -- ── Update ─────────────────────────────────────────────────────────────────
 
 function MatrixScene:update(dt)
+    if self._settings_menu and self._settings_menu.is_open then
+        self._settings_menu:update(dt)
+        return
+    end
     if self.anim_t < 1 then
         self.anim_t = math.min(1, self.anim_t + dt / self.run_speed)
         if self.anim_t >= 1 and self.running then
@@ -722,7 +729,7 @@ function MatrixScene:update(dt)
                 puzzle      = self.puzzle,
             }
             self._scene_manager:switch(
-                SolutionRecapScene.new(stats, board, self._run_frames or {}, self.run_speed, self._scene_manager)
+                SolutionRecapScene.new(stats, board, self._run_frames or {}, self.run_speed, self._scene_manager, self._settings_state)
             )
         end
     end
@@ -1352,7 +1359,7 @@ function MatrixScene:_cmd_activate(id)
     elseif id == "menu" then
         if self._scene_manager then
             local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
+            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
         end
     end
 end
@@ -1686,6 +1693,9 @@ function MatrixScene:draw()
     love.graphics.setColor(1, 1, 1, 1)
     self:draw_timeline()
     self:_draw_status_banner()
+    if self._settings_menu then
+        self._settings_menu:draw()
+    end
 end
 
 -- ── Input ──────────────────────────────────────────────────────────────────
@@ -2152,14 +2162,16 @@ function MatrixScene:mouse_released(mx, my, btn)
 end
 
 function MatrixScene:key_pressed(key)
+    if self._settings_menu and self._settings_menu.is_open then
+        if self._settings_menu:key_pressed(key) then return end
+    end
     local KEY_CMD = { r = "run", backspace = "reset" }
     local cmd = KEY_CMD[key]
     if cmd then
         if self:_cmd_enabled(cmd) then self:_cmd_activate(cmd) end
     elseif key == "escape" then
-        if self._scene_manager then
-            local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
+        if self._settings_menu then
+            self._settings_menu:open()
         end
     end
 end

@@ -1,5 +1,6 @@
-local UI   = require("lua/core/ui")
-local Save = require("lua/core/save")
+local UI           = require("lua/core/ui")
+local Save         = require("lua/core/save")
+local SettingsState = require("lua/game/settings_state")
 
 local W, H = 1280, 720
 
@@ -23,7 +24,7 @@ function SettingsMenu.new(settings_state, scene_manager)
     local self = setmetatable({}, SettingsMenu)
     self.is_open          = false
     self.selected         = 1
-    self._state           = settings_state
+    self._state           = settings_state or SettingsState.new()
     self._scene_manager   = scene_manager
     return self
 end
@@ -43,7 +44,7 @@ end
 function SettingsMenu:_on_exit_to_menu()
     Save.write_settings(self._state:to_save())
     local StartScene = require("lua/game/scenes/start_scene")
-    self._scene_manager:switch(StartScene.new(self._scene_manager))
+    self._scene_manager:switch(StartScene.new(self._scene_manager, self._state))
     self:close()
 end
 

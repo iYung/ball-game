@@ -564,16 +564,26 @@ function MatrixScene:_process_footprint(old_fp)
     for _, info in ipairs(entered_anchors) do
         local tile = self.grid:get(info.x, info.y)
         if tile and tile.kind == "op" then
-            mat = Sim.apply_op(tile, mat)
-            self.occupied_ops[info.akey] = {ax=info.x, ay=info.y}
-            if not Sim.footprint_clear(self.sim.x, self.sim.y,
-                                        mat.rows, mat.cols,
-                                        self.grid.w, self.grid.h,
-                                        self.sim.gaps, self.sim.pushers) then
-                self.running = false
-                self.status  = "fail"
-                self.current_matrix = mat
-                return new_fp
+            -- Re-check coverage: a prior op in this tick may have changed the matrix
+            -- dimensions (e.g. transpose on a non-square matrix), shrinking it off
+            -- this tile.  Skip tiles the matrix no longer physically covers.
+            local w, h = tile.width or 1, tile.height or 1
+            local mx2  = self.sim.x + mat.cols - 1
+            local my2  = self.sim.y + mat.rows - 1
+            local overlaps = self.sim.x <= info.x + w - 1 and mx2 >= info.x
+                         and self.sim.y <= info.y + h - 1 and my2 >= info.y
+            if overlaps then
+                mat = Sim.apply_op(tile, mat)
+                self.occupied_ops[info.akey] = {ax=info.x, ay=info.y}
+                if not Sim.footprint_clear(self.sim.x, self.sim.y,
+                                            mat.rows, mat.cols,
+                                            self.grid.w, self.grid.h,
+                                            self.sim.gaps, self.sim.pushers) then
+                    self.running = false
+                    self.status  = "fail"
+                    self.current_matrix = mat
+                    return new_fp
+                end
             end
         end
     end

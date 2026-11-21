@@ -1,7 +1,9 @@
 local runner = require("lua/headless/runner")
 
-local function new_scene()
-    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
+local Matrix = require("lua/game/matrix_math")
+
+local function new_scene(puzzle_index)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(puzzle_index or 1) end)
     return ctx.sm.current
 end
 
@@ -234,6 +236,29 @@ do
     assert(scene.sim.tick >= 500,
         "sim ran at least 500 ticks, got " .. tostring(scene.sim.tick))
     print("PASS: timeout status")
+end
+
+-- A dimension-changing op (transpose on a non-square matrix) must not wrongly
+-- trigger sibling ops that are no longer under the matrix after the size change.
+--
+-- Setup: puzzle 5 has a 2×3 input matrix (2 rows, 3 cols).  Source at (2,3).
+-- A pusher moves the matrix right 3 cells until it reaches (5,3), where the
+-- rightmost column of its footprint — cells (7,3) and (7,4) — is newly entered.
+-- Transpose at (7,3) fires first (top-to-bottom order) and reshapes the matrix
+-- from 2×3 to 3×2.  The 3×2 footprint at (5,3) covers only cols 5-6, so (7,4)
+-- is no longer under the matrix.  Negate at (7,4) must NOT fire.
+do
+    local scene = new_scene(5)   -- input: 2×3  {{1,2,3},{4,5,6}}
+    add_pusher(scene, 1, 3, { [1]="right", [2]="right", [3]="right" })
+    scene:_place_tile_at(7, 3, { kind="op", op="transpose" })
+    scene:_place_tile_at(7, 4, { kind="op", op="negate" })
+    scene:start_run()
+    scene:do_step(); scene:do_step(); scene:do_step()
+    -- Only transpose should have fired: 2×3 → transposed 3×2 = {{1,4},{2,5},{3,6}}
+    local expected = Matrix.new(3, 2, {{1,4},{2,5},{3,6}})
+    assert(scene.current_matrix:equals(expected),
+        "negate at (7,4) must not fire after transpose shrinks matrix off that cell")
+    print("PASS: dimension-changing op does not wrongly trigger co-entered sibling op")
 end
 
 print("ALL TESTS PASSED")

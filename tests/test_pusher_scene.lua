@@ -1,7 +1,8 @@
 local runner = require("lua/headless/runner")
+local Matrix  = require("lua/game/matrix_math")
 
-local function new_scene()
-    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
+local function new_scene(puzzle_index)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(puzzle_index or 1) end)
     return ctx.sm.current
 end
 
@@ -234,6 +235,30 @@ do
     assert(scene.sim.tick >= 500,
         "sim ran at least 500 ticks, got " .. tostring(scene.sim.tick))
     print("PASS: timeout status")
+end
+
+-- After a dimension-changing op fires, _last_fp must reflect the POST-op
+-- footprint.  If it still holds the PRE-op (smaller/differently-shaped)
+-- footprint, the next tick treats cells that are newly covered due to the
+-- shape change — not due to movement — as freshly entered and fires their ops.
+--
+-- Puzzle 11: 2×3 input (rows=2, cols=3), source (2,5).
+-- A pusher moves the matrix one cell right to (3,5), newly entering (5,5)
+-- and (5,6).  Transpose at (5,5) fires: matrix becomes 3×2 at (3,5),
+-- which now covers (3,7) and (4,7) — cells not in the pre-transform footprint.
+-- Negate at (3,7) must NOT fire on the following idle tick (no movement).
+do
+    local scene = new_scene(11)   -- input: 2×3  {{1,2,3},{4,5,6}}
+    add_pusher(scene, 1, 5, { [1]="right" })
+    scene:_place_tile_at(5, 5, { kind="op", op="transpose" })
+    scene:_place_tile_at(3, 7, { kind="op", op="negate" })
+    scene:start_run()
+    scene:do_step()   -- tick 1: matrix moves right, transpose fires
+    scene:do_step()   -- tick 2: no movement (slot 2 = idle)
+    local expected = Matrix.new(3, 2, {{1,4},{2,5},{3,6}})
+    assert(scene.current_matrix:equals(expected),
+        "negate at (3,7) must not fire: it was reached by shape change, not movement")
+    print("PASS: shape-change footprint does not trigger ops on idle next tick")
 end
 
 print("ALL TESTS PASSED")

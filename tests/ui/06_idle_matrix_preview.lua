@@ -6,7 +6,7 @@ return {
     steps = {
         -- Navigate to puzzle 1
         { press = "return" },
-        { assert_text = "WORLD 1: BASICS" },
+        { assert_button = { id = "world:1", selected = true } },
         { click_button = "Identity Check" },
         -- Input matrix is a 2x2 identity: [[1,0],[0,1]]
         { assert_matrix = { { 1, 0 }, { 0, 1 } } },

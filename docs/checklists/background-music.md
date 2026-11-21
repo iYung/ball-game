@@ -8,7 +8,7 @@
 
 ## Group B — Assets and wiring (parallel after Group A)
 
-- [ ] Task B1 — `assets/music/` — Create the directory and copy the five files from `/root/wip/assets/music/`: `menu.mp3`, `background.mp3`, `background2.mp3`, `background3.mp3`, `background4.mp3`. Use `cp` — no conversion needed.
+- [x] Task B1 — `assets/music/` — Create the directory and copy the five files from `/root/wip/assets/music/`: `menu.mp3`, `background.mp3`, `background2.mp3`, `background3.mp3`, `background4.mp3`. Use `cp` — no conversion needed.
 
 - [ ] Task B2 — `main.lua` — Three additions: (1) `require("lua/core/sound")` near the top (after other requires). (2) In `love.load()`, after `manager:switch(StartScene.new(...))`, call `Sound.load({ music = { menu={path="assets/music/menu.mp3", looping=true, autoplay=true}, bg1={path="assets/music/background.mp3", looping=false}, bg2={path="assets/music/background2.mp3", looping=false}, bg3={path="assets/music/background3.mp3", looping=false}, bg4={path="assets/music/background4.mp3", looping=false} } })`. (3) In `love.update(dt)`, call `Sound.update(dt)` before `manager:update(dt)`. (4) Add `function love.focus(focused) Sound.on_focus(focused) end` at the bottom. Skip the Sound.load call when `_visual_mode` is true (or guard: load only inside the non-visual branch).
 

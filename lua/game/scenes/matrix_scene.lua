@@ -222,6 +222,13 @@ function MatrixScene:on_enter()
     self._drag_ghost  = nil
 
     self:load_puzzle(self._start_puzzle)
+
+    local Sound = require("lua/core/sound")
+    Sound.fade_music("menu", 0, 2)
+    local _bgs = {"bg1","bg2","bg3","bg4"}
+    self._bg_track = _bgs[math.random(#_bgs)]
+    self._prev_bg_track = self._bg_track
+    Sound.fade_music(self._bg_track, 1, 2)
 end
 
 function MatrixScene:on_exit()
@@ -701,6 +708,17 @@ end
 -- ── Update ─────────────────────────────────────────────────────────────────
 
 function MatrixScene:update(dt)
+    local Sound = require("lua/core/sound")
+    if self._bg_track and not Sound.is_music_playing(self._bg_track) then
+        local _bgs = {"bg1","bg2","bg3","bg4"}
+        local next_track
+        repeat
+            next_track = _bgs[math.random(#_bgs)]
+        until #_bgs == 1 or next_track ~= self._prev_bg_track
+        self._prev_bg_track = self._bg_track
+        self._bg_track = next_track
+        Sound.fade_music(self._bg_track, 1, 1)
+    end
     if self._settings_menu and self._settings_menu.is_open then
         self._settings_menu:update(dt)
         return

@@ -94,6 +94,9 @@ end
 -- Registry of clickable elements (see docs/design/ui-tests.md section 2):
 -- world arrows first, then one row per puzzle in row order.
 function LevelSelectScene:ui_elements()
+    if self._settings_menu and self._settings_menu.is_open then
+        return self._settings_menu:ui_elements()
+    end
     local els = {}
     local function rect(r) return { x = r.x, y = r.y, w = r.w, h = r.h } end
     if self._arrow_left.x then

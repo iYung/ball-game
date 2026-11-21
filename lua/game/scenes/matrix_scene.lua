@@ -201,7 +201,10 @@ end
 -- ── Lifecycle ──────────────────────────────────────────────────────────────
 
 function MatrixScene:on_enter()
-    self._settings_menu = SettingsMenu.new(self._settings_state, self._scene_manager)
+    self._settings_menu = SettingsMenu.new(self._settings_state, self._scene_manager, function()
+        local LevelSelectScene = require("lua/game/scenes/level_select_scene")
+        self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
+    end)
     self.palette      = Palette.new()
     self.hud          = HUD.new(HUD_X, 0, 460, PALETTE_Y)
     self.font_cell    = love.graphics.newFont(14)
@@ -1599,6 +1602,9 @@ local function el(id, label, kind, r, enabled, selected)
 end
 
 function MatrixScene:ui_elements()
+    if self._settings_menu and self._settings_menu.is_open then
+        return self._settings_menu:ui_elements()
+    end
     local out = {}
     for _, r in ipairs(self._palette_rects or {}) do
         local enabled = r.enabled ~= false
@@ -1861,6 +1867,10 @@ function MatrixScene:mouse_moved(mx, my)
 end
 
 function MatrixScene:mouse_pressed(mx, my, btn)
+    if self._settings_menu and self._settings_menu.is_open then
+        self._settings_menu:mouse_pressed(mx, my)
+        return
+    end
     -- All hit-testing goes through the UI element registry.
     local e = UI.element_at(self:ui_elements(), mx, my)
     if e == nil then return end

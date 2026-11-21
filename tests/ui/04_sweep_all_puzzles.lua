@@ -34,7 +34,9 @@ for w, world in ipairs(worlds) do
             add({ wait = 5 })
             add({ assert_button = { id = "palette:scroll_left", enabled = true } })
         end
+        -- ESC now opens the settings overlay; "Exit to Menu" returns to level select
         add({ press = "escape" })
+        add({ click_button = { id = "settings:exit" } })
     end
 end
 

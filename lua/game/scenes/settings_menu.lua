@@ -20,12 +20,13 @@ local R_EXIT      = { x = 490, y = 418, w = 200, h = 36 }
 local SettingsMenu = {}
 SettingsMenu.__index = SettingsMenu
 
-function SettingsMenu.new(settings_state, scene_manager)
+function SettingsMenu.new(settings_state, scene_manager, on_exit)
     local self = setmetatable({}, SettingsMenu)
     self.is_open          = false
     self.selected         = 1
     self._state           = settings_state or SettingsState.new()
     self._scene_manager   = scene_manager
+    self._on_exit         = on_exit
     return self
 end
 
@@ -43,9 +44,13 @@ end
 
 function SettingsMenu:_on_exit_to_menu()
     Save.write_settings(self._state:to_save())
-    local StartScene = require("lua/game/scenes/start_scene")
-    self._scene_manager:switch(StartScene.new(self._scene_manager, self._state))
     self:close()
+    if self._on_exit then
+        self._on_exit()
+    else
+        local StartScene = require("lua/game/scenes/start_scene")
+        self._scene_manager:switch(StartScene.new(self._scene_manager, self._state))
+    end
 end
 
 function SettingsMenu:_on_confirm()

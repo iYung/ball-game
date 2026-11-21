@@ -22,6 +22,8 @@ function StartScene:on_enter()
     self._time = 0
     self._play_rect    = { x = W / 2 - 120, y = 572, w = 240, h = 32 }
     self._unlock_rect  = { x = W / 2 - 80, y = 625, w = 160, h = 22 }
+    local Sound = require("lua/core/sound")
+    if not Sound.is_music_playing("menu") then Sound.play_music("menu") end
 end
 
 -- UI element registry (see docs/design/ui-tests.md). Fresh table each call.

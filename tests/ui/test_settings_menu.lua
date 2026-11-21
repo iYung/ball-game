@@ -4,6 +4,9 @@ package.loaded["lua/core/sound"] = {
     set_music_volume = function() end,
     get_sfx_volume   = function() return 1 end,
     get_music_volume = function() return 1 end,
+    is_music_playing = function() return false end,
+    play_music       = function() end,
+    fade_music       = function() end,
 }
 package.loaded["lua/core/save"] = {
     write_settings = function() end,

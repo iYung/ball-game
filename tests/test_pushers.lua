@@ -48,12 +48,13 @@ do
     local _, blocked_t = Sim.advance(t)
     assert(t.x == 5 and t.pushers[1].x == 5, "no contact, matrix untouched")
     assert(blocked_t == false, "beside matrix: not blocked")
-    -- a pusher riding inside the matrix carries it along
-    local r = st({ x = 1, y = 5, pushers = { P(1, 6, "right", "right") } })
+    -- a pusher that consistently follows the matrix one step behind carries it tick by tick;
+    -- after each push the matrix moves one cell ahead, putting the pusher back outside
+    local r = st({ x = 1, y = 5, pushers = { P(0, 5, "right", "right") } })
     local _, blocked_r1 = Sim.advance(r)
     local _, blocked_r2 = Sim.advance(r)
-    assert(r.x == 3 and r.pushers[1].x == 3, "inside pusher drags matrix")
-    assert(blocked_r1 == false and blocked_r2 == false, "inside pusher drags: not blocked")
+    assert(r.x == 3 and r.pushers[1].x == 2, "follower pusher carries matrix 2 cells")
+    assert(blocked_r1 == false and blocked_r2 == false, "follower carry: not blocked")
     print("PASS: push matrix")
 end
 
@@ -126,9 +127,10 @@ do
     assert(moved_s == false and s.pushers[1].x == 2, "pusher cannot enter gap")
     assert(blocked_s == true, "gap block: blocked")
 
-    -- matrix shove blocked when new position overlaps a gap
-    -- matrix at (1,2) cols=2 rows=2; pusher pushes right; new anchor (2,2) covers (2,2),(3,2),(2,3),(3,3); (3,3) is a gap
-    local m = st({ x = 1, y = 2, rows = 2, cols = 2, pushers = { P(1, 3, "right") }, gaps = gaps })
+    -- outside pusher shove blocked when new matrix position overlaps a gap
+    -- matrix at (1,2) cols=2 rows=2; pusher at (0,2) outside, pushes right;
+    -- new anchor (2,2) covers (2,2),(3,2),(2,3),(3,3); (3,3) is a gap → blocked
+    local m = st({ x = 1, y = 2, rows = 2, cols = 2, pushers = { P(0, 2, "right") }, gaps = gaps })
     local moved_m, blocked_m = Sim.advance(m)
     assert(not moved_m or (m.x == 1), "matrix cannot be shoved onto a gap cell")
     assert(blocked_m == true, "matrix shove into gap: blocked")

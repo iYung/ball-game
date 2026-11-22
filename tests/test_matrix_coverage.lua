@@ -51,9 +51,9 @@ do
     local ok, err = pcall(function() scene:_process_footprint({}) end)
     assert(ok, "_process_footprint with overlapping pusher threw: " .. tostring(err))
     assert(scene.running == false, "fail: running must be false")
-    assert(scene.status  == "fail", "fail: status must be 'fail', got " .. tostring(scene.status))
+    assert(scene.status  == "blocked", "fail: status must be 'blocked', got " .. tostring(scene.status))
 
-    print("PASS: fail status when footprint_clear returns false after op (lines 573-576)")
+    print("PASS: blocked status when footprint_clear returns false after op (lines 573-576)")
 end
 
 -- ── 2a. Timeline auto-scroll forward (line 637) ──────────────────────────────

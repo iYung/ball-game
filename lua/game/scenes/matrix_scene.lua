@@ -25,6 +25,7 @@ local PALETTE_REGION_W = CMD_BTN_X - 50   -- palette slot width, leaving breathi
 local STATUS_COLORS = {
     win       = {0.2, 0.8, 0.3, 1},
     fail      = {0.9, 0.2, 0.2, 1},
+    blocked   = {0.9, 0.2, 0.2, 1},
     stuck     = {0.9, 0.6, 0.1, 1},
     timeout   = {0.9, 0.6, 0.1, 1},
     running   = {0.4, 0.6, 1.0, 1},
@@ -34,6 +35,7 @@ local STATUS_COLORS = {
 local STATUS_LABELS = {
     win       = "WIN!",
     fail      = "FAIL — matrix mismatch",
+    blocked   = "FAIL — matrix is blocked",
     stuck     = "STUCK — nothing is pushing",
     timeout   = "TIMEOUT",
     running   = "Running...",
@@ -571,7 +573,7 @@ function MatrixScene:_process_footprint(old_fp)
                                         self.grid.w, self.grid.h,
                                         self.sim.gaps, self.sim.pushers) then
                 self.running = false
-                self.status  = "fail"
+                self.status  = "blocked"
                 self.current_matrix = mat
                 return new_fp
             end
@@ -618,7 +620,7 @@ function MatrixScene:do_step()
     local moved, blocked = Sim.advance(st)
     if blocked then
         self.running = false
-        self.status  = "fail"
+        self.status  = "blocked"
         return
     end
     sim.x, sim.y, sim.tick = st.x, st.y, st.tick

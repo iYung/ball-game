@@ -2,6 +2,7 @@ local Scene        = require("lua/core/scene")
 local PuzzleLoader = require("lua/game/puzzle_loader")
 local Progress     = require("lua/game/progress")
 local UI           = require("lua/core/ui")
+local SettingsMenu = require("lua/game/scenes/settings_menu")
 
 local W, H        = 1280, 720
 local ROW_H       = 54
@@ -14,15 +15,16 @@ local TAB_H       = 48
 local LevelSelectScene = setmetatable({}, { __index = Scene })
 LevelSelectScene.__index = LevelSelectScene
 
-function LevelSelectScene.new(scene_manager)
-    local self          = Scene.new(W, H)
+function LevelSelectScene.new(scene_manager, settings_state)
+    local self           = Scene.new(W, H)
     setmetatable(self, LevelSelectScene)
-    self.scene_manager  = scene_manager
-    self.selected       = 1
-    self._world         = 1
-    self._world_puzzles = {}
-    self._row_rects     = {}
-    self._tab_rects     = {}
+    self.scene_manager   = scene_manager
+    self._settings_state = settings_state
+    self.selected        = 1
+    self._world          = 1
+    self._world_puzzles  = {}
+    self._row_rects      = {}
+    self._tab_rects      = {}
     return self
 end
 
@@ -50,10 +52,13 @@ function LevelSelectScene:_rebuild_world_data()
 end
 
 function LevelSelectScene:on_enter()
-    self._font_title = love.graphics.newFont(28)
-    self._font_world = love.graphics.newFont(14)
-    self._font_row   = love.graphics.newFont(20)
-    self._font_hint  = love.graphics.newFont(14)
+    self._font_title    = love.graphics.newFont(28)
+    self._font_world    = love.graphics.newFont(14)
+    self._font_row      = love.graphics.newFont(20)
+    self._font_hint     = love.graphics.newFont(14)
+    self._settings_menu = SettingsMenu.new(self._settings_state, self.scene_manager)
+    local Sound = require("lua/core/sound")
+    if not Sound.is_music_playing("menu") then Sound.play_music("menu") end
 
     self:_rebuild_world_data()
 end
@@ -81,7 +86,7 @@ function LevelSelectScene:_switch_world(target)
         Progress.mark_cutscene_seen(self._world)
         local CutsceneScene    = require("lua/game/scenes/cutscene_scene")
         local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-        local next_scene       = LevelSelectScene.new(self.scene_manager)
+        local next_scene       = LevelSelectScene.new(self.scene_manager, self._settings_state)
         next_scene._world      = self._world
         self.scene_manager:switch(CutsceneScene.new(self._world, next_scene, self.scene_manager))
         return
@@ -93,6 +98,9 @@ end
 
 -- Registry of clickable elements: one tab per world, then one row per puzzle.
 function LevelSelectScene:ui_elements()
+    if self._settings_menu and self._settings_menu.is_open then
+        return self._settings_menu:ui_elements()
+    end
     local els = {}
     local n = PuzzleLoader.world_count()
     for w = 1, n do
@@ -134,7 +142,11 @@ local function world_index_of(e)
     return w and tonumber(w) or nil
 end
 
-function LevelSelectScene:update(_dt) end
+function LevelSelectScene:update(_dt)
+    if self._settings_menu and self._settings_menu.is_open then
+        self._settings_menu:update(_dt)
+    end
+end
 
 function LevelSelectScene:mouse_moved(x, y)
     local row = self:_row_of(UI.element_at(self:ui_elements(), x, y))
@@ -146,10 +158,14 @@ end
 function LevelSelectScene:_load_selected()
     local MatrixScene = require("lua/game/scenes/matrix_scene")
     local puzzle_index = self._world_puzzles[self.selected].index
-    self.scene_manager:switch(MatrixScene.new(puzzle_index, self.scene_manager))
+    self.scene_manager:switch(MatrixScene.new(puzzle_index, self.scene_manager, self._settings_state))
 end
 
 function LevelSelectScene:key_pressed(key)
+    if self._settings_menu and self._settings_menu.is_open then
+        if self._settings_menu:key_pressed(key) then return end
+    end
+
     local n = #self._world_puzzles
     if key == "up" then
         self.selected = ((self.selected - 2) % n) + 1
@@ -165,12 +181,17 @@ function LevelSelectScene:key_pressed(key)
         Progress.unlock_world(self._world)
         self:_rebuild_world_data()
     elseif key == "escape" then
-        local StartScene = require("lua/game/scenes/start_scene")
-        self.scene_manager:switch(StartScene.new(self.scene_manager))
+        if self._settings_menu then
+            self._settings_menu:open()
+        end
     end
 end
 
 function LevelSelectScene:mouse_pressed(mx, my, btn)
+    if self._settings_menu and self._settings_menu.is_open then
+        self._settings_menu:mouse_pressed(mx, my)
+        return
+    end
     if btn ~= 1 then return end
     local e = UI.element_at(self:ui_elements(), mx, my)
     if not e then return end
@@ -271,6 +292,10 @@ function LevelSelectScene:draw()
     love.graphics.printf("[Left/Right] Switch World   [Up/Down] Navigate   [Enter] Play   [Esc] Back", 0, H - 36, W, "center")
 
     love.graphics.setColor(1, 1, 1, 1)
+
+    if self._settings_menu then
+        self._settings_menu:draw()
+    end
 end
 
 function LevelSelectScene:text_input(_) end

@@ -13,7 +13,7 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 | `Left / Right` | Switch world |
 | `Up / Down` | Navigate puzzle list within world |
 | `Enter` | Play selected puzzle |
-| `Esc` | Return to start screen |
+| `Esc` | Open settings |
 | Click a row | Play that puzzle |
 
 Puzzles are grouped into five worlds — **Basics** (1–5), **Combos** (6–11), **Advanced** (12–16), **Transforms** (17–20), and **Fixed Pieces** (21–23) — shown in a top bar. Click the `<` / `>` arrows or press Left/Right to cycle worlds. World 1 is always open; every later world is **locked** until all puzzles in the previous world are solved, and locked worlds are skipped when cycling. Click a puzzle row to play it. Hovering highlights a row only when the mouse actually moves, so a resting cursor never overrides Up/Down navigation. On the start screen, press `D` or click **(D) Unlock All** to mark every puzzle solved (useful for testing or jumping ahead).
@@ -25,7 +25,7 @@ Puzzles are grouped into five worlds — **Basics** (1–5), **Combos** (6–11)
 | `R` or **Run** button | Run — one timeline tick at a time, animated (not available while running or after a win) |
 | `Space` or **Step** button | Step — advance one tick |
 | `Backspace` or **Reset** button | Reset — return the matrix to the source (no-op when there is nothing to reset) |
-| `Esc` or **Menu** button | Return to level select (from puzzle) or start screen (from level select) |
+| `Esc` or **Menu** button | Open settings overlay (SFX / music volume, Resume, Exit to Menu) |
 | `← →` | Previous / next puzzle |
 | Left-click grid | Place selected tile (or pick up a tile in **[Mv]** mode) |
 | Right-click grid | Erase tile (or cancel an in-progress drag) |

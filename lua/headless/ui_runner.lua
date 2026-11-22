@@ -399,7 +399,7 @@ function UIRunner.run_spec(spec, opts)
 
     local ok, err = pcall(function()
         local Progress   = require("lua/game/progress")
-        local make_scene = opts.make_scene or function(sm)
+        local make_scene = opts.make_scene or spec.make_scene or function(sm)
             return require("lua/game/scenes/start_scene").new(sm)
         end
 

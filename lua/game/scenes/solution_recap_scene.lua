@@ -43,18 +43,19 @@ local RECAP_BUTTONS = {
 
 -- ── Constructor ──────────────────────────────────────────────────────────────
 
-function SolutionRecapScene.new(stats, board, frames, run_speed, scene_manager)
+function SolutionRecapScene.new(stats, board, frames, run_speed, scene_manager, settings_state)
     local base = Scene.new(W, H)
     local self = setmetatable(base, SolutionRecapScene)
-    self._stats         = stats
-    self._board         = board
-    self._frames        = frames
-    self._run_speed     = run_speed or 0.35
-    self._scene_manager = scene_manager
-    self._frame_idx     = 1
-    self._anim_t        = 0
-    self._end_hold      = 0   -- counts down when we're paused at the last frame
-    self._holding       = false
+    self._stats          = stats
+    self._board          = board
+    self._frames         = frames
+    self._run_speed      = run_speed or 0.35
+    self._scene_manager  = scene_manager
+    self._settings_state = settings_state
+    self._frame_idx      = 1
+    self._anim_t         = 0
+    self._end_hold       = 0   -- counts down when we're paused at the last frame
+    self._holding        = false
     return self
 end
 
@@ -370,7 +371,7 @@ end
 function SolutionRecapScene:_next()
     local next_idx = (self._stats.puzzle_index % self._puzzle_count) + 1
     local MatrixScene = require("lua/game/scenes/matrix_scene")
-    self._scene_manager:switch(MatrixScene.new(next_idx, self._scene_manager))
+    self._scene_manager:switch(MatrixScene.new(next_idx, self._scene_manager, self._settings_state))
 end
 
 function SolutionRecapScene:_replay()
@@ -382,7 +383,7 @@ end
 
 function SolutionRecapScene:_menu()
     local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-    self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
+    self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
 end
 
 local ACTIONS = {

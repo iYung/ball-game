@@ -6,6 +6,7 @@ local Palette      = require("lua/game/palette")
 local HUD          = require("lua/game/hud")
 local PuzzleLoader = require("lua/game/puzzle_loader")
 local UI           = require("lua/core/ui")
+local SettingsMenu = require("lua/game/scenes/settings_menu")
 
 local function cell_key(x, y) return x .. "," .. y end
 
@@ -187,11 +188,12 @@ local function lerp(a, b, t) return a + (b - a) * t end
 
 -- ── Constructor ────────────────────────────────────────────────────────────
 
-function MatrixScene.new(puzzle_index, scene_manager)
+function MatrixScene.new(puzzle_index, scene_manager, settings_state)
     local base = Scene.new(1280, 720)
     local self  = setmetatable(base, MatrixScene)
     self._start_puzzle    = puzzle_index or 1
     self._scene_manager   = scene_manager
+    self._settings_state  = settings_state
     self._win_timer       = nil
     return self
 end
@@ -199,6 +201,10 @@ end
 -- ── Lifecycle ──────────────────────────────────────────────────────────────
 
 function MatrixScene:on_enter()
+    self._settings_menu = SettingsMenu.new(self._settings_state, self._scene_manager, function()
+        local LevelSelectScene = require("lua/game/scenes/level_select_scene")
+        self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
+    end)
     self.palette      = Palette.new()
     self.hud          = HUD.new(HUD_X, 0, 460, PALETTE_Y)
     self.font_cell    = love.graphics.newFont(14)
@@ -216,6 +222,13 @@ function MatrixScene:on_enter()
     self._drag_ghost  = nil
 
     self:load_puzzle(self._start_puzzle)
+
+    local Sound = require("lua/core/sound")
+    Sound.fade_music("menu", 0, 2)
+    local _bgs = {"bg1","bg2","bg3","bg4"}
+    self._bg_track = _bgs[math.random(#_bgs)]
+    self._prev_bg_track = self._bg_track
+    Sound.fade_music(self._bg_track, 1, 2)
 end
 
 function MatrixScene:on_exit()
@@ -697,6 +710,21 @@ end
 -- ── Update ─────────────────────────────────────────────────────────────────
 
 function MatrixScene:update(dt)
+    local Sound = require("lua/core/sound")
+    if self._bg_track and not Sound.is_music_playing(self._bg_track) then
+        local _bgs = {"bg1","bg2","bg3","bg4"}
+        local next_track
+        repeat
+            next_track = _bgs[math.random(#_bgs)]
+        until #_bgs == 1 or next_track ~= self._prev_bg_track
+        self._prev_bg_track = self._bg_track
+        self._bg_track = next_track
+        Sound.fade_music(self._bg_track, 1, 1)
+    end
+    if self._settings_menu and self._settings_menu.is_open then
+        self._settings_menu:update(dt)
+        return
+    end
     if self.anim_t < 1 then
         self.anim_t = math.min(1, self.anim_t + dt / self.run_speed)
         if self.anim_t >= 1 and self.running then
@@ -724,7 +752,7 @@ function MatrixScene:update(dt)
                 puzzle      = self.puzzle,
             }
             self._scene_manager:switch(
-                SolutionRecapScene.new(stats, board, self._run_frames or {}, self.run_speed, self._scene_manager)
+                SolutionRecapScene.new(stats, board, self._run_frames or {}, self.run_speed, self._scene_manager, self._settings_state)
             )
         end
     end
@@ -1354,7 +1382,7 @@ function MatrixScene:_cmd_activate(id)
     elseif id == "menu" then
         if self._scene_manager then
             local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
+            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
         end
     end
 end
@@ -1638,6 +1666,9 @@ local function el(id, label, kind, r, enabled, selected)
 end
 
 function MatrixScene:ui_elements()
+    if self._settings_menu and self._settings_menu.is_open then
+        return self._settings_menu:ui_elements()
+    end
     local out = {}
     for _, r in ipairs(self._palette_rects or {}) do
         local enabled = r.enabled ~= false
@@ -1737,6 +1768,9 @@ function MatrixScene:draw()
     love.graphics.setColor(1, 1, 1, 1)
     self:draw_timeline()
     self:_draw_status_banner()
+    if self._settings_menu then
+        self._settings_menu:draw()
+    end
 end
 
 -- ── Input ──────────────────────────────────────────────────────────────────
@@ -1902,6 +1936,10 @@ function MatrixScene:mouse_moved(mx, my)
 end
 
 function MatrixScene:mouse_pressed(mx, my, btn)
+    if self._settings_menu and self._settings_menu.is_open then
+        self._settings_menu:mouse_pressed(mx, my)
+        return
+    end
     -- All hit-testing goes through the UI element registry.
     local e = UI.element_at(self:ui_elements(), mx, my)
     if e == nil then return end
@@ -2203,14 +2241,16 @@ function MatrixScene:mouse_released(mx, my, btn)
 end
 
 function MatrixScene:key_pressed(key)
+    if self._settings_menu and self._settings_menu.is_open then
+        if self._settings_menu:key_pressed(key) then return end
+    end
     local KEY_CMD = { r = "run", backspace = "reset" }
     local cmd = KEY_CMD[key]
     if cmd then
         if self:_cmd_enabled(cmd) then self:_cmd_activate(cmd) end
     elseif key == "escape" then
-        if self._scene_manager then
-            local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
+        if self._settings_menu then
+            self._settings_menu:open()
         end
     end
 end

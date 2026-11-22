@@ -180,3 +180,28 @@ do
         string.format("scroll_left (%d..%d) must not overlap header_x=%d", sl.x, sl.x + sl.w, header_x))
     print("PASS: scroll_left does not overlap TIMELINE header")
 end
+
+-- MatrixScene:text_input(_) is a no-op and must not raise.
+do
+    local scene = new_scene()
+    local ok, err = pcall(function() scene:text_input("a") end)
+    assert(ok, "text_input must not error: " .. tostring(err))
+    print("PASS: MatrixScene text_input is a no-op")
+end
+
+-- HUD:draw_matrix with a float value hits the fmt_num "%.2f" branch (hud.lua:20).
+do
+    local HUD    = require("lua/game/hud")
+    local Matrix = require("lua/game/matrix_math")
+
+    local hud = HUD.new(820, 0, 460, 720)
+    -- Non-integer value ensures fmt_num takes the string.format("%.2f", v) branch.
+    local mat = Matrix.new(1, 1, { {1.5} })
+    local ok, err = pcall(function()
+        hud:draw_matrix(mat, 820 + 230, 10, hud.font_num)
+    end)
+    assert(ok, "HUD draw_matrix with float must not error: " .. tostring(err))
+    print("PASS: HUD fmt_num float branch (hud.lua:20)")
+end
+
+print("ALL REGISTRY TESTS PASSED")

@@ -14,7 +14,16 @@ return {
         steps = {
             { click_button = "Unlock All" },
             { press = "right" },
-            { assert_button = { id = "world:2", selected = true } },
+            { assert_text = "WORLD 2: COMBOS" },
+        },
+    },
+    {
+        name  = "press d unlocks world 2",
+        given = { solved = {} },
+        steps = {
+            { press = "d" },
+            { press = "right" },
+            { assert_text = "WORLD 2: COMBOS" },
         },
     },
 }

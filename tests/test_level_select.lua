@@ -24,13 +24,10 @@ end
 do
     local _, scene = setup()
     local els = scene:ui_elements()
-    local PuzzleLoader = require("lua/game/puzzle_loader")
-    local n_worlds = PuzzleLoader.world_count()
     assert(UIRunner.check_invariants(els) == nil, tostring(UIRunner.check_invariants(els)))
-    assert(els[1].id == "world:1", "tab 1 comes first")
-    assert(els[n_worlds].id == "world:" .. n_worlds, "last world tab is world:" .. n_worlds)
-    assert(els[n_worlds + 1].id == "puzzle:1" and els[n_worlds + 1].selected == true, "row 1 selected by default")
-    assert(#els == n_worlds + #scene._world_puzzles, "one tab per world plus one element per row")
+    assert(els[1].id == "world:prev" and els[2].id == "world:next", "arrows come first")
+    assert(els[3].id == "puzzle:1" and els[3].selected == true, "row 1 selected by default")
+    assert(#els == 2 + #scene._world_puzzles, "one element per row")
     print("PASS: level_select: registry")
 end
 
@@ -65,14 +62,37 @@ do
     print("PASS: level_select: click row opens puzzle")
 end
 
--- Click on world:2 tab with nothing solved stays on world 1 (locked) ----------
+-- Click on world:next with nothing solved stays on world 1 -------------------
 do
     local sm, scene = setup()
-    local x, y = UI.centre(UI.find(scene:ui_elements(), "world:2").rect)
+    local x, y = UI.centre(UI.find(scene:ui_elements(), "world:next").rect)
     sm:mouse_pressed(x, y, 1)
     assert(sm.current == scene, "still on level select")
-    assert(scene._world == 1, "locked tab click is no-op, got world " .. scene._world)
-    print("PASS: level_select: locked world:2 tab click stays on world 1")
+    assert(scene._world == 1, "locked worlds are skipped, got world " .. scene._world)
+    print("PASS: level_select: world:next with nothing solved stays on world 1")
+end
+
+-- Right-click does not switch scene ------------------------------------------
+do
+    local sm, scene = setup()
+    sm:mouse_pressed(400, 300, 2)
+    assert(sm.current == scene, "right-click should not switch away from level select")
+    print("PASS: level_select: right-click does not switch scene")
+end
+
+-- Click world:prev cycles backward (line 162 coverage) ----------------------
+do
+    local sm, scene = setup()
+    -- Unlock world 2 so there's somewhere to cycle to
+    Progress.unlock_world(2)
+    scene:_rebuild_world_data()
+    -- Set to world 2 so prev goes to world 1
+    scene._world = 2
+    scene:_rebuild_world_data()
+    local x, y = UI.centre(UI.find(scene:ui_elements(), "world:prev").rect)
+    sm:mouse_pressed(x, y, 1)
+    assert(scene._world == 1, "world:prev cycles to world 1, got " .. scene._world)
+    print("PASS: level_select: world:prev cycles backward")
 end
 
 Progress.reset()

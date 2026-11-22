@@ -21,7 +21,7 @@ for w, world in ipairs(worlds) do
         -- Esc from a puzzle returns to level select on world 1.
         for _ = 1, w - 1 do add({ press = "right" }) end
         if n == 1 then
-            add({ assert_button = { id = string.format("world:%d", w), selected = true } })
+            add({ assert_text = string.format("WORLD %d: %s", w, world.name:upper()) })
         end
         add({ assert_button = { id = "puzzle:" .. p.index } })
         add({ click_button = { id = "puzzle:" .. p.index } })
@@ -34,9 +34,7 @@ for w, world in ipairs(worlds) do
             add({ wait = 5 })
             add({ assert_button = { id = "palette:scroll_left", enabled = true } })
         end
-        -- ESC now opens the settings overlay; "Exit to Menu" returns to level select
         add({ press = "escape" })
-        add({ click_button = { id = "settings:exit" } })
     end
 end
 

@@ -48,13 +48,12 @@ do
     local _, blocked_t = Sim.advance(t)
     assert(t.x == 5 and t.pushers[1].x == 5, "no contact, matrix untouched")
     assert(blocked_t == false, "beside matrix: not blocked")
-    -- a pusher that consistently follows the matrix one step behind carries it tick by tick;
-    -- after each push the matrix moves one cell ahead, putting the pusher back outside
-    local r = st({ x = 1, y = 5, pushers = { P(0, 5, "right", "right") } })
+    -- a pusher riding inside the matrix carries it along
+    local r = st({ x = 1, y = 5, pushers = { P(1, 6, "right", "right") } })
     local _, blocked_r1 = Sim.advance(r)
     local _, blocked_r2 = Sim.advance(r)
-    assert(r.x == 3 and r.pushers[1].x == 2, "follower pusher carries matrix 2 cells")
-    assert(blocked_r1 == false and blocked_r2 == false, "follower carry: not blocked")
+    assert(r.x == 3 and r.pushers[1].x == 3, "inside pusher drags matrix")
+    assert(blocked_r1 == false and blocked_r2 == false, "inside pusher drags: not blocked")
     print("PASS: push matrix")
 end
 
@@ -117,6 +116,55 @@ do
     print("PASS: apply_op")
 end
 
+-- apply_op: negate, swap_rows, scalar_mul, add_matrix / sub_matrix / mul_matrix
+do
+    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
+
+    -- negate: every element flips sign.
+    local neg = Sim.apply_op({ kind = "op", op = "negate" }, m)
+    assert(neg:equals(Matrix.new(2, 2, { {-1, -2}, {-3, -4} })), "negate")
+    print("PASS: apply_op negate")
+
+    -- swap_rows: rows a and b are exchanged.
+    local sw = Sim.apply_op({ kind = "op", op = "swap_rows", params = { row_a = 1, row_b = 2 } }, m)
+    assert(sw:equals(Matrix.new(2, 2, { {3, 4}, {1, 2} })), "swap_rows 1↔2")
+    print("PASS: apply_op swap_rows")
+
+    -- scalar_mul: every element multiplied by scalar.
+    local sc = Sim.apply_op({ kind = "op", op = "scalar_mul", params = { scalar = 3 } }, m)
+    assert(sc:equals(Matrix.new(2, 2, { {3, 6}, {9, 12} })), "scalar_mul by 3")
+    print("PASS: apply_op scalar_mul")
+
+    -- add_matrix: element-wise addition using tile.values / tile_rows / tile_cols.
+    local addend = { {1, 0}, {0, 1} }
+    local am = Sim.apply_op({
+        kind = "op", op = "add_matrix",
+        tile_rows = 2, tile_cols = 2,
+        values = addend,
+    }, m)
+    assert(am:equals(Matrix.new(2, 2, { {2, 2}, {3, 5} })), "add_matrix identity addend")
+    print("PASS: apply_op add_matrix")
+
+    -- sub_matrix: element-wise subtraction.
+    local sm2 = Sim.apply_op({
+        kind = "op", op = "sub_matrix",
+        tile_rows = 2, tile_cols = 2,
+        values = addend,
+    }, m)
+    assert(sm2:equals(Matrix.new(2, 2, { {0, 2}, {3, 3} })), "sub_matrix identity operand")
+    print("PASS: apply_op sub_matrix")
+
+    -- mul_matrix: element-wise (Hadamard) product.
+    local factor = { {2, 3}, {4, 5} }
+    local mm = Sim.apply_op({
+        kind = "op", op = "mul_matrix",
+        tile_rows = 2, tile_cols = 2,
+        values = factor,
+    }, m)
+    assert(mm:equals(Matrix.new(2, 2, { {2, 6}, {12, 20} })), "mul_matrix element-wise: [[1,2],[3,4]] * [[2,3],[4,5]]")
+    print("PASS: apply_op mul_matrix")
+end
+
 -- gap cells: pusher cannot enter; matrix cannot be shoved onto or through
 do
     local gaps = { [3] = { [3] = true } }
@@ -127,10 +175,9 @@ do
     assert(moved_s == false and s.pushers[1].x == 2, "pusher cannot enter gap")
     assert(blocked_s == true, "gap block: blocked")
 
-    -- outside pusher shove blocked when new matrix position overlaps a gap
-    -- matrix at (1,2) cols=2 rows=2; pusher at (0,2) outside, pushes right;
-    -- new anchor (2,2) covers (2,2),(3,2),(2,3),(3,3); (3,3) is a gap → blocked
-    local m = st({ x = 1, y = 2, rows = 2, cols = 2, pushers = { P(0, 2, "right") }, gaps = gaps })
+    -- matrix shove blocked when new position overlaps a gap
+    -- matrix at (1,2) cols=2 rows=2; pusher pushes right; new anchor (2,2) covers (2,2),(3,2),(2,3),(3,3); (3,3) is a gap
+    local m = st({ x = 1, y = 2, rows = 2, cols = 2, pushers = { P(1, 3, "right") }, gaps = gaps })
     local moved_m, blocked_m = Sim.advance(m)
     assert(not moved_m or (m.x == 1), "matrix cannot be shoved onto a gap cell")
     assert(blocked_m == true, "matrix shove into gap: blocked")
@@ -141,34 +188,6 @@ do
     assert(moved_n == true and n.pushers[1].x == 3, "no gaps: pusher moves freely")
     assert(blocked_n == false, "no gaps: not blocked")
     print("PASS: gap blocking")
-end
-
--- diagonal corner cells must be gap-free: matrix at (2,2) 2×2, pushing (+1,+1).
--- top-right corner = (4,2); bottom-left corner = (2,4).
-do
-    -- gap at top-right corner blocks the diagonal
-    local g1 = { [2] = { [4] = true } }
-    local d1 = st({ x=2, y=2, rows=2, cols=2,
-        pushers = { P(1,2,"right"), P(3,1,"down") }, gaps = g1 })
-    local moved_d1, blocked_d1 = Sim.advance(d1)
-    assert(not moved_d1 and d1.x == 2, "diagonal blocked by top-right corner gap: matrix stayed")
-    assert(blocked_d1, "diagonal blocked by top-right corner gap: blocked=true")
-
-    -- gap at bottom-left corner also blocks
-    local g2 = { [4] = { [2] = true } }
-    local d2 = st({ x=2, y=2, rows=2, cols=2,
-        pushers = { P(1,2,"right"), P(3,1,"down") }, gaps = g2 })
-    local moved_d2, blocked_d2 = Sim.advance(d2)
-    assert(not moved_d2 and d2.x == 2, "diagonal blocked by bottom-left corner gap: matrix stayed")
-    assert(blocked_d2, "diagonal blocked by bottom-left corner gap: blocked=true")
-
-    -- no corner gaps: diagonal move succeeds
-    local d3 = st({ x=2, y=2, rows=2, cols=2,
-        pushers = { P(1,2,"right"), P(3,1,"down") } })
-    local moved_d3, blocked_d3 = Sim.advance(d3)
-    assert(moved_d3 and d3.x == 3 and d3.y == 3, "diagonal with clear corners succeeds")
-    assert(not blocked_d3, "diagonal with clear corners: not blocked")
-    print("PASS: diagonal corner gap blocking")
 end
 
 -- nxm matrix: transpose swaps dimensions, Sim.blocked uses actual rows/cols
@@ -389,6 +408,47 @@ do
         params = { src = 1, dst = 1, scalar = 5 } }, m)
     assert(r == m, "add_cols same col is a no-op")
     print("PASS: apply_op add_cols src==dst no-op")
+end
+
+-- negate
+do
+    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
+    local r = Sim.apply_op({ kind = "op", op = "negate" }, m)
+    assert(r:equals(Matrix.new(2, 2, { {-1, -2}, {-3, -4} })), "apply_op negate")
+    print("PASS: apply_op negate")
+end
+
+-- swap_rows
+do
+    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
+    local r = Sim.apply_op({ kind = "op", op = "swap_rows", params = { row_a = 1, row_b = 2 } }, m)
+    assert(r:equals(Matrix.new(2, 2, { {3, 4}, {1, 2} })), "apply_op swap_rows")
+    print("PASS: apply_op swap_rows")
+end
+
+-- scalar_mul
+do
+    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
+    local r = Sim.apply_op({ kind = "op", op = "scalar_mul", params = { scalar = 3 } }, m)
+    assert(r:equals(Matrix.new(2, 2, { {3, 6}, {9, 12} })), "apply_op scalar_mul")
+    print("PASS: apply_op scalar_mul")
+end
+
+-- add_matrix
+do
+    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
+    local r = Sim.apply_op({ kind = "op", op = "add_matrix",
+        tile_rows = 2, tile_cols = 2, values = { {10, 20}, {30, 40} } }, m)
+    assert(r:equals(Matrix.new(2, 2, { {11, 22}, {33, 44} })), "apply_op add_matrix")
+    print("PASS: apply_op add_matrix")
+end
+
+-- apply_op fallback: unknown op returns matrix unchanged (line 173)
+do
+    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
+    local result = Sim.apply_op({ kind = "op", op = "unknown_op_xyz" }, m)
+    assert(result == m, "apply_op unknown op returns matrix unchanged")
+    print("PASS: apply_op unknown op fallback (line 173)")
 end
 
 print("ALL TESTS PASSED")

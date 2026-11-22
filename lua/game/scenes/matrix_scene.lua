@@ -265,6 +265,7 @@ function MatrixScene:load_puzzle(n)
     self.timeline       = {}
     self.timeline_n     = TL.DEFAULT_N
     self.timeline_scroll  = 0
+    self.tl_row_scroll    = 0
     self._palette_scroll  = 0
     self._win_timer      = nil
     self.grid            = Grid.new(p.grid_w, p.grid_h)
@@ -449,6 +450,7 @@ function MatrixScene:do_reset()
     self.sim            = nil
     self.cur_slot        = nil
     self.timeline_scroll = 0
+    self.tl_row_scroll   = 0
     self.occupied_ops   = {}
     self._last_fp       = {}
     self.anim_t         = 1
@@ -1500,18 +1502,34 @@ function MatrixScene:_timeline_layout()
     local scroll       = self.timeline_scroll or 0
     local first        = scroll + 1
     local last         = math.min(first + vis - 1, self.timeline_n)
+
+    -- Vertical windowing: how many pusher rows fit, reserving 12px at the bottom for scroll_down.
+    local vis_rows      = math.max(1, math.floor((PALETTE_Y - top - 32) / TL.ROW_H))
+    local pushers       = self:_pusher_list()
+    local max_row_scroll = math.max(0, #pushers - vis_rows)
+    local row_scroll    = math.max(0, math.min(self.tl_row_scroll or 0, max_row_scroll))
+    self.tl_row_scroll  = row_scroll
+    local row_first     = row_scroll + 1
+    local row_last      = math.min(row_first + vis_rows - 1, #pushers)
+
     local L = {
         x0 = x0, top = top, rows = {},
         vis = vis, first = first, last = last,
         slot_x = slot_x, slot_w = slot_w_total,
+        vis_rows = vis_rows, row_first = row_first, row_last = row_last,
         scroll_left  = { x = x0 - 14, y = top, w = 12, h = 16 },
         scroll_right = { x = slot_x + slot_w_total + 2, y = top, w = 12, h = 16 },
+        -- Placed in the label column (x0..x0+LABEL_W-4) so they never overlap slots.
+        scroll_up    = { x = x0, y = top + 4, w = TL.LABEL_W - 4, h = 12 },
+        scroll_down  = { x = x0, y = top + 20 + vis_rows * TL.ROW_H, w = TL.LABEL_W - 4, h = 12 },
         dec = { x=len_x,      y=top, w=18, h=16 },
         val = { x=len_x + 18, y=top, w=42, h=16 },
         inc = { x=len_x + 60, y=top, w=18, h=16 },
     }
-    for i, p in ipairs(self:_pusher_list()) do
-        local ry  = top + 20 + (i - 1) * TL.ROW_H
+    for i = row_first, row_last do
+        local p   = pushers[i]
+        local ri  = i - row_first  -- 0-based visual row index
+        local ry  = top + 20 + ri * TL.ROW_H
         local row = { id=p.id, y=ry, slots={} }
         for s = first, last do
             local col = s - first
@@ -1521,7 +1539,7 @@ function MatrixScene:_timeline_layout()
                 s = s,
             }
         end
-        L.rows[i] = row
+        L.rows[#L.rows + 1] = row
     end
     return L
 end
@@ -1529,6 +1547,12 @@ end
 function MatrixScene:draw_timeline()
     local L = self:_timeline_layout()
     if not L then return end
+
+    -- Distinct background for the timeline zone
+    love.graphics.setColor(0.05, 0.10, 0.14, 1)
+    love.graphics.rectangle("fill", HUD_X, L.top, 460, PALETTE_Y - L.top)
+    love.graphics.setColor(0.2, 0.4, 0.5, 1)
+    love.graphics.rectangle("fill", HUD_X, L.top, 460, 1)
 
     love.graphics.setFont(self.font_ui)
     love.graphics.setColor(0.6, 0.75, 1.0, 1)
@@ -1544,7 +1568,7 @@ function MatrixScene:draw_timeline()
     love.graphics.setColor(0.85, 0.85, 0.95, 1)
     love.graphics.printf("len " .. self.timeline_n, L.val.x, L.val.y + 2, L.val.w, "center")
 
-    -- Scroll buttons
+    -- Horizontal scroll buttons
     local can_left, can_right = self:_tl_can_scroll(L)
     for _, b in ipairs({ { L.scroll_left, "<", can_left }, { L.scroll_right, ">", can_right } }) do
         love.graphics.setColor(b[3] and 0.25 or 0.15, b[3] and 0.25 or 0.15, b[3] and 0.4 or 0.25, 1)
@@ -1553,14 +1577,24 @@ function MatrixScene:draw_timeline()
         love.graphics.printf(b[2], b[1].x, b[1].y + 2, b[1].w, "center")
     end
 
+    -- Vertical scroll buttons
+    local can_up   = L.row_first > 1
+    local can_down = L.row_last < #self:_pusher_list()
+    for _, b in ipairs({ { L.scroll_up, "^", can_up }, { L.scroll_down, "v", can_down } }) do
+        love.graphics.setColor(b[3] and 0.25 or 0.15, b[3] and 0.25 or 0.15, b[3] and 0.4 or 0.25, 1)
+        love.graphics.rectangle("fill", b[1].x, b[1].y, b[1].w, b[1].h, 2, 2)
+        love.graphics.setColor(b[3] and 0.85 or 0.4, b[3] and 0.85 or 0.4, b[3] and 0.95 or 0.5, 1)
+        love.graphics.printf(b[2], b[1].x, b[1].y + 1, b[1].w, "center")
+    end
+
     if #L.rows == 0 then
         love.graphics.setColor(0.45, 0.45, 0.6, 1)
         love.graphics.print("Place a pusher [P], then program it here", L.x0, L.top + 24)
         return
     end
 
-    -- Clip slot drawing to the slot area
-    love.graphics.setScissor(L.slot_x, L.top, L.slot_w, 720 - L.top)
+    -- Clip slot drawing to the slot area (horizontal and vertical)
+    love.graphics.setScissor(L.slot_x, L.top + 20, L.slot_w, L.vis_rows * TL.ROW_H)
     for _, row in ipairs(L.rows) do
         love.graphics.setColor(0.80, 0.60, 1.0, 1)
         love.graphics.printf(string.char(64 + row.id), L.x0, row.y + 1, TL.LABEL_W - 6, "right")
@@ -1604,6 +1638,18 @@ function MatrixScene:_tl_scroll_right(L)
     self.timeline_scroll = math.min(max_scroll, (self.timeline_scroll or 0) + 1)
 end
 
+function MatrixScene:_tl_scroll_up()
+    self.tl_row_scroll = math.max(0, (self.tl_row_scroll or 0) - 1)
+end
+
+function MatrixScene:_tl_scroll_down()
+    local pushers = self:_pusher_list()
+    local L = self:_timeline_layout()
+    if not L then return end
+    local max_scroll = math.max(0, #pushers - L.vis_rows)
+    self.tl_row_scroll = math.min(max_scroll, (self.tl_row_scroll or 0) + 1)
+end
+
 -- Left-click cycles a slot forward, right-click backward.
 function MatrixScene:_tl_cycle_slot(pusher_id, s, btn)
     local cmds = self.timeline[pusher_id] or {}
@@ -1644,6 +1690,9 @@ function MatrixScene:ui_elements()
         local can_left, can_right = self:_tl_can_scroll(L)
         out[#out + 1] = el("tl:scroll_left",  "<", "button", L.scroll_left,  can_left and idle)
         out[#out + 1] = el("tl:scroll_right", ">", "button", L.scroll_right, can_right and idle)
+        local pushers = self:_pusher_list()
+        out[#out + 1] = el("tl:scroll_up",   "^", "button", L.scroll_up,   L.row_first > 1 and idle)
+        out[#out + 1] = el("tl:scroll_down", "v", "button", L.scroll_down, L.row_last < #pushers and idle)
         out[#out + 1] = el("tl:dec", "-", "button", L.dec, idle)
         out[#out + 1] = el("tl:inc", "+", "button", L.inc, idle)
         for _, row in ipairs(L.rows) do
@@ -1687,8 +1736,10 @@ function MatrixScene:_timeline_element_click(e, btn)
     elseif btn == 1 then
         if e.id == "tl:dec" then self:_tl_dec(L)
         elseif e.id == "tl:inc" then self:_tl_inc()
-        elseif e.id == "tl:scroll_left" then self:_tl_scroll_left()
-        elseif e.id == "tl:scroll_right" then self:_tl_scroll_right(L) end
+        elseif e.id == "tl:scroll_left"  then self:_tl_scroll_left()
+        elseif e.id == "tl:scroll_right" then self:_tl_scroll_right(L)
+        elseif e.id == "tl:scroll_up"    then self:_tl_scroll_up()
+        elseif e.id == "tl:scroll_down"  then self:_tl_scroll_down() end
     end
 end
 

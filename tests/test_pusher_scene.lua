@@ -236,4 +236,68 @@ do
     print("PASS: timeout status")
 end
 
+-- Two pushers in the same direction: forces aggregate, matrix moves only one cell.
+-- Puzzle 1, 2×2 matrix at (2,5)–(3,6).
+-- A at (1,5) right + B at (1,6) right: both step into the matrix's left column.
+-- Net force = one right; matrix must end up at (3,5)–(4,6), not (4,5)–(5,6).
+do
+    local scene = new_scene()
+    add_pusher(scene, 1, 5, { [1]="right" })   -- A
+    add_pusher(scene, 1, 6, { [1]="right" })   -- B
+    scene:start_run()
+    scene:do_step()
+    assert(scene.sim.x == 3 and scene.sim.y == 5,
+        "two same-direction pushers move matrix one cell, got ("
+        .. scene.sim.x .. "," .. scene.sim.y .. ")")
+    print("PASS: same-direction pushers aggregate to one cell")
+end
+
+-- Two pushers in perpendicular directions: forces combine into a diagonal move.
+-- Puzzle 1, 2×2 matrix at (2,5)–(3,6).
+-- A at (1,5) right (steps into (2,5)) + B at (3,4) down (steps into (3,5)).
+-- Net force = (+1,+1); matrix must move diagonally to (3,6)–(4,7).
+-- A negate op at (4,6) (newly entered after the diagonal step) must fire.
+do
+    local scene = new_scene()
+    add_pusher(scene, 1, 5, { [1]="right" })   -- A
+    add_pusher(scene, 3, 4, { [1]="down"  })   -- B
+    scene:_place_tile_at(4, 6, { kind="op", op="negate" })
+    scene:start_run()
+    scene:do_step()
+    assert(scene.sim.x == 3 and scene.sim.y == 6,
+        "perpendicular pushers move matrix diagonally, got ("
+        .. scene.sim.x .. "," .. scene.sim.y .. ")")
+    assert(scene.current_matrix.values[1][1] == -1,
+        "negate at (4,6) fires after diagonal move")
+    print("PASS: perpendicular pushers combine into diagonal move")
+end
+
+-- Two pushers with opposing forces on the same axis → conflict → puzzle fail.
+-- Puzzle 1, 2×2 matrix at (2,5)–(3,6).
+-- A at (1,5) right + B at (4,5) left: both contact the matrix from opposite sides.
+-- Net force is undefined (conflict); the run must fail.
+do
+    local scene = new_scene()
+    add_pusher(scene, 1, 5, { [1]="right" })   -- pushes from left
+    add_pusher(scene, 4, 5, { [1]="left"  })   -- pushes from right
+    scene:start_run()
+    scene:do_step()
+    assert(scene.status == "fail",
+        "opposing pushers on same axis must fail the run, got " .. tostring(scene.status))
+    print("PASS: opposing pushers conflict fails run")
+end
+
+-- A pusher below the matrix going further down must not drag the matrix.
+-- Puzzle 1: 2×2 matrix at (2,5)–(3,6). Pusher at (2,7) [one below the bottom],
+-- going down — it is entirely outside and moving away. Matrix must stay put.
+do
+    local scene = new_scene()
+    add_pusher(scene, 2, 7, { [1]="down" })
+    scene:start_run()
+    scene:do_step()
+    assert(scene.sim.y == 5,
+        "pusher below matrix going down must not drag it, got y=" .. scene.sim.y)
+    print("PASS: pusher below matrix going down does not drag it")
+end
+
 print("ALL TESTS PASSED")

@@ -21,7 +21,7 @@ for w, world in ipairs(worlds) do
         -- Esc from a puzzle returns to level select on world 1.
         for _ = 1, w - 1 do add({ press = "right" }) end
         if n == 1 then
-            add({ assert_text = string.format("WORLD %d: %s", w, world.name:upper()) })
+            add({ assert_button = { id = string.format("world:%d", w), selected = true } })
         end
         add({ assert_button = { id = "puzzle:" .. p.index } })
         add({ click_button = { id = "puzzle:" .. p.index } })

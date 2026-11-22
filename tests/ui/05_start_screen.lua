@@ -14,7 +14,7 @@ return {
         steps = {
             { click_button = "Unlock All" },
             { press = "right" },
-            { assert_text = "WORLD 2: COMBOS" },
+            { assert_button = { id = "world:2", selected = true } },
         },
     },
 }

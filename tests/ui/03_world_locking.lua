@@ -6,8 +6,8 @@ return {
         steps = {
             { press = "return" },
             { press = "right" },
-            { assert_text = "WORLD 1: BASICS" },
-            { assert_no_text = "WORLD 2" },
+            { assert_button = { id = "world:1", selected = true } },
+            { assert_button = { id = "world:2", selected = false } },
         },
     },
     {
@@ -16,7 +16,7 @@ return {
         steps = {
             { press = "return" },
             { press = "right" },
-            { assert_text = "WORLD 2: COMBOS" },
+            { assert_button = { id = "world:2", selected = true } },
             { click_button = { id = "puzzle:6" } },
             { assert_text = "Z-Bend" },
         },

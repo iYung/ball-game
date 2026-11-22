@@ -143,6 +143,34 @@ do
     print("PASS: gap blocking")
 end
 
+-- diagonal corner cells must be gap-free: matrix at (2,2) 2×2, pushing (+1,+1).
+-- top-right corner = (4,2); bottom-left corner = (2,4).
+do
+    -- gap at top-right corner blocks the diagonal
+    local g1 = { [2] = { [4] = true } }
+    local d1 = st({ x=2, y=2, rows=2, cols=2,
+        pushers = { P(1,2,"right"), P(3,1,"down") }, gaps = g1 })
+    local moved_d1, blocked_d1 = Sim.advance(d1)
+    assert(not moved_d1 and d1.x == 2, "diagonal blocked by top-right corner gap: matrix stayed")
+    assert(blocked_d1, "diagonal blocked by top-right corner gap: blocked=true")
+
+    -- gap at bottom-left corner also blocks
+    local g2 = { [4] = { [2] = true } }
+    local d2 = st({ x=2, y=2, rows=2, cols=2,
+        pushers = { P(1,2,"right"), P(3,1,"down") }, gaps = g2 })
+    local moved_d2, blocked_d2 = Sim.advance(d2)
+    assert(not moved_d2 and d2.x == 2, "diagonal blocked by bottom-left corner gap: matrix stayed")
+    assert(blocked_d2, "diagonal blocked by bottom-left corner gap: blocked=true")
+
+    -- no corner gaps: diagonal move succeeds
+    local d3 = st({ x=2, y=2, rows=2, cols=2,
+        pushers = { P(1,2,"right"), P(3,1,"down") } })
+    local moved_d3, blocked_d3 = Sim.advance(d3)
+    assert(moved_d3 and d3.x == 3 and d3.y == 3, "diagonal with clear corners succeeds")
+    assert(not blocked_d3, "diagonal with clear corners: not blocked")
+    print("PASS: diagonal corner gap blocking")
+end
+
 -- nxm matrix: transpose swaps dimensions, Sim.blocked uses actual rows/cols
 do
     -- corridor at x=5,6: 2-row opening at y=5,6 (matches puzzle 11's gap=2 layout)

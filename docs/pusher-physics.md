@@ -73,16 +73,21 @@ Same rule applies to up vs down.
 
 ---
 
-## Open question — diagonal corner cells
+## Diagonal corner cells
 
-For a diagonal move `(+1,+1)` the matrix jumps from start to destination in one step. The two "corner" cells it clips through — `(start.x+dx, start.y)` and `(start.x, start.y+dy)` — are **not** currently validated.
+For a diagonal move `(+1,+1)` the matrix jumps from start to destination in one step. The two "corner" cells of the bounding box — outside both the start and end footprint — **must be clear** or the move is blocked.
+
+For a matrix at `(x, y)` with `cols × rows`, moving `(+1,+1)`:
+- Top-right corner: `(x + cols, y)`
+- Bottom-left corner: `(x, y + rows)`
 
 ```
-Start          Destination    Corner cells (not checked)
+Start             Destination    Corner cells (must be clear)
 
-P→ M  M            P  P             P  P
-   M  M    →          M  M             ?  M  M
-   P↓                 M  M          ?     M  M
+      P↓                                    
+P→ M  M    →   P  P            P  P  ?
+   M  M               M  M        M  M
+                       M  M     ?  M  M
 ```
 
-A gap or wall at a corner cell does not currently block the move. Decision needed: should diagonal moves require the corner cells to be clear?
+A gap, wall, or out-of-bounds cell at either corner → **blocked → puzzle fails**. This applies to all four diagonal directions.

@@ -117,6 +117,21 @@ function Sim.advance(st)
         local nx, ny = st.x + net_dx, st.y + net_dy
         local ok = not Sim.blocked(nx, ny, st.rows, st.cols, st.w, st.h, st.gaps)
 
+        -- Diagonal moves: the two corner cells of the bounding box (outside both
+        -- start and end footprints) must also be within bounds and gap-free.
+        if ok and net_dx ~= 0 and net_dy ~= 0 then
+            local cx1 = st.x + (net_dx > 0 and st.cols or -1)
+            local cy1 = st.y + (net_dy > 0 and 0 or st.rows - 1)
+            local cx2 = st.x + (net_dx > 0 and 0 or st.cols - 1)
+            local cy2 = st.y + (net_dy > 0 and st.rows or -1)
+            if cx1 < 1 or cx1 > st.w or cy1 < 1 or cy1 > st.h
+               or cx2 < 1 or cx2 > st.w or cy2 < 1 or cy2 > st.h
+               or (st.gaps and st.gaps[cy1] and st.gaps[cy1][cx1])
+               or (st.gaps and st.gaps[cy2] and st.gaps[cy2][cx2]) then
+                ok = false
+            end
+        end
+
         -- New matrix position must not overlap any pusher that is not part of this push.
         if ok then
             for _, q in ipairs(st.pushers) do

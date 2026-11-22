@@ -5,7 +5,7 @@ return {
     given = { solved = {} },
     steps = {
         { press = "return" },
-        { assert_text = "WORLD 1: BASICS" },
+        { assert_button = { id = "world:1", selected = true } },
         { click_button = "Identity Check" },
         { assert_text = "Identity Check" },
         { assert_matrix = { { 1, 0 }, { 0, 1 } } },

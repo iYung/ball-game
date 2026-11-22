@@ -131,9 +131,9 @@ return {
         given = { solved = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16} },
         steps = {
             { press = "return" },
-            { click_button = { id = "world:next" } },  -- world 1 → world 2
-            { click_button = { id = "world:next" } },  -- world 2 → world 3
-            { click_button = { id = "world:next" } },  -- world 3 → world 4
+            { click_button = { id = "world:2" } },  -- world 1 → world 2
+            { click_button = { id = "world:3" } },  -- switch to world 3
+            { click_button = { id = "world:4" } },  -- switch to world 4
             { click_button = { id = "puzzle:18" } },
             { assert_text = "Column Work" },
 

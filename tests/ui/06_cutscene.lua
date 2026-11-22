@@ -40,4 +40,19 @@ return {
             { assert_text = "Ordered Ops" },            -- unique to world 2
         },
     },
+    {
+        -- Regression: pressing U to unlock a world also resets the cutscene-seen
+        -- flag for the newly-accessible world.  Without this, testers who had
+        -- previously seen the cutscene would press U and get no cutscene.
+        name  = "pressing u to unlock world 1 resets world 2 cutscene",
+        given = { solved = {} },                        -- no cutscenes_unseen → all pre-marked seen
+        steps = {
+            { press = "return" },                       -- title → level select (world 1)
+            { press = "u" },                            -- unlock world 1 → clears world 2 seen flag
+            { click_button = { id = "world:2" } },     -- tab now enabled; cutscene should fire
+            { assert_text = "SYSTEM" },
+            { press = "escape" },
+            { assert_text = "Ordered Ops" },
+        },
+    },
 }

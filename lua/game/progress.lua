@@ -93,6 +93,9 @@ function Progress.unlock_world(w)
     for _, puzzle in ipairs(world.puzzles) do
         _solved[puzzle.index] = true
     end
+    -- Clear the first-visit cutscene for the world that just became accessible,
+    -- so a tester pressing U can still see the full first-visit flow.
+    _seen_cutscene[w + 1] = nil
     _persist()
 end
 

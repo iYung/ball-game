@@ -19,4 +19,4 @@ jobs:
           sudo apt-get install -y love
 
       - name: Run tests
-        run: love . --headless --coverage
+        run: love . --headless

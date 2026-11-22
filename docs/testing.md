@@ -57,7 +57,7 @@ love . --headless --coverage                           # all tests + per-file co
 
 - Any path that starts with `tests/ui/` runs as a spec file. Any other path runs as a unit test.
 - You cannot run a single spec out of a multi-spec file by name. Put the spec in its own file temporarily, or comment out its siblings while you iterate (do not commit that).
-- The exit code is 0 when everything passes and 1 otherwise. CI (`.github/workflows/ci.yml`) runs the bare `love . --headless`.
+- The exit code is 0 when everything passes and 1 otherwise. CI (`.github/workflows/ci.yml`) runs `love . --headless --coverage`, so a drop below 100 % line coverage of `lua/game/` blocks the build.
 - On a machine without a display you may see `error: XDG_RUNTIME_DIR is invalid...`. It is harmless.
 - `love . --visual <unit test>` is unchanged and applies to unit tests only.
 
@@ -81,7 +81,7 @@ FAIL  tests/ui/99_broken.lua — tests/ui/99_broken.lua:3: '}' expected near 'st
 
 `lua/core/` is excluded intentionally — its files are mostly rendering infrastructure (`shader.lua`, `sprite.lua`, `spriteset.lua`, `fonts.lua`) stubbed out in headless mode and cannot be meaningfully measured.
 
-The tool uses `debug.sethook` from the standard Lua `debug` library — no third-party tools required. CI does not run with `--coverage`; it is a local developer tool.
+The tool uses `debug.sethook` from the standard Lua `debug` library — no third-party tools required. CI enforces 100 % line coverage: `love . --headless --coverage` exits 1 if any file in `lua/game/` drops below 100 %, blocking the build.
 
 ---
 

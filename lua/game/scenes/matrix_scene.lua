@@ -6,7 +6,6 @@ local Palette      = require("lua/game/palette")
 local HUD          = require("lua/game/hud")
 local PuzzleLoader = require("lua/game/puzzle_loader")
 local UI           = require("lua/core/ui")
-local SettingsMenu = require("lua/game/scenes/settings_menu")
 
 local function cell_key(x, y) return x .. "," .. y end
 
@@ -188,12 +187,11 @@ local function lerp(a, b, t) return a + (b - a) * t end
 
 -- ── Constructor ────────────────────────────────────────────────────────────
 
-function MatrixScene.new(puzzle_index, scene_manager, settings_state)
+function MatrixScene.new(puzzle_index, scene_manager)
     local base = Scene.new(1280, 720)
     local self  = setmetatable(base, MatrixScene)
     self._start_puzzle    = puzzle_index or 1
     self._scene_manager   = scene_manager
-    self._settings_state  = settings_state
     self._win_timer       = nil
     return self
 end
@@ -201,10 +199,6 @@ end
 -- ── Lifecycle ──────────────────────────────────────────────────────────────
 
 function MatrixScene:on_enter()
-    self._settings_menu = SettingsMenu.new(self._settings_state, self._scene_manager, function()
-        local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-        self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
-    end)
     self.palette      = Palette.new()
     self.hud          = HUD.new(HUD_X, 0, 460, PALETTE_Y)
     self.font_cell    = love.graphics.newFont(14)
@@ -222,13 +216,6 @@ function MatrixScene:on_enter()
     self._drag_ghost  = nil
 
     self:load_puzzle(self._start_puzzle)
-
-    local Sound = require("lua/core/sound")
-    Sound.fade_music("menu", 0, 2)
-    local _bgs = {"bg1","bg2","bg3","bg4"}
-    self._bg_track = _bgs[math.random(#_bgs)]
-    self._prev_bg_track = self._bg_track
-    Sound.fade_music(self._bg_track, 1, 2)
 end
 
 function MatrixScene:on_exit()
@@ -265,7 +252,6 @@ function MatrixScene:load_puzzle(n)
     self.timeline       = {}
     self.timeline_n     = TL.DEFAULT_N
     self.timeline_scroll  = 0
-    self.tl_row_scroll    = 0
     self._palette_scroll  = 0
     self._win_timer      = nil
     self.grid            = Grid.new(p.grid_w, p.grid_h)
@@ -450,7 +436,6 @@ function MatrixScene:do_reset()
     self.sim            = nil
     self.cur_slot        = nil
     self.timeline_scroll = 0
-    self.tl_row_scroll   = 0
     self.occupied_ops   = {}
     self._last_fp       = {}
     self.anim_t         = 1
@@ -710,21 +695,6 @@ end
 -- ── Update ─────────────────────────────────────────────────────────────────
 
 function MatrixScene:update(dt)
-    local Sound = require("lua/core/sound")
-    if self._bg_track and not Sound.is_music_playing(self._bg_track) then
-        local _bgs = {"bg1","bg2","bg3","bg4"}
-        local next_track
-        repeat
-            next_track = _bgs[math.random(#_bgs)]
-        until #_bgs == 1 or next_track ~= self._prev_bg_track
-        self._prev_bg_track = self._bg_track
-        self._bg_track = next_track
-        Sound.fade_music(self._bg_track, 1, 1)
-    end
-    if self._settings_menu and self._settings_menu.is_open then
-        self._settings_menu:update(dt)
-        return
-    end
     if self.anim_t < 1 then
         self.anim_t = math.min(1, self.anim_t + dt / self.run_speed)
         if self.anim_t >= 1 and self.running then
@@ -752,7 +722,7 @@ function MatrixScene:update(dt)
                 puzzle      = self.puzzle,
             }
             self._scene_manager:switch(
-                SolutionRecapScene.new(stats, board, self._run_frames or {}, self.run_speed, self._scene_manager, self._settings_state)
+                SolutionRecapScene.new(stats, board, self._run_frames or {}, self.run_speed, self._scene_manager)
             )
         end
     end
@@ -1382,7 +1352,7 @@ function MatrixScene:_cmd_activate(id)
     elseif id == "menu" then
         if self._scene_manager then
             local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
+            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
         end
     end
 end
@@ -1502,34 +1472,18 @@ function MatrixScene:_timeline_layout()
     local scroll       = self.timeline_scroll or 0
     local first        = scroll + 1
     local last         = math.min(first + vis - 1, self.timeline_n)
-
-    -- Vertical windowing: how many pusher rows fit, reserving 12px at the bottom for scroll_down.
-    local vis_rows      = math.max(1, math.floor((PALETTE_Y - top - 32) / TL.ROW_H))
-    local pushers       = self:_pusher_list()
-    local max_row_scroll = math.max(0, #pushers - vis_rows)
-    local row_scroll    = math.max(0, math.min(self.tl_row_scroll or 0, max_row_scroll))
-    self.tl_row_scroll  = row_scroll
-    local row_first     = row_scroll + 1
-    local row_last      = math.min(row_first + vis_rows - 1, #pushers)
-
     local L = {
         x0 = x0, top = top, rows = {},
         vis = vis, first = first, last = last,
         slot_x = slot_x, slot_w = slot_w_total,
-        vis_rows = vis_rows, row_first = row_first, row_last = row_last,
         scroll_left  = { x = x0 - 14, y = top, w = 12, h = 16 },
         scroll_right = { x = slot_x + slot_w_total + 2, y = top, w = 12, h = 16 },
-        -- Placed in the label column (x0..x0+LABEL_W-4) so they never overlap slots.
-        scroll_up    = { x = x0, y = top + 4, w = TL.LABEL_W - 4, h = 12 },
-        scroll_down  = { x = x0, y = top + 20 + vis_rows * TL.ROW_H, w = TL.LABEL_W - 4, h = 12 },
         dec = { x=len_x,      y=top, w=18, h=16 },
         val = { x=len_x + 18, y=top, w=42, h=16 },
         inc = { x=len_x + 60, y=top, w=18, h=16 },
     }
-    for i = row_first, row_last do
-        local p   = pushers[i]
-        local ri  = i - row_first  -- 0-based visual row index
-        local ry  = top + 20 + ri * TL.ROW_H
+    for i, p in ipairs(self:_pusher_list()) do
+        local ry  = top + 20 + (i - 1) * TL.ROW_H
         local row = { id=p.id, y=ry, slots={} }
         for s = first, last do
             local col = s - first
@@ -1539,7 +1493,7 @@ function MatrixScene:_timeline_layout()
                 s = s,
             }
         end
-        L.rows[#L.rows + 1] = row
+        L.rows[i] = row
     end
     return L
 end
@@ -1547,12 +1501,6 @@ end
 function MatrixScene:draw_timeline()
     local L = self:_timeline_layout()
     if not L then return end
-
-    -- Distinct background for the timeline zone
-    love.graphics.setColor(0.05, 0.10, 0.14, 1)
-    love.graphics.rectangle("fill", HUD_X, L.top, 460, PALETTE_Y - L.top)
-    love.graphics.setColor(0.2, 0.4, 0.5, 1)
-    love.graphics.rectangle("fill", HUD_X, L.top, 460, 1)
 
     love.graphics.setFont(self.font_ui)
     love.graphics.setColor(0.6, 0.75, 1.0, 1)
@@ -1568,7 +1516,7 @@ function MatrixScene:draw_timeline()
     love.graphics.setColor(0.85, 0.85, 0.95, 1)
     love.graphics.printf("len " .. self.timeline_n, L.val.x, L.val.y + 2, L.val.w, "center")
 
-    -- Horizontal scroll buttons
+    -- Scroll buttons
     local can_left, can_right = self:_tl_can_scroll(L)
     for _, b in ipairs({ { L.scroll_left, "<", can_left }, { L.scroll_right, ">", can_right } }) do
         love.graphics.setColor(b[3] and 0.25 or 0.15, b[3] and 0.25 or 0.15, b[3] and 0.4 or 0.25, 1)
@@ -1577,24 +1525,14 @@ function MatrixScene:draw_timeline()
         love.graphics.printf(b[2], b[1].x, b[1].y + 2, b[1].w, "center")
     end
 
-    -- Vertical scroll buttons
-    local can_up   = L.row_first > 1
-    local can_down = L.row_last < #self:_pusher_list()
-    for _, b in ipairs({ { L.scroll_up, "^", can_up }, { L.scroll_down, "v", can_down } }) do
-        love.graphics.setColor(b[3] and 0.25 or 0.15, b[3] and 0.25 or 0.15, b[3] and 0.4 or 0.25, 1)
-        love.graphics.rectangle("fill", b[1].x, b[1].y, b[1].w, b[1].h, 2, 2)
-        love.graphics.setColor(b[3] and 0.85 or 0.4, b[3] and 0.85 or 0.4, b[3] and 0.95 or 0.5, 1)
-        love.graphics.printf(b[2], b[1].x, b[1].y + 1, b[1].w, "center")
-    end
-
     if #L.rows == 0 then
         love.graphics.setColor(0.45, 0.45, 0.6, 1)
         love.graphics.print("Place a pusher [P], then program it here", L.x0, L.top + 24)
         return
     end
 
-    -- Clip slot drawing to the slot area (horizontal and vertical)
-    love.graphics.setScissor(L.slot_x, L.top + 20, L.slot_w, L.vis_rows * TL.ROW_H)
+    -- Clip slot drawing to the slot area
+    love.graphics.setScissor(L.slot_x, L.top, L.slot_w, 720 - L.top)
     for _, row in ipairs(L.rows) do
         love.graphics.setColor(0.80, 0.60, 1.0, 1)
         love.graphics.printf(string.char(64 + row.id), L.x0, row.y + 1, TL.LABEL_W - 6, "right")
@@ -1638,18 +1576,6 @@ function MatrixScene:_tl_scroll_right(L)
     self.timeline_scroll = math.min(max_scroll, (self.timeline_scroll or 0) + 1)
 end
 
-function MatrixScene:_tl_scroll_up()
-    self.tl_row_scroll = math.max(0, (self.tl_row_scroll or 0) - 1)
-end
-
-function MatrixScene:_tl_scroll_down()
-    local pushers = self:_pusher_list()
-    local L = self:_timeline_layout()
-    if not L then return end
-    local max_scroll = math.max(0, #pushers - L.vis_rows)
-    self.tl_row_scroll = math.min(max_scroll, (self.tl_row_scroll or 0) + 1)
-end
-
 -- Left-click cycles a slot forward, right-click backward.
 function MatrixScene:_tl_cycle_slot(pusher_id, s, btn)
     local cmds = self.timeline[pusher_id] or {}
@@ -1666,9 +1592,6 @@ local function el(id, label, kind, r, enabled, selected)
 end
 
 function MatrixScene:ui_elements()
-    if self._settings_menu and self._settings_menu.is_open then
-        return self._settings_menu:ui_elements()
-    end
     local out = {}
     for _, r in ipairs(self._palette_rects or {}) do
         local enabled = r.enabled ~= false
@@ -1690,9 +1613,6 @@ function MatrixScene:ui_elements()
         local can_left, can_right = self:_tl_can_scroll(L)
         out[#out + 1] = el("tl:scroll_left",  "<", "button", L.scroll_left,  can_left and idle)
         out[#out + 1] = el("tl:scroll_right", ">", "button", L.scroll_right, can_right and idle)
-        local pushers = self:_pusher_list()
-        out[#out + 1] = el("tl:scroll_up",   "^", "button", L.scroll_up,   L.row_first > 1 and idle)
-        out[#out + 1] = el("tl:scroll_down", "v", "button", L.scroll_down, L.row_last < #pushers and idle)
         out[#out + 1] = el("tl:dec", "-", "button", L.dec, idle)
         out[#out + 1] = el("tl:inc", "+", "button", L.inc, idle)
         for _, row in ipairs(L.rows) do
@@ -1736,10 +1656,8 @@ function MatrixScene:_timeline_element_click(e, btn)
     elseif btn == 1 then
         if e.id == "tl:dec" then self:_tl_dec(L)
         elseif e.id == "tl:inc" then self:_tl_inc()
-        elseif e.id == "tl:scroll_left"  then self:_tl_scroll_left()
-        elseif e.id == "tl:scroll_right" then self:_tl_scroll_right(L)
-        elseif e.id == "tl:scroll_up"    then self:_tl_scroll_up()
-        elseif e.id == "tl:scroll_down"  then self:_tl_scroll_down() end
+        elseif e.id == "tl:scroll_left" then self:_tl_scroll_left()
+        elseif e.id == "tl:scroll_right" then self:_tl_scroll_right(L) end
     end
 end
 
@@ -1768,9 +1686,6 @@ function MatrixScene:draw()
     love.graphics.setColor(1, 1, 1, 1)
     self:draw_timeline()
     self:_draw_status_banner()
-    if self._settings_menu then
-        self._settings_menu:draw()
-    end
 end
 
 -- ── Input ──────────────────────────────────────────────────────────────────
@@ -1936,10 +1851,6 @@ function MatrixScene:mouse_moved(mx, my)
 end
 
 function MatrixScene:mouse_pressed(mx, my, btn)
-    if self._settings_menu and self._settings_menu.is_open then
-        self._settings_menu:mouse_pressed(mx, my)
-        return
-    end
     -- All hit-testing goes through the UI element registry.
     local e = UI.element_at(self:ui_elements(), mx, my)
     if e == nil then return end
@@ -2241,16 +2152,14 @@ function MatrixScene:mouse_released(mx, my, btn)
 end
 
 function MatrixScene:key_pressed(key)
-    if self._settings_menu and self._settings_menu.is_open then
-        if self._settings_menu:key_pressed(key) then return end
-    end
     local KEY_CMD = { r = "run", backspace = "reset" }
     local cmd = KEY_CMD[key]
     if cmd then
         if self:_cmd_enabled(cmd) then self:_cmd_activate(cmd) end
     elseif key == "escape" then
-        if self._settings_menu then
-            self._settings_menu:open()
+        if self._scene_manager then
+            local LevelSelectScene = require("lua/game/scenes/level_select_scene")
+            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
         end
     end
 end

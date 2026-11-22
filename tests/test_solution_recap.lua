@@ -218,4 +218,122 @@ do
     print("PASS: SolutionRecapScene draw (op/gap/source/sink/pusher tiles + loop-back)")
 end
 
+-- SolutionRecapScene key_pressed: return, r, escape.
+do
+    local SolutionRecapScene = require("lua/game/scenes/solution_recap_scene")
+    local Matrix = require("lua/game/matrix_math")
+
+    local switched_to = {}
+    local mock_sm = { switch = function(_, s) switched_to[#switched_to + 1] = s end }
+    local stats = { ticks = 1, pieces = 1, puzzle_name = "K", puzzle_index = 1 }
+    local frames = { { from_x=0, from_y=0, to_x=0, to_y=0, matrix=Matrix.new(1,1,{{1}}) } }
+
+    -- return → _next
+    local recap = SolutionRecapScene.new(stats, {}, frames, 0.1, mock_sm)
+    recap:on_enter()
+    recap:key_pressed("return")
+    assert(#switched_to == 1, "return should switch scene, got " .. #switched_to)
+    print("PASS: SolutionRecapScene key return")
+
+    -- r → _replay (resets animation, does NOT switch scene)
+    switched_to = {}
+    local recap2 = SolutionRecapScene.new(stats, {}, frames, 0.1, mock_sm)
+    recap2:on_enter()
+    recap2:update(0.5)  -- advance so _frame_idx or _anim_t changes
+    recap2:key_pressed("r")
+    assert(#switched_to == 0, "r must not switch scene (it replays in-place)")
+    assert(recap2._frame_idx == 1, "r resets frame to 1, got " .. tostring(recap2._frame_idx))
+    print("PASS: SolutionRecapScene key r")
+
+    -- escape → _menu (goes to level select)
+    switched_to = {}
+    local recap3 = SolutionRecapScene.new(stats, {}, frames, 0.1, mock_sm)
+    recap3:on_enter()
+    recap3:key_pressed("escape")
+    assert(#switched_to == 1, "escape should switch scene")
+    print("PASS: SolutionRecapScene key escape")
+end
+
+-- SolutionRecapScene mouse_pressed btn != 1 returns early (no action fired).
+do
+    local SolutionRecapScene = require("lua/game/scenes/solution_recap_scene")
+    local Matrix = require("lua/game/matrix_math")
+
+    local switched = false
+    local mock_sm = { switch = function() switched = true end }
+    local stats = { ticks = 1, pieces = 1, puzzle_name = "M", puzzle_index = 1 }
+    local frames = { { from_x=0, from_y=0, to_x=0, to_y=0, matrix=Matrix.new(1,1,{{1}}) } }
+
+    local recap = SolutionRecapScene.new(stats, {}, frames, 0.1, mock_sm)
+    recap:on_enter()
+    -- Right-click anywhere; must not switch scene.
+    recap:mouse_pressed(640, 360, 2)
+    assert(not switched, "right-click must not trigger any action")
+    print("PASS: SolutionRecapScene mouse_pressed btn!=1 is a no-op")
+end
+
+-- SolutionRecapScene text_input: empty handler must not error.
+do
+    local SolutionRecapScene = require("lua/game/scenes/solution_recap_scene")
+    local Matrix = require("lua/game/matrix_math")
+
+    local stats = { ticks = 1, pieces = 1, puzzle_name = "T", puzzle_index = 1 }
+    local frames = { { from_x=0, from_y=0, to_x=0, to_y=0, matrix=Matrix.new(1,1,{{1}}) } }
+    local recap = SolutionRecapScene.new(stats, {}, frames, 0.1, nil)
+    recap:on_enter()
+    local ok, err = pcall(function() recap:text_input("x") end)
+    assert(ok, "text_input must not error: " .. tostring(err))
+    print("PASS: SolutionRecapScene text_input is a no-op")
+end
+
+-- SolutionRecapScene _draw_tile: pusher branch (lines 173-182).
+-- _draw_grid() explicitly skips pushers (kind ~= "pusher"), so the only way to
+-- cover this branch is a direct call.
+do
+    local SolutionRecapScene = require("lua/game/scenes/solution_recap_scene")
+    local Matrix = require("lua/game/matrix_math")
+
+    local stats = { ticks = 1, pieces = 0, puzzle_name = "P", puzzle_index = 1 }
+    local frames = { { from_x=0, from_y=0, to_x=0, to_y=0, matrix=Matrix.new(1,1,{{1}}) } }
+    local recap = SolutionRecapScene.new(stats, {}, frames, 0.1, nil)
+    recap:on_enter()
+
+    local ok, err = pcall(function()
+        recap:_draw_tile({ kind = "pusher", id = 1 }, 1, 1)
+    end)
+    assert(ok, "_draw_tile pusher branch must not error: " .. tostring(err))
+    print("PASS: SolutionRecapScene _draw_tile pusher branch (lines 173-182)")
+end
+
+-- SolutionRecapScene draw with float matrix value: exercises fmt_num float branch (hud.lua:20).
+do
+    local SolutionRecapScene = require("lua/game/scenes/solution_recap_scene")
+    local Grid   = require("lua/game/grid")
+    local Matrix = require("lua/game/matrix_math")
+
+    local grid = Grid.new(2, 2)
+    grid.cells[1][1] = { kind = "source", width = 1, height = 1 }
+    grid.cells[1][2] = { kind = "sink" }
+
+    local board = { grid = grid }
+
+    -- Use a float value (0.5) so fmt_num takes the string.format("%.2f", v) branch.
+    local mat = Matrix.new(1, 1, {{0.5}})
+    local frames = {
+        {
+            from_x = 50, from_y = 50, to_x = 50, to_y = 50,
+            matrix = mat,
+            pushers_from = {},
+            pushers_to   = {},
+        },
+    }
+
+    local stats = { ticks = 3, pieces = 0, puzzle_name = "Float Test", puzzle_index = 1 }
+    local recap = SolutionRecapScene.new(stats, board, frames, 0.1, nil)
+    recap:on_enter()
+    recap:draw()
+
+    print("PASS: SolutionRecapScene draw with float matrix value (fmt_num float branch)")
+end
+
 print("ALL TESTS PASSED")

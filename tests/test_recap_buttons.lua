@@ -94,5 +94,76 @@ do
     print("PASS: recap click outside buttons does nothing")
 end
 
+-- key_pressed "return" switches to the next puzzle's MatrixScene.
+do
+    local ctx, scene = new_recap()
+    scene:key_pressed("return")
+    local cur = ctx.sm.current
+    assert(cur ~= scene, "key return: scene switched")
+    assert(getmetatable(cur) == MatrixScene, "key return: switched to MatrixScene")
+    local expected = PUZZLE_INDEX % PuzzleLoader.count() + 1
+    assert(cur.puzzle_index == expected,
+        "key return: next puzzle index " .. expected .. ", got " .. tostring(cur.puzzle_index))
+    print("PASS: key_pressed return -> next puzzle")
+end
+
+-- key_pressed "r" resets the animation and stays on the recap scene.
+do
+    local ctx, scene = new_recap()
+    scene:update(0.15)
+    scene:update(0.15)
+    assert(scene._frame_idx > 1, "precondition: animation advanced before replay key")
+    scene:key_pressed("r")
+    assert(ctx.sm.current == scene, "key r: stays on recap scene")
+    assert(scene._frame_idx == 1, "key r: resets _frame_idx to 1, got " .. tostring(scene._frame_idx))
+    print("PASS: key_pressed r -> replay")
+end
+
+-- key_pressed "escape" switches to LevelSelectScene.
+do
+    local ctx, scene = new_recap()
+    scene:key_pressed("escape")
+    assert(getmetatable(ctx.sm.current) == LevelSelectScene, "key escape: switched to LevelSelectScene")
+    print("PASS: key_pressed escape -> menu")
+end
+
+-- mouse_pressed with button != 1 does not switch scenes (early return).
+do
+    local ctx, scene = new_recap()
+    scene:mouse_pressed(400, 400, 2)
+    assert(ctx.sm.current == scene, "right-click does not switch scenes")
+    print("PASS: mouse_pressed right-click early return")
+end
+
+-- text_input does nothing and raises no error.
+do
+    local _, scene = new_recap()
+    scene:text_input("x")
+    print("PASS: text_input no error")
+end
+
+-- draw() with a float matrix value hits the float branch in _draw_matrix().
+do
+    local mat_float = Matrix.new(1, 1, {{0.5}})
+    local frames_float = {
+        { from_x = 0, from_y = 0, to_x = 0, to_y = 0, matrix = mat_float }
+    }
+    local stats = { ticks = 10, pieces = 2, puzzle_name = "Test", puzzle_index = PUZZLE_INDEX }
+    local mock_grid = {
+        h = 1, w = 1,
+        cells = { { false } },
+        is_ref = function() return false end,
+        get    = function() return nil end,
+    }
+    local board = { grid = mock_grid }
+    local ctx = runner.setup(function(_, sm)
+        return SolutionRecapScene.new(stats, board, frames_float, 0.1, sm)
+    end)
+    local scene = ctx.sm.current
+    local ok, err = pcall(function() scene:draw() end)
+    assert(ok, "draw() with float matrix raised error: " .. tostring(err))
+    print("PASS: draw() float matrix branch no error")
+end
+
 Progress.reset()
 print("ALL TESTS PASSED")

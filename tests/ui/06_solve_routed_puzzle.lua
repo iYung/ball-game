@@ -15,7 +15,7 @@ return {
     steps = {
         -- Navigate to puzzle 3 from title screen.
         { press = "return" },
-        { assert_button = { id = "world:1", selected = true } },
+        { assert_text = "WORLD 1: BASICS" },
         { click_button = "Sharp Left" },
         { assert_text = "Sharp Left" },
 

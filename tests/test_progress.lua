@@ -103,4 +103,180 @@ Progress.reset()
 assert(not Progress.is_cutscene_seen(2), "world 2 cutscene cleared by reset")
 print("PASS: reset clears cutscene seen state")
 
+-- ── _load() coverage ─────────────────────────────────────────────────────────
+
+-- _load() new format: {solved={...}, cutscenes={...}}
+-- Strategy: save the original cached module, replace with a fresh load for testing,
+-- then restore the original so other modules' cached references remain valid.
+do
+    local orig_read    = love.filesystem.read
+    local orig_getInfo = love.filesystem.getInfo
+    local orig_module  = package.loaded["lua/game/progress"]
+
+    -- Simulate a save file in new format.
+    love.filesystem.read    = function() return "return {solved={3,4},cutscenes={2}}\n" end
+    love.filesystem.getInfo = function(path)
+        if path == "progress.lua" then return { type = "file", size = 0 } end
+        return orig_getInfo(path)
+    end
+
+    -- Temporarily replace with a fresh load so _load() runs with our stubs.
+    package.loaded["lua/game/progress"] = nil
+    local P2 = require("lua/game/progress")
+
+    assert(P2.is_solved(3),          "_load new fmt: puzzle 3 solved")
+    assert(P2.is_solved(4),          "_load new fmt: puzzle 4 solved")
+    assert(not P2.is_solved(1),      "_load new fmt: puzzle 1 not solved")
+    assert(P2.is_cutscene_seen(2),   "_load new fmt: cutscene 2 seen")
+    assert(not P2.is_cutscene_seen(1), "_load new fmt: cutscene 1 not seen")
+
+    love.filesystem.read    = orig_read
+    love.filesystem.getInfo = orig_getInfo
+    -- Restore original module so other modules' cached references stay valid.
+    package.loaded["lua/game/progress"] = orig_module
+    orig_module.reset()
+    print("PASS: _load() new format")
+end
+
+-- _load() old format: plain array {1,2,...}
+do
+    local orig_read    = love.filesystem.read
+    local orig_getInfo = love.filesystem.getInfo
+    local orig_module  = package.loaded["lua/game/progress"]
+
+    love.filesystem.read    = function() return "return {5,6}\n" end
+    love.filesystem.getInfo = function(path)
+        if path == "progress.lua" then return { type = "file", size = 0 } end
+        return orig_getInfo(path)
+    end
+
+    package.loaded["lua/game/progress"] = nil
+    local P2 = require("lua/game/progress")
+
+    assert(P2.is_solved(5),          "_load old fmt: puzzle 5 solved")
+    assert(P2.is_solved(6),          "_load old fmt: puzzle 6 solved")
+    assert(not P2.is_solved(1),      "_load old fmt: puzzle 1 not solved")
+    assert(not P2.is_cutscene_seen(1), "_load old fmt: no cutscene data")
+
+    love.filesystem.read    = orig_read
+    love.filesystem.getInfo = orig_getInfo
+    package.loaded["lua/game/progress"] = orig_module
+    orig_module.reset()
+    print("PASS: _load() old format")
+end
+
+-- _persist() error branch: write failure is silently ignored.
+do
+    local orig_write = love.filesystem.write
+    love.filesystem.write = function() error("disk full") end
+
+    -- Should not raise.
+    local ok = pcall(function() Progress.mark_solved(99) end)
+    assert(ok, "_persist() write error must not propagate")
+
+    love.filesystem.write = orig_write
+    Progress.reset()
+    print("PASS: _persist() silently ignores write failure")
+end
+
 print("ALL PROGRESS TESTS PASSED")
+
+-- ── _load() branch coverage ───────────────────────────────────────────────────
+-- These tests re-require the module with stubbed filesystem to exercise the
+-- _load() body (lines 42–61) which is unreachable in normal headless runs
+-- because the save file does not exist on disk.
+
+do
+    local orig_getInfo = love.filesystem.getInfo
+    local orig_read    = love.filesystem.read
+
+    -- Pretend the save file exists and contains new-format data.
+    love.filesystem.getInfo = function(path)
+        if path == "progress.lua" then return { type = "file" } end
+        return orig_getInfo(path)
+    end
+    love.filesystem.read = function(path)
+        if path == "progress.lua" then
+            return "return {solved={1,3},cutscenes={2}}\n"
+        end
+        return orig_read(path)
+    end
+
+    -- Force a fresh require so _load() runs with our stubs.
+    package.loaded["lua/game/progress"] = nil
+    local P = require("lua/game/progress")
+
+    assert(P.is_solved(1),         "_load new-format: puzzle 1 loaded")
+    assert(not P.is_solved(2),     "_load new-format: puzzle 2 not in save")
+    assert(P.is_solved(3),         "_load new-format: puzzle 3 loaded")
+    assert(P.is_cutscene_seen(2),  "_load new-format: world 2 cutscene loaded")
+    assert(not P.is_cutscene_seen(1), "_load new-format: world 1 cutscene not in save")
+    print("PASS: _load() new-format save")
+
+    -- Restore stubs and re-load a clean module for subsequent tests.
+    love.filesystem.getInfo = orig_getInfo
+    love.filesystem.read    = orig_read
+    package.loaded["lua/game/progress"] = nil
+    require("lua/game/progress")
+end
+
+do
+    local orig_getInfo = love.filesystem.getInfo
+    local orig_read    = love.filesystem.read
+
+    -- Old-format save: plain array, no solved/cutscenes keys.
+    love.filesystem.getInfo = function(path)
+        if path == "progress.lua" then return { type = "file" } end
+        return orig_getInfo(path)
+    end
+    love.filesystem.read = function(path)
+        if path == "progress.lua" then
+            return "return {5,7}\n"
+        end
+        return orig_read(path)
+    end
+
+    package.loaded["lua/game/progress"] = nil
+    local P = require("lua/game/progress")
+
+    assert(P.is_solved(5),     "_load old-format: puzzle 5 loaded")
+    assert(P.is_solved(7),     "_load old-format: puzzle 7 loaded")
+    assert(not P.is_solved(1), "_load old-format: puzzle 1 not in save")
+    print("PASS: _load() old-format save")
+
+    love.filesystem.getInfo = orig_getInfo
+    love.filesystem.read    = orig_read
+    package.loaded["lua/game/progress"] = nil
+    require("lua/game/progress")
+end
+
+-- ── _persist() write-error branch (line 36: _ = err) ────────────────────────
+
+do
+    -- Fresh module so internal state is clean.
+    package.loaded["lua/game/progress"] = nil
+    local P = require("lua/game/progress")
+    P.reset()
+
+    local orig_write = love.filesystem.write
+    love.filesystem.write = function() error("disk full") end
+
+    -- The error must be caught inside _persist(); nothing should escape.
+    local ok = pcall(function() P.mark_solved(99) end)
+    assert(ok,             "write error must not escape from mark_solved")
+    assert(P.is_solved(99), "puzzle 99 still marked solved despite write failure")
+    print("PASS: _persist() write-error silently ignored")
+
+    love.filesystem.write = orig_write
+    -- Leave module in a clean state.
+    P.reset()
+    package.loaded["lua/game/progress"] = nil
+    require("lua/game/progress")
+end
+
+-- Restore the original module object so other modules' cached `require("lua/game/progress")`
+-- references remain consistent with what UIRunner's fresh `require()` returns.
+package.loaded["lua/game/progress"] = Progress
+Progress.reset()
+
+print("ALL PROGRESS LOAD/PERSIST TESTS PASSED")

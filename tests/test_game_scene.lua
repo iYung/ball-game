@@ -59,4 +59,31 @@ do
     print("PASS: Player moves down")
 end
 
+-- GameScene:draw() — lines 44–51 (never reached by runner.tick alone)
+do
+    local scene = GameScene.new()
+    scene:on_enter()
+    local ok, err = pcall(function() scene:draw() end)
+    assert(ok, "GameScene:draw() raised an error: " .. tostring(err))
+    print("PASS: GameScene:draw() runs without error")
+end
+
+-- Blink timer coin.visible toggle — lines 38–40 (requires dt ≥ 0.5)
+do
+    local scene = GameScene.new()
+    scene:on_enter()
+
+    local first_coin    = scene.coins[1]
+    local visible_before = first_coin.visible
+
+    -- dt=1.0 is well past the 0.5 s threshold; timer should fire
+    scene:update(1.0)
+
+    assert(
+        first_coin.visible ~= visible_before,
+        "coin.visible should toggle after update(1.0)"
+    )
+    print("PASS: coin.visible toggles after blink timer fires")
+end
+
 print("ALL GAME SCENE / PLAYER TESTS PASSED")

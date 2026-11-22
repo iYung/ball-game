@@ -29,4 +29,22 @@ return {
             { assert_button = { id = "puzzle:1", visible = true } }, -- scene still showing world 1
         },
     },
+    {
+        name  = "escape on level select returns to start screen",
+        given = { solved = {} },
+        steps = {
+            { press = "return" },                       -- title → level select
+            { press = "escape" },                       -- level select → start screen
+            { assert_button = { id = "start:play", visible = true } }, -- start screen is shown
+        },
+    },
+    {
+        name  = "right-click on level select row does nothing",
+        given = { solved = {} },
+        steps = {
+            { press = "return" },                       -- title → level select
+            { right_click_button = { id = "puzzle:1" } },  -- btn=2 → early return
+            { assert_text = "SELECT PUZZLE" },          -- still on level select
+        },
+    },
 }

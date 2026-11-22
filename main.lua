@@ -35,11 +35,8 @@ end
 
 love.graphics.setDefaultFilter("nearest", "nearest")
 
-local SceneManager   = require("lua/core/scene_manager")
-local StartScene     = require("lua/game/scenes/start_scene")
-local SettingsState  = require("lua/game/settings_state")
-local Save           = require("lua/core/save")
-local Sound          = require("lua/core/sound")
+local SceneManager  = require("lua/core/scene_manager")
+local StartScene    = require("lua/game/scenes/start_scene")
 
 local LOGICAL_W, LOGICAL_H = 1280, 720
 local canvas
@@ -78,20 +75,8 @@ function love.load()
         return
     end
 
-    local settings_state = SettingsState.from_save(Save.read_settings())
-
     manager = SceneManager.new(LOGICAL_W, LOGICAL_H)
-    manager:switch(StartScene.new(manager, settings_state))
-
-    Sound.load({
-        music = {
-            menu = { path = "assets/music/menu.mp3",        looping = true,  autoplay = true },
-            bg1  = { path = "assets/music/background.mp3",  looping = false },
-            bg2  = { path = "assets/music/background2.mp3", looping = false },
-            bg3  = { path = "assets/music/background3.mp3", looping = false },
-            bg4  = { path = "assets/music/background4.mp3", looping = false },
-        },
-    })
+    manager:switch(StartScene.new(manager))
 end
 
 function love.update(dt)
@@ -103,7 +88,6 @@ function love.update(dt)
         end
         return
     end
-    Sound.update(dt)
     manager:update(dt)
 end
 
@@ -156,8 +140,4 @@ end
 
 function love.textinput(text)
     manager:text_input(text)
-end
-
-function love.focus(focused)
-    Sound.on_focus(focused)
 end

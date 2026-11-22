@@ -38,6 +38,7 @@ function Save.write(data)
 end
 
 function Save.read()
+    if not love.filesystem.getInfo("save.dat") then return nil end
     local content, _ = love.filesystem.read("save.dat")
     if not content then return nil end
     local loader = loadstring or load
@@ -57,6 +58,7 @@ function Save.write_settings(data)
 end
 
 function Save.read_settings()
+    if not love.filesystem.getInfo("settings.dat") then return nil end
     local content, _ = love.filesystem.read("settings.dat")
     if not content then return nil end
     local loader = loadstring or load

@@ -246,6 +246,7 @@ function MatrixScene:load_puzzle(n)
     self.input_matrix   = Matrix.new(p.input.rows,  p.input.cols,  p.input.values)
     self.target_matrix  = Matrix.new(p.target.rows, p.target.cols, p.target.values)
     self.current_matrix = nil
+    self._anim_display_matrix = nil
     -- Clamp row-index params to actual matrix row count
     local nr = p.input.rows
     local nc = p.input.cols
@@ -447,6 +448,7 @@ end
 
 function MatrixScene:do_reset()
     self.current_matrix = nil
+    self._anim_display_matrix = nil
     self.status         = nil
     self.running        = false
     self.sim            = nil
@@ -506,6 +508,7 @@ end
 function MatrixScene:start_run()
     local p             = self.puzzle
     self.current_matrix = self.input_matrix:copy()
+    self._anim_display_matrix = nil
     self.sim            = { x=p.source.x, y=p.source.y, tick=0, idle=0,
                             pushers=self:_pusher_list(), gaps=self.gaps }
     self.status          = "running"
@@ -659,6 +662,8 @@ function MatrixScene:do_step()
     end
 
     local to_x, to_y = cell_top_left(sim.x, sim.y)
+    -- Ops fire on entry, but the matrix slides in with its pre-op values (as in the recap).
+    self._anim_display_matrix = mat
     local new_fp     = self:_process_footprint(self._last_fp)
 
     if self._run_frames then
@@ -1286,8 +1291,16 @@ function MatrixScene:draw_set_col_value_cell(tile, dr, cx, cy)
     end
 end
 
+-- The matrix the player sees: pre-op values while sliding into an op, post-op once settled.
+function MatrixScene:_display_matrix()
+    if self.anim_t < 1 and self._anim_display_matrix then
+        return self._anim_display_matrix
+    end
+    return self.current_matrix
+end
+
 function MatrixScene:draw_travelling_matrix()
-    local mat = self.current_matrix
+    local mat = self:_display_matrix()
     if not mat then
         if self.sim == nil and self.input_matrix then
             local px, py = cell_top_left(self.puzzle.source.x, self.puzzle.source.y)
@@ -1702,7 +1715,7 @@ end
 
 -- C6 query: matrix values currently shown, as plain rows.
 function MatrixScene:ui_matrix()
-    local m = self.current_matrix or self.input_matrix
+    local m = self:_display_matrix() or self.input_matrix
     local rows = {}
     for r = 1, m.rows do
         rows[r] = {}

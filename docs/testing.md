@@ -148,7 +148,7 @@ A full play-through looks like this (puzzle 1: a pusher at (1,5) pushing right f
 { assert_text = "Flip It" },
 ```
 
-See the files in `tests/ui/` for more: `01_solve_puzzle_1.lua`, `02_level_select_keyboard.lua`, `03_world_locking.lua`, `04_sweep_all_puzzles.lua` (generated steps, all 23 puzzles), `05_start_screen.lua`, `06_cutscene.lua` (CutsceneScene end-to-end), `07_drag_drop.lua` (Mv drag tool), and `08_matrix_scene_ops.lua` (all op-tile param cell click paths).
+See the files in `tests/ui/` for more: `01_solve_puzzle_1.lua`, `02_level_select_keyboard.lua`, `03_world_locking.lua`, `04_sweep_all_puzzles.lua` (generated steps, all 23 puzzles), `05_start_screen.lua`, `06_cutscene.lua` (CutsceneScene end-to-end), `07_drag_drop.lua` (Mv drag tool), and `08_matrix_scene_ops.lua` (all op-tile param cell click paths). `11_anim_timing.lua` checks the matrix shows pre-op values while sliding into an op (`assert_matrix` mid-run).
 
 ---
 

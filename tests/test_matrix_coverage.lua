@@ -146,7 +146,6 @@ do
     local scene = new_scene()
     -- Inject a float value directly into input_matrix
     scene.input_matrix = Matrix.new(1, 1, {{0.5}})
-    scene:_place_tile_at(5, 1, { kind = "pusher" })
 
     local ok, err = pcall(function() scene:draw_travelling_matrix() end)
     assert(ok, "draw_travelling_matrix (input preview float) threw: " .. tostring(err))

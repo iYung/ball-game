@@ -1289,7 +1289,7 @@ end
 function MatrixScene:draw_travelling_matrix()
     local mat = self.current_matrix
     if not mat then
-        if self.sim == nil and self.input_matrix and #self:_pusher_list() > 0 then
+        if self.sim == nil and self.input_matrix then
             local px, py = cell_top_left(self.puzzle.source.x, self.puzzle.source.y)
             local preview = self.input_matrix
             for r = 1, preview.rows do
@@ -1765,6 +1765,8 @@ function MatrixScene:draw()
     if self._settings_menu then
         self._settings_menu:draw()
     end
+    -- main.lua draws the scene canvas with the current color, so a leaked color tints the screen.
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 -- ── Input ──────────────────────────────────────────────────────────────────

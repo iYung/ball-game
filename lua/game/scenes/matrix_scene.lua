@@ -1765,6 +1765,8 @@ function MatrixScene:draw()
     if self._settings_menu then
         self._settings_menu:draw()
     end
+    -- main.lua draws the scene canvas with the current color, so a leaked color tints the screen.
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 -- ── Input ──────────────────────────────────────────────────────────────────

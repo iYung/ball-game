@@ -14,9 +14,10 @@ jobs:
 
       - name: Install LÖVE 11.5
         run: |
-          sudo add-apt-repository -y ppa:bartbes/love-stable
-          sudo apt-get update -q
-          sudo apt-get install -y love
+          wget -q https://github.com/love2d/love/releases/download/11.5/love-11.5-x86_64.AppImage
+          chmod +x love-11.5-x86_64.AppImage
+          ./love-11.5-x86_64.AppImage --appimage-extract >/dev/null
+          sudo ln -s "$PWD/squashfs-root/bin/love" /usr/local/bin/love
 
       - name: Run tests
         run: love . --headless --coverage

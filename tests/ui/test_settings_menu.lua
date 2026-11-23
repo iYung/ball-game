@@ -195,4 +195,57 @@ return {
             { assert_text = "90%" },
         },
     },
+    {
+        name       = "clicking SFX inc arrow increments sfx volume",
+        given      = { solved = {} },
+        make_scene = make_scene,
+        steps = {
+            { click_button = "Settings" },
+            { click_button = { id = "settings:sfx_dec" } },   -- 100 -> 90
+            { click_button = { id = "settings:sfx_inc" } },   -- 90 -> 100
+            { assert_text = "100%" },
+        },
+    },
+    {
+        name       = "clicking music dec arrow decrements music volume",
+        given      = { solved = {} },
+        make_scene = make_scene,
+        steps = {
+            { click_button = "Settings" },
+            { click_button = { id = "settings:music_dec" } },
+            { assert_text = "90%" },
+        },
+    },
+    {
+        name       = "clicking music inc arrow increments music volume",
+        given      = { solved = {} },
+        make_scene = make_scene,
+        steps = {
+            { click_button = "Settings" },
+            { click_button = { id = "settings:music_dec" } },   -- 100 -> 90
+            { click_button = { id = "settings:music_inc" } },   -- 90 -> 100
+            { assert_text = "100%" },
+        },
+    },
+    {
+        name       = "clicking Exit to Menu button switches to StartScene",
+        given      = { solved = {} },
+        make_scene = make_scene,
+        steps = {
+            { click_button = "Settings" },
+            { click_button = { id = "settings:exit" } },
+            { assert_text = "MATRIX PUSH" },
+        },
+    },
+    {
+        name       = "up key wraps from row 1 to row 4 (Exit to Menu)",
+        given      = { solved = {} },
+        make_scene = make_scene,
+        steps = {
+            { click_button = "Settings" },   -- opens at row 1 (SFX)
+            { press = "up" },                -- row 1 -> row 4 (Exit to Menu)
+            { press = "return" },            -- Enter on Exit -> start screen
+            { assert_text = "MATRIX PUSH" },
+        },
+    },
 }

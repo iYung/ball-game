@@ -38,4 +38,20 @@ return {
             { assert_text = "SELECT PUZZLE" },          -- still on level select
         },
     },
+    {
+        -- Covers level_select_scene.lua lines exercised when settings overlay is open:
+        -- ui_elements delegation, key_pressed delegation, mouse_pressed delegation,
+        -- update delegation, and the ESC-to-open path.
+        name  = "ESC opens settings overlay in level select; ESC again closes it",
+        given = { solved = {} },
+        steps = {
+            { press = "return" },                           -- title → level select
+            { press = "escape" },                           -- open settings overlay
+            { assert_text = "Settings" },                   -- overlay title is drawn
+            { assert_button = { id = "settings:resume" } }, -- overlay elements in registry
+            { press = "down" },                             -- settings key delegation: row 1→2
+            { press = "escape" },                           -- close overlay
+            { assert_text = "SELECT PUZZLE" },              -- back on level select
+        },
+    },
 }

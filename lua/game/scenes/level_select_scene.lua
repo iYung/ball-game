@@ -96,11 +96,10 @@ function LevelSelectScene:_switch_world(target)
     self:_rebuild_world_data()
 end
 
--- Registry of clickable elements: one tab per world, then one row per puzzle.
-function LevelSelectScene:ui_elements()
-    if self._settings_menu and self._settings_menu.is_open then
-        return self._settings_menu:ui_elements()
-    end
+-- Builds the base level-select elements (tabs + puzzle rows) without delegating
+-- to the settings overlay. Used by draw() so tabs/rows render correctly even
+-- when the settings overlay is open on top.
+function LevelSelectScene:_base_elements()
     local els = {}
     local n = PuzzleLoader.world_count()
     for w = 1, n do
@@ -124,6 +123,14 @@ function LevelSelectScene:ui_elements()
                           selected = (i == self.selected) }
     end
     return els
+end
+
+-- Registry of clickable elements: one tab per world, then one row per puzzle.
+function LevelSelectScene:ui_elements()
+    if self._settings_menu and self._settings_menu.is_open then
+        return self._settings_menu:ui_elements()
+    end
+    return self:_base_elements()
 end
 
 -- Row number (1-based) of a puzzle element, or nil for other elements.
@@ -213,8 +220,8 @@ function LevelSelectScene:draw()
     love.graphics.setColor(0.09, 0.10, 0.17, 1)
     love.graphics.rectangle("fill", 0, 0, W, TAB_H)
 
-    -- Tabs (pull from ui_elements so rects stay in sync)
-    local elements = self:ui_elements()
+    -- Tabs (use base elements so rects stay correct even when settings overlay is open)
+    local elements = self:_base_elements()
     love.graphics.setFont(self._font_world)
     local n_worlds = PuzzleLoader.world_count()
     for w = 1, n_worlds do

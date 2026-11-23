@@ -176,7 +176,8 @@ do
     print("PASS: fixed player-placed tile blocks param edits")
 end
 
--- Puzzle-placed locked op loads as a multi-cell tile (scale_row spans 4 rows).
+-- Puzzle-placed locked op loads correctly (P23 uses tile_rows=1 so the arch gap at y=4 x=5
+-- does not block placement; a 4-row tile would be rejected because (5,4) is a gap).
 do
     local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(23) end)
     local scene = ctx.sm.current
@@ -189,19 +190,15 @@ do
     assert(anchor.locked == true,  "anchor is locked")
     assert(anchor.params.scalar == 3, "anchor scalar=3, got " .. tostring(anchor.params.scalar))
 
-    -- Ref cells at rows 4, 5, 6 (tile_rows=4 → rows 3..6)
-    local ok4, ax4, ay4 = scene.grid:is_ref(5, 4)
-    assert(ok4 and ax4==5 and ay4==3, "row 4 is ref → anchor (5,3)")
-    local ok5, ax5, ay5 = scene.grid:is_ref(5, 5)
-    assert(ok5 and ax5==5 and ay5==3, "row 5 is ref → anchor (5,3)")
-    local ok6, ax6, ay6 = scene.grid:is_ref(5, 6)
-    assert(ok6 and ax6==5 and ay6==3, "row 6 is ref → anchor (5,3)")
+    -- tile_rows=1: only the anchor cell is used, no ref cells below.
+    local ok4 = scene.grid:is_ref(5, 4)
+    assert(not ok4, "tile_rows=1: (5,4) is not a ref cell")
 
-    -- Row 2 (y=4 in grid coords is *above* the tile, i.e. y=2 in grid) should be empty.
+    -- Row above the tile should also be empty.
     local ok2 = scene.grid:is_ref(5, 2)
     assert(not ok2, "row above tile (5,2) is not a ref")
 
-    print("PASS: locked multi-cell op loads correctly")
+    print("PASS: locked single-cell op loads correctly")
 end
 
 -- Puzzle-placed locked op fires with correct params in simulation.

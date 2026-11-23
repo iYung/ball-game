@@ -272,19 +272,19 @@ do
     print("PASS: perpendicular pushers combine into diagonal move")
 end
 
--- Two pushers with opposing forces on the same axis → conflict → puzzle fail.
+-- Two pushers with opposing forces on the same axis → conflict → blocked status.
 -- Puzzle 1, 2×2 matrix at (2,5)–(3,6).
 -- A at (1,5) right + B at (4,5) left: both contact the matrix from opposite sides.
--- Net force is undefined (conflict); the run must fail.
+-- Net force is undefined (conflict); the run must give blocked status.
 do
     local scene = new_scene()
     add_pusher(scene, 1, 5, { [1]="right" })   -- pushes from left
     add_pusher(scene, 4, 5, { [1]="left"  })   -- pushes from right
     scene:start_run()
     scene:do_step()
-    assert(scene.status == "fail",
-        "opposing pushers on same axis must fail the run, got " .. tostring(scene.status))
-    print("PASS: opposing pushers conflict fails run")
+    assert(scene.status == "blocked",
+        "opposing pushers on same axis must give blocked status, got " .. tostring(scene.status))
+    print("PASS: opposing pushers conflict gives blocked status")
 end
 
 -- A pusher below the matrix going further down must not drag the matrix.

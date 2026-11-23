@@ -30,21 +30,28 @@ return {
         },
     },
     {
-        name  = "escape on level select returns to start screen",
-        given = { solved = {} },
-        steps = {
-            { press = "return" },                       -- title → level select
-            { press = "escape" },                       -- level select → start screen
-            { assert_button = { id = "start:play", visible = true } }, -- start screen is shown
-        },
-    },
-    {
         name  = "right-click on level select row does nothing",
         given = { solved = {} },
         steps = {
             { press = "return" },                       -- title → level select
             { right_click_button = { id = "puzzle:1" } },  -- btn=2 → early return
             { assert_text = "SELECT PUZZLE" },          -- still on level select
+        },
+    },
+    {
+        -- Covers level_select_scene.lua lines exercised when settings overlay is open:
+        -- ui_elements delegation, key_pressed delegation, mouse_pressed delegation,
+        -- update delegation, and the ESC-to-open path.
+        name  = "ESC opens settings overlay in level select; Resume click closes it",
+        given = { solved = {} },
+        steps = {
+            { press = "return" },                           -- title → level select
+            { press = "escape" },                           -- open settings overlay
+            { assert_text = "Settings" },                   -- overlay title is drawn
+            { assert_button = { id = "settings:resume" } }, -- overlay elements in registry (ui_elements delegation)
+            { press = "down" },                             -- settings key delegation: row 1→2
+            { click_button = { id = "settings:resume" } }, -- mouse_pressed delegation → closes overlay
+            { assert_text = "SELECT PUZZLE" },              -- back on level select
         },
     },
 }

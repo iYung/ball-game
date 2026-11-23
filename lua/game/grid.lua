@@ -108,11 +108,11 @@ function Grid:clear(x, y)
     if width == 1 then
         -- Scan right to find any trailing ref cells
         local nx = ax + 1
-        local c = self:in_bounds(nx, ay) and self.cells[ay][nx]
-        while c and c.ref and c.ax == ax and c.ay == ay do
+        while self:in_bounds(nx, ay) do
+            local c = self.cells[ay][nx]
+            if not (c and c.ref and c.ax == ax and c.ay == ay) then break end
             width = nx - ax + 1
             nx = nx + 1
-            c = self:in_bounds(nx, ay) and self.cells[ay][nx]
         end
     end
 

@@ -6,10 +6,11 @@ local W, H = 1280, 720
 local StartScene = setmetatable({}, { __index = Scene })
 StartScene.__index = StartScene
 
-function StartScene.new(scene_manager)
+function StartScene.new(scene_manager, settings_state)
     local self = Scene.new(W, H)
     setmetatable(self, StartScene)
-    self._scene_manager = scene_manager
+    self._scene_manager  = scene_manager
+    self._settings_state = settings_state
     return self
 end
 
@@ -21,6 +22,8 @@ function StartScene:on_enter()
     self._time = 0
     self._play_rect    = { x = W / 2 - 120, y = 572, w = 240, h = 32 }
     self._unlock_rect  = { x = W / 2 - 80, y = 625, w = 160, h = 22 }
+    local Sound = require("lua/core/sound")
+    if not Sound.is_music_playing("menu") then Sound.play_music("menu") end
 end
 
 -- UI element registry (see docs/design/ui-tests.md). Fresh table each call.
@@ -40,7 +43,7 @@ end
 
 function StartScene:_advance()
     local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-    self._scene_manager:switch(LevelSelectScene.new(self._scene_manager))
+    self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
 end
 
 function StartScene:_unlock_all()

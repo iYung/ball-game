@@ -2,30 +2,29 @@ local Scene        = require("lua/core/scene")
 local PuzzleLoader = require("lua/game/puzzle_loader")
 local Progress     = require("lua/game/progress")
 local UI           = require("lua/core/ui")
+local SettingsMenu = require("lua/game/scenes/settings_menu")
 
 local W, H        = 1280, 720
 local ROW_H       = 54
-local LIST_TOP    = 190
+local LIST_TOP    = 110
 local LIST_LEFT   = 400
 local LIST_W      = 480
 
-local BAR_Y       = 100
-local BAR_H       = 50
-local ARROW_W     = 48
+local TAB_H       = 48
 
 local LevelSelectScene = setmetatable({}, { __index = Scene })
 LevelSelectScene.__index = LevelSelectScene
 
-function LevelSelectScene.new(scene_manager)
-    local self          = Scene.new(W, H)
+function LevelSelectScene.new(scene_manager, settings_state)
+    local self           = Scene.new(W, H)
     setmetatable(self, LevelSelectScene)
-    self.scene_manager  = scene_manager
-    self.selected       = 1
-    self._world         = 1
-    self._world_puzzles = {}
-    self._row_rects     = {}
-    self._arrow_left    = {}
-    self._arrow_right   = {}
+    self.scene_manager   = scene_manager
+    self._settings_state = settings_state
+    self.selected        = 1
+    self._world          = 1
+    self._world_puzzles  = {}
+    self._row_rects      = {}
+    self._tab_rects      = {}
     return self
 end
 
@@ -43,18 +42,23 @@ function LevelSelectScene:_rebuild_world_data()
         }
     end
 
-    -- Arrow hit rects centered in the bar
-    local bar_cx = W / 2
-    local name_w = 320
-    self._arrow_left  = { x = bar_cx - name_w / 2 - ARROW_W - 8, y = BAR_Y, w = ARROW_W, h = BAR_H }
-    self._arrow_right = { x = bar_cx + name_w / 2 + 8,            y = BAR_Y, w = ARROW_W, h = BAR_H }
+    -- Tab rects: one per world, evenly spaced across full width
+    local n = PuzzleLoader.world_count()
+    local tab_w = W / n
+    self._tab_rects = {}
+    for w = 1, n do
+        self._tab_rects[w] = { x = (w - 1) * tab_w, y = 0, w = tab_w, h = TAB_H }
+    end
 end
 
 function LevelSelectScene:on_enter()
-    self._font_title = love.graphics.newFont(28)
-    self._font_world = love.graphics.newFont(22)
-    self._font_row   = love.graphics.newFont(20)
-    self._font_hint  = love.graphics.newFont(14)
+    self._font_title    = love.graphics.newFont(28)
+    self._font_world    = love.graphics.newFont(14)
+    self._font_row      = love.graphics.newFont(20)
+    self._font_hint     = love.graphics.newFont(14)
+    self._settings_menu = SettingsMenu.new(self._settings_state, self.scene_manager)
+    local Sound = require("lua/core/sound")
+    if not Sound.is_music_playing("menu") then Sound.play_music("menu") end
 
     self:_rebuild_world_data()
 end
@@ -68,7 +72,11 @@ function LevelSelectScene:_cycle_world(delta)
             break
         end
     end
-    self._world = candidate
+    self:_switch_world(candidate)
+end
+
+function LevelSelectScene:_switch_world(target)
+    self._world = target
 
     local cs_path = string.format("data/cutscenes/world_%d.lua", self._world)
     if self._world ~= 1
@@ -78,7 +86,7 @@ function LevelSelectScene:_cycle_world(delta)
         Progress.mark_cutscene_seen(self._world)
         local CutsceneScene    = require("lua/game/scenes/cutscene_scene")
         local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-        local next_scene       = LevelSelectScene.new(self.scene_manager)
+        local next_scene       = LevelSelectScene.new(self.scene_manager, self._settings_state)
         next_scene._world      = self._world
         self.scene_manager:switch(CutsceneScene.new(self._world, next_scene, self.scene_manager))
         return
@@ -88,23 +96,41 @@ function LevelSelectScene:_cycle_world(delta)
     self:_rebuild_world_data()
 end
 
--- Registry of clickable elements (see docs/design/ui-tests.md section 2):
--- world arrows first, then one row per puzzle in row order.
-function LevelSelectScene:ui_elements()
+-- Builds the base level-select elements (tabs + puzzle rows) without delegating
+-- to the settings overlay. Used by draw() so tabs/rows render correctly even
+-- when the settings overlay is open on top.
+function LevelSelectScene:_base_elements()
     local els = {}
-    local function rect(r) return { x = r.x, y = r.y, w = r.w, h = r.h } end
-    if self._arrow_left.x then
-        els[#els + 1] = { id = "world:prev", label = "<", kind = "button",
-                          rect = rect(self._arrow_left), enabled = true }
-        els[#els + 1] = { id = "world:next", label = ">", kind = "button",
-                          rect = rect(self._arrow_right), enabled = true }
+    local n = PuzzleLoader.world_count()
+    for w = 1, n do
+        local unlocked = Progress.is_world_unlocked(w)
+        local world_data = PuzzleLoader.world(w)
+        local label = unlocked and world_data.name or "[?]"
+        local r = self._tab_rects[w] or { x = 0, y = 0, w = 0, h = 0 }
+        els[#els + 1] = {
+            id       = "world:" .. w,
+            label    = label,
+            kind     = "button",
+            rect     = { x = r.x, y = r.y, w = r.w, h = r.h },
+            enabled  = unlocked,
+            selected = (w == self._world),
+        }
     end
     for i, puzzle in ipairs(self._world_puzzles) do
+        local r = self._row_rects[i]
         els[#els + 1] = { id = "puzzle:" .. puzzle.index, label = puzzle.name, kind = "button",
-                          rect = rect(self._row_rects[i]), enabled = true,
+                          rect = { x = r.x, y = r.y, w = r.w, h = r.h }, enabled = true,
                           selected = (i == self.selected) }
     end
     return els
+end
+
+-- Registry of clickable elements: one tab per world, then one row per puzzle.
+function LevelSelectScene:ui_elements()
+    if self._settings_menu and self._settings_menu.is_open then
+        return self._settings_menu:ui_elements()
+    end
+    return self:_base_elements()
 end
 
 -- Row number (1-based) of a puzzle element, or nil for other elements.
@@ -116,9 +142,18 @@ function LevelSelectScene:_row_of(e)
     return nil
 end
 
--- Hover only changes the selection when the mouse actually moves, so a
--- resting cursor never overrides Up/Down navigation.
-function LevelSelectScene:update(_dt) end
+-- World index from a world:N element id, or nil.
+local function world_index_of(e)
+    if not e then return nil end
+    local w = e.id:match("^world:(%d+)$")
+    return w and tonumber(w) or nil
+end
+
+function LevelSelectScene:update(_dt)
+    if self._settings_menu and self._settings_menu.is_open then
+        self._settings_menu:update(_dt)
+    end
+end
 
 function LevelSelectScene:mouse_moved(x, y)
     local row = self:_row_of(UI.element_at(self:ui_elements(), x, y))
@@ -130,10 +165,14 @@ end
 function LevelSelectScene:_load_selected()
     local MatrixScene = require("lua/game/scenes/matrix_scene")
     local puzzle_index = self._world_puzzles[self.selected].index
-    self.scene_manager:switch(MatrixScene.new(puzzle_index, self.scene_manager))
+    self.scene_manager:switch(MatrixScene.new(puzzle_index, self.scene_manager, self._settings_state))
 end
 
 function LevelSelectScene:key_pressed(key)
+    if self._settings_menu and self._settings_menu.is_open then
+        if self._settings_menu:key_pressed(key) then return end
+    end
+
     local n = #self._world_puzzles
     if key == "up" then
         self.selected = ((self.selected - 2) % n) + 1
@@ -149,19 +188,23 @@ function LevelSelectScene:key_pressed(key)
         Progress.unlock_world(self._world)
         self:_rebuild_world_data()
     elseif key == "escape" then
-        local StartScene = require("lua/game/scenes/start_scene")
-        self.scene_manager:switch(StartScene.new(self.scene_manager))
+        if self._settings_menu then
+            self._settings_menu:open()
+        end
     end
 end
 
 function LevelSelectScene:mouse_pressed(mx, my, btn)
+    if self._settings_menu and self._settings_menu.is_open then
+        self._settings_menu:mouse_pressed(mx, my)
+        return
+    end
     if btn ~= 1 then return end
     local e = UI.element_at(self:ui_elements(), mx, my)
     if not e then return end
-    if e.id == "world:prev" then
-        self:_cycle_world(-1)
-    elseif e.id == "world:next" then
-        self:_cycle_world(1)
+    local wi = world_index_of(e)
+    if wi and e.enabled then
+        self:_switch_world(wi)
     elseif self:_row_of(e) then
         self.selected = self:_row_of(e)
         self:_load_selected()
@@ -173,60 +216,53 @@ function LevelSelectScene:draw()
     love.graphics.setColor(0.07, 0.07, 0.12, 1)
     love.graphics.rectangle("fill", 0, 0, W, H)
 
-    -- Title
-    love.graphics.setFont(self._font_title)
-    love.graphics.setColor(0.65, 0.75, 1.0, 1)
-    love.graphics.printf("SELECT PUZZLE", 0, 44, W, "center")
+    -- Tab bar background
+    love.graphics.setColor(0.09, 0.10, 0.17, 1)
+    love.graphics.rectangle("fill", 0, 0, W, TAB_H)
 
-    -- World bar
-    local world      = PuzzleLoader.world(self._world)
-    local world_name = string.format("WORLD %d: %s", self._world, world.name:upper())
-    local bar_cx     = W / 2
-    local name_w     = 320
-    local bar_x      = bar_cx - name_w / 2
-    local bar_y      = BAR_Y
-    local bar_h      = BAR_H
-
-    -- Bar background
-    love.graphics.setColor(0.11, 0.12, 0.20, 1)
-    love.graphics.rectangle("fill", bar_x - ARROW_W - 8, bar_y, name_w + (ARROW_W + 8) * 2, bar_h, 6, 6)
-    love.graphics.setColor(0.25, 0.32, 0.55, 0.7)
-    love.graphics.rectangle("line", bar_x - ARROW_W - 8, bar_y, name_w + (ARROW_W + 8) * 2, bar_h, 6, 6)
-
-    -- Left arrow
+    -- Tabs (use base elements so rects stay correct even when settings overlay is open)
+    local elements = self:_base_elements()
     love.graphics.setFont(self._font_world)
-    love.graphics.setColor(0.55, 0.65, 0.90, 1)
-    love.graphics.printf("<", bar_x - ARROW_W - 8, bar_y + (bar_h - self._font_world:getHeight()) / 2, ARROW_W, "center")
-
-    -- World name
-    love.graphics.setColor(0.90, 0.92, 1.0, 1)
-    love.graphics.printf(world_name, bar_x, bar_y + (bar_h - self._font_world:getHeight()) / 2, name_w, "center")
-
-    -- Right arrow
-    love.graphics.setColor(0.55, 0.65, 0.90, 1)
-    love.graphics.printf(">", bar_cx + name_w / 2 + 8, bar_y + (bar_h - self._font_world:getHeight()) / 2, ARROW_W, "center")
-
-    -- World dots
     local n_worlds = PuzzleLoader.world_count()
-    local dot_r    = 4
-    local dot_gap  = 14
-    local dots_w   = n_worlds * dot_gap - (dot_gap - dot_r * 2)
-    local dot_y    = bar_y + bar_h + 10
-    local dot_x0   = bar_cx - dots_w / 2
     for w = 1, n_worlds do
-        if w == self._world then
-            love.graphics.setColor(0.55, 0.65, 0.90, 1)
-        elseif not Progress.is_world_unlocked(w) then
-            love.graphics.setColor(0.30, 0.22, 0.28, 1)
-        else
-            love.graphics.setColor(0.25, 0.30, 0.45, 1)
+        local e = UI.find(elements, "world:" .. w)
+        local r = e.rect
+        local is_active   = e.selected
+        local is_unlocked = e.enabled
+
+        if is_active then
+            love.graphics.setColor(0.14, 0.16, 0.28, 1)
+            love.graphics.rectangle("fill", r.x, r.y, r.w, r.h)
+            -- Bottom underline
+            love.graphics.setColor(0.45, 0.60, 1.0, 1)
+            love.graphics.rectangle("fill", r.x + 2, r.y + r.h - 4, r.w - 4, 4)
         end
-        love.graphics.circle("fill", dot_x0 + (w - 1) * dot_gap + dot_r, dot_y + dot_r, dot_r)
+
+        -- Tab separator line
+        if w < n_worlds then
+            love.graphics.setColor(0.20, 0.22, 0.35, 1)
+            love.graphics.rectangle("fill", r.x + r.w - 1, r.y + 6, 1, r.h - 12)
+        end
+
+        -- Label
+        local label_y = r.y + (r.h - self._font_world:getHeight()) / 2
+        if not is_unlocked then
+            love.graphics.setColor(0.35, 0.28, 0.35, 1)
+        elseif is_active then
+            love.graphics.setColor(0.90, 0.92, 1.0, 1)
+        else
+            love.graphics.setColor(0.50, 0.55, 0.75, 1)
+        end
+        love.graphics.printf(e.label, r.x, label_y, r.w, "center")
     end
+
+    -- Title
+    love.graphics.setFont(self._font_world)
+    love.graphics.setColor(0.65, 0.75, 1.0, 1)
+    love.graphics.printf("SELECT PUZZLE", 0, TAB_H + 8, W, "center")
 
     -- Rows
     love.graphics.setFont(self._font_row)
-    local elements = self:ui_elements()
     for _, puzzle in ipairs(self._world_puzzles) do
         local e   = UI.find(elements, "puzzle:" .. puzzle.index)
         local r   = e.rect
@@ -263,6 +299,10 @@ function LevelSelectScene:draw()
     love.graphics.printf("[Left/Right] Switch World   [Up/Down] Navigate   [Enter] Play   [Esc] Back", 0, H - 36, W, "center")
 
     love.graphics.setColor(1, 1, 1, 1)
+
+    if self._settings_menu then
+        self._settings_menu:draw()
+    end
 end
 
 function LevelSelectScene:text_input(_) end

@@ -110,12 +110,9 @@ function Grid:clear(x, y)
         local nx = ax + 1
         while self:in_bounds(nx, ay) do
             local c = self.cells[ay][nx]
-            if c and c.ref and c.ax == ax and c.ay == ay then
-                width = nx - ax + 1
-                nx = nx + 1
-            else
-                break
-            end
+            if not (c and c.ref and c.ax == ax and c.ay == ay) then break end
+            width = nx - ax + 1
+            nx = nx + 1
         end
     end
 

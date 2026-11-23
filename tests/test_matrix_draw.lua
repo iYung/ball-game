@@ -120,6 +120,20 @@ do
     assert(ok, "_timeline_element_click slot:A:1 threw: " .. tostring(err))
     print("PASS: _timeline_element_click slot:A:1")
 
+    -- tl:scroll_up branch
+    ok, err = pcall(function()
+        scene:_timeline_element_click({ id = "tl:scroll_up", kind = "tl", enabled = true }, 1)
+    end)
+    assert(ok, "_timeline_element_click tl:scroll_up threw: " .. tostring(err))
+    print("PASS: _timeline_element_click tl:scroll_up")
+
+    -- tl:scroll_down branch
+    ok, err = pcall(function()
+        scene:_timeline_element_click({ id = "tl:scroll_down", kind = "tl", enabled = true }, 1)
+    end)
+    assert(ok, "_timeline_element_click tl:scroll_down threw: " .. tostring(err))
+    print("PASS: _timeline_element_click tl:scroll_down")
+
     -- disabled element — should return early without error
     ok, err = pcall(function()
         scene:_timeline_element_click({ id = "tl:inc", kind = "tl", enabled = false }, 1)

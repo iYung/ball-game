@@ -962,21 +962,13 @@ function MatrixScene:draw_ref_cell(tile, dc, dr, cx, cy)
     elseif op == "swap_rows" then
         self:draw_swap_strip(tile, dr + 1, cx, cy)
     elseif op == "set_row" then
-        if dc == 0 then
-            self:draw_param_cell(tile, 1, cx, cy)
-        else
-            self:draw_set_row_value_cell(tile, dc, cx, cy)
-        end
+        self:draw_set_row_value_cell(tile, dc, cx, cy)
     elseif op == "scale_col" then
         self:draw_scale_col_band(tile, dc + 1, cx, cy)
     elseif op == "swap_cols" then
         self:draw_swap_col_strip(tile, dc + 1, cx, cy)
     elseif op == "set_col" then
-        if dr == 0 then
-            self:draw_param_cell(tile, 1, cx, cy)
-        else
-            self:draw_set_col_value_cell(tile, dr, cx, cy)
-        end
+        self:draw_set_col_value_cell(tile, dr, cx, cy)
     else
         -- existing ops (scalar_mul, add_rows, add_cols, etc.)
         self:draw_param_cell(tile, dc, cx, cy)
@@ -1965,8 +1957,6 @@ function MatrixScene:mouse_pressed(mx, my, btn)
         return
     elseif id:sub(1, 3) == "tl:" or e.kind == "slot" then
         self:_timeline_element_click(e, btn)
-        return
-    elseif e.kind ~= "cell" then
         return
     end
 

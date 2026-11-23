@@ -399,4 +399,29 @@ do
     print("PASS: apply_op unknown op fallback (line 173)")
 end
 
+-- swap_rows
+do
+    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
+    local r = Sim.apply_op({ kind = "op", op = "swap_rows", params = { row_a = 1, row_b = 2 } }, m)
+    assert(r:equals(Matrix.new(2, 2, { {3, 4}, {1, 2} })), "apply_op swap_rows")
+    print("PASS: apply_op swap_rows")
+end
+
+-- scalar_mul
+do
+    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
+    local r = Sim.apply_op({ kind = "op", op = "scalar_mul", params = { scalar = 3 } }, m)
+    assert(r:equals(Matrix.new(2, 2, { {3, 6}, {9, 12} })), "apply_op scalar_mul")
+    print("PASS: apply_op scalar_mul")
+end
+
+-- add_matrix
+do
+    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
+    local r = Sim.apply_op({ kind = "op", op = "add_matrix",
+        tile_rows = 2, tile_cols = 2, values = { {10, 20}, {30, 40} } }, m)
+    assert(r:equals(Matrix.new(2, 2, { {11, 22}, {33, 44} })), "apply_op add_matrix")
+    print("PASS: apply_op add_matrix")
+end
+
 print("ALL TESTS PASSED")

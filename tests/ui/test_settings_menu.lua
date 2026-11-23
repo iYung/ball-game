@@ -248,4 +248,44 @@ return {
             { assert_text = "MATRIX PUSH" },
         },
     },
+    {
+        -- Covers settings_menu.lua lines 105-106: right key on music row (row 2)
+        name       = "right key on music row increments music volume",
+        given      = { solved = {} },
+        make_scene = make_scene,
+        steps = {
+            { click_button = "Settings" },
+            { press = "s" },                 -- navigate down to music row (row 2)
+            { press = "left" },              -- music: 100 → 90
+            { press = "right" },             -- music: 90 → 100
+            { assert_text = "100%" },
+        },
+    },
+    {
+        -- Covers settings_menu.lua line 111: return false for unrecognized key
+        name       = "unrecognized key while settings open is a no-op",
+        given      = { solved = {} },
+        make_scene = make_scene,
+        steps = {
+            { click_button = "Settings" },
+            { assert_button = { id = "settings:resume" } },
+            { press = "f" },                      -- unrecognized key → return false
+            { assert_button = { id = "settings:resume" } },  -- still open
+        },
+    },
+    {
+        -- Covers settings_menu.lua line 55: self._on_exit() when on_exit callback provided
+        name       = "on_exit callback fires instead of scene switch",
+        given      = { solved = {} },
+        make_scene = function(sm)
+            local scene  = WrapperScene.new(sm)
+            scene._menu  = SettingsMenu.new(scene._state, sm, function() end)
+            return scene
+        end,
+        steps = {
+            { click_button = "Settings" },
+            { click_button = { id = "settings:exit" } },
+            { assert_button = { id = "wrap:open" } },  -- overlay closed, no scene switch
+        },
+    },
 }

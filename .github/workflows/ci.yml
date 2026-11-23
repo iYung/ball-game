@@ -16,7 +16,16 @@ jobs:
         run: |
           sudo add-apt-repository -y ppa:bartbes/love-stable
           sudo apt-get update -q
-          sudo apt-get install -y love
+          # Retry up to 3 times; fall back to official .deb on persistent PPA failure
+          for attempt in 1 2 3; do
+            sudo apt-get install -y love && break
+            if [ $attempt -eq 3 ]; then
+              echo "PPA failed after 3 attempts, installing from official .deb"
+              wget -q https://github.com/love2d/love/releases/download/11.5/love_11.5_amd64.deb
+              sudo apt-get install -y ./love_11.5_amd64.deb
+            fi
+            sleep 10
+          done
 
       - name: Run tests
         run: love . --headless --coverage

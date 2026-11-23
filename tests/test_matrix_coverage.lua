@@ -304,4 +304,51 @@ do
     print("PASS: grid:clear on empty cell with nil palette (line 2113)")
 end
 
+-- ── 12. _cmd_enabled with unknown id returns false (line 1369) ───────────────
+do
+    local scene = new_scene()
+    local result = scene:_cmd_enabled("unknown_command")
+    assert(result == false, "_cmd_enabled unknown id must return false, got: " .. tostring(result))
+    print("PASS: _cmd_enabled unknown id returns false (line 1369)")
+end
+
+-- ── 13. _palette_is_selected with unknown kind returns false (line 1424) ──────
+-- sel != nil, btn.kind does not match any handled kind → line 1424 fires.
+do
+    local scene = new_scene()
+    -- Select something so palette:selected() != nil
+    scene.palette:select({ kind = "op", op = "negate" })
+    -- Pass a button whose kind is not "pusher", "drag", or "op"
+    local result = scene:_palette_is_selected({ kind = "unknown_kind" })
+    assert(result == false, "_palette_is_selected unknown kind must return false, got: " .. tostring(result))
+    print("PASS: _palette_is_selected unknown kind returns false (line 1424)")
+end
+
+-- ── 14. set_row value-cell right-third click increments value (lines 2072-2073) ──
+-- Same setup as test 10 but click the right third of the ref cell.
+do
+    local scene = new_scene()
+    scene:_place_tile_at(5, 1, { kind = "op", op = "set_row" })
+    scene:_resize_tile(5, 1, "grow_col")
+
+    local tile = scene.grid:get(5, 1)
+    assert(tile ~= nil and tile.op == "set_row", "set_row tile must be at (5,1)")
+    scene.palette:select({ kind = "op", op = "negate" })
+
+    -- Click the right third of ref cell (6,1):
+    -- cell_top_left(6,1) = (95+5*63, 20+0*63) = (410, 20)
+    -- right-third: rel_x >= CELL_SIZE*2/3 = 42 → mx >= 410+42 = 452 → use 455
+    local mx, my = 455, 30
+
+    local ok, err = pcall(function() scene:mouse_pressed(mx, my, 1) end)
+    assert(ok, "mouse_pressed right-third of set_row ref cell threw: " .. tostring(err))
+
+    local values = tile.values
+    assert(values and values[1] and values[1][1] ~= nil,
+        "set_row value cell: values[1][1] should exist after right-click")
+    assert(values[1][1] == math.min(9, 1),
+        "set_row value cell: values[1][1] should be 1 after increment, got " .. tostring(values[1][1]))
+    print("PASS: set_row value-cell right-third click increments value (lines 2072-2073)")
+end
+
 print("ALL MATRIX COVERAGE TESTS PASSED")

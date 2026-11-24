@@ -39,8 +39,11 @@ do
     print("PASS: click Unlock All unlocks and advances")
 end
 
--- Click anywhere else advances without unlocking
+-- Click anywhere else advances without unlocking.
+-- Pre-mark intro seen so the click goes straight to LevelSelectScene
+-- (intro-cutscene triggering is covered in tests/ui/08_intro_cutscene.lua).
 do
+    Progress.mark_cutscene_seen(0)
     local ctx = fresh()
     local scene = ctx.sm.current
     ctx.sm:mouse_pressed(5, 5, 1)
@@ -49,6 +52,19 @@ do
     assert(ctx.sm.current ~= scene, "click at (5,5) advances")
     assert(not Progress.is_world_unlocked(2), "click at (5,5) does not unlock")
     print("PASS: click elsewhere advances")
+end
+
+-- First visit (intro unseen): click advances to CutsceneScene
+do
+    Progress.reset()
+    local ctx = fresh()
+    local scene = ctx.sm.current
+    ctx.sm:mouse_pressed(5, 5, 1)
+    local CutsceneScene = require("lua/game/scenes/cutscene_scene")
+    assert(getmetatable(ctx.sm.current) == CutsceneScene, "click at (5,5) on first visit shows intro cutscene")
+    assert(ctx.sm.current ~= scene, "click at (5,5) advances")
+    assert(not Progress.is_world_unlocked(2), "click at (5,5) does not unlock")
+    print("PASS: click elsewhere on first visit shows intro cutscene")
 end
 
 Progress.reset()

@@ -415,12 +415,17 @@ function UIRunner.run_spec(spec, opts)
         -- doesn't unexpectedly trigger cutscenes in unrelated specs.
         -- Specs that intentionally test cutscene triggering must list the
         -- worlds whose cutscene should remain unseen in given.cutscenes_unseen.
+        -- World 0 is the intro cutscene (fires from StartScene); it is also
+        -- marked seen by default so unrelated specs reach level select directly.
         local PuzzleLoader   = require("lua/game/puzzle_loader")
         local unseen_cutscenes = {}
         if type(given.cutscenes_unseen) == "table" then
             for _, w in ipairs(given.cutscenes_unseen) do
                 unseen_cutscenes[w] = true
             end
+        end
+        if not unseen_cutscenes[0] then
+            Progress.mark_cutscene_seen(0)
         end
         for w = 1, PuzzleLoader.world_count() do
             if not unseen_cutscenes[w] then

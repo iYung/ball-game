@@ -43,7 +43,17 @@ end
 
 function StartScene:_advance()
     local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-    self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
+    local next_scene = LevelSelectScene.new(self._scene_manager, self._settings_state)
+
+    local Progress = require("lua/game/progress")
+    if not Progress.is_cutscene_seen(0) then
+        Progress.mark_cutscene_seen(0)
+        local CutsceneScene = require("lua/game/scenes/cutscene_scene")
+        self._scene_manager:switch(CutsceneScene.new(0, next_scene, self._scene_manager))
+        return
+    end
+
+    self._scene_manager:switch(next_scene)
 end
 
 function StartScene:_unlock_all()

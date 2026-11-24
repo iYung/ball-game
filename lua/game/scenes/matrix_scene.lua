@@ -2347,4 +2347,7 @@ end
 
 function MatrixScene:text_input(_) end
 
+-- Board geometry shared with the solution recap so replays line up with the game board.
+MatrixScene.GEOM = { GRID_X = GRID_X, GRID_Y = GRID_Y, CELL_SIZE = CELL_SIZE, HUD_X = HUD_X }
+
 return MatrixScene

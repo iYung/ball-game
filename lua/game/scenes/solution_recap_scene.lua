@@ -4,11 +4,12 @@ local UI           = require("lua/core/ui")
 
 local W, H = 1280, 720
 
--- Grid layout constants (match matrix_scene for identical rendering)
-local GRID_X    = 95
-local GRID_Y    = 20
-local CELL_SIZE = 63
-local HUD_X     = 820
+-- Grid layout constants come from matrix_scene so replays line up with the board.
+local GEOM      = require("lua/game/scenes/matrix_scene").GEOM
+local GRID_X    = GEOM.GRID_X
+local GRID_Y    = GEOM.GRID_Y
+local CELL_SIZE = GEOM.CELL_SIZE
+local HUD_X     = GEOM.HUD_X
 
 local PAUSE_AT_END = 0.6  -- seconds to hold at the last frame before looping
 
@@ -31,6 +32,8 @@ local function cell_top_left(cx, cy)
     return GRID_X + (cx - 1) * CELL_SIZE,
            GRID_Y + (cy - 1) * CELL_SIZE
 end
+
+SolutionRecapScene.cell_top_left = cell_top_left
 
 local function lerp(a, b, t) return a + (b - a) * t end
 

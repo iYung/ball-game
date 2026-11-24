@@ -12,7 +12,7 @@ return {
         { assert_tile = { x = 5, y = 6, kind = "op", op = "transpose" } },
         { click_button = { id = "palette:pusher" } },
         { click_cell = { 1, 5 } },
-        { click_slot = { pusher = 1, slots = { 1, 2, 3, 4, 5, 6, 7, 8 }, times = 2 } },
+        { drag = { from = { id = "chip:right" }, to = { slot = { 1, 1 } } } },
         { click_button = "Run" },
         -- ~0.35 s per tick: 30 frames in is the middle of the slide into the transpose tile.
         { wait = 30 },

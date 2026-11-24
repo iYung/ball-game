@@ -44,7 +44,8 @@ do
         assert(seen[c], c .. " present")
     end
     assert(seen["cell:1,1"] and seen["cell:10,10"], "cells present")
-    assert(seen["tl:dec"] and seen["tl:inc"] and seen["tl:scroll_left"] and seen["tl:scroll_right"], "timeline controls")
+    assert(seen["tl:scroll_left"] and seen["tl:scroll_right"], "timeline scroll controls")
+    assert(seen["chip:right"] and seen["chip:stop"] and seen["slot:1:1"] and seen["slot:4:1"], "chips and slots")
     -- Order: palette, cmd, cells, tl
     local pos = {}
     for i, id in ipairs(a) do pos[id] = i end
@@ -52,7 +53,7 @@ do
     assert(pos["cmd:menu"] < pos["cell:1,1"], "commands before cells")
     assert(pos["cell:2,1"] < pos["cell:1,2"], "cells are y-major")
     assert(pos["cell:10,10"] < pos["tl:scroll_left"], "cells before timeline")
-    assert(pos["tl:scroll_right"] < pos["tl:dec"] and pos["tl:dec"] < pos["tl:inc"], "timeline order")
+    assert(pos["tl:scroll_left"] < pos["tl:scroll_right"] and pos["tl:scroll_right"] < pos["slot:1:1"], "timeline order")
     assert(UIRunner.check_invariants(scene:ui_elements()) == nil,
         "puzzle 2 invariants: " .. tostring(UIRunner.check_invariants(scene:ui_elements())))
     -- _btn_rects is a dense array with ids and btn.label
@@ -101,7 +102,7 @@ do
     local scene = new_scene()
     scene:_place_tile_at(3, 3, { kind = "op", op = "transpose" })
     scene.palette:select({ kind = "drag" })
-    scene:mouse_pressed(95 + 2 * 63 + 10, 20 + 2 * 63 + 10, 1)
+    scene:mouse_pressed(130 + 2 * 52 + 10, 10 + 2 * 52 + 10, 1)
     local held = scene._drag_tile
     assert(held ~= nil, "tile held")
     assert(scene.sim == nil and scene.status == nil, "nothing to reset")
@@ -128,25 +129,30 @@ do
     print("PASS: cmd:reset enabled matches")
 end
 
--- Slots appear after a pusher is placed; clicking slot:A:1 cycles it to up.
+-- Pusher selector buttons appear once a pusher is placed; chips write slots through the registry.
+-- Rewritten: the old test cycled slot:A:1 by clicking and used tl:inc/tl:dec for the length;
+-- slots are now slot:<lane>:<tick>, written by an armed chip, and the length is fixed.
 do
+    local Timeline = require("lua/game/timeline")
     local scene = new_scene()
-    assert(UI.find(scene:ui_elements(), "slot:A:1") == nil, "no slots without a pusher")
+    assert(UI.find(scene:ui_elements(), "psel:A") == nil, "no selector without a pusher")
+    local s1 = UI.find(scene:ui_elements(), "slot:1:1")
+    assert(s1 and s1.kind == "slot" and s1.enabled, "slot:1:1 present and enabled")
     scene:_place_tile_at(1, 5, { kind = "pusher" })
-    local s1 = UI.find(scene:ui_elements(), "slot:A:1")
-    assert(s1 and s1.kind == "slot" and s1.enabled, "slot:A:1 present and enabled")
-    click(scene, "slot:A:1")
-    assert(scene.timeline[1][1] == "up", "slot cycled to up, got " .. tostring(scene.timeline[1][1]))
-    click(scene, "slot:A:1", 2)
-    assert(scene.timeline[1][1] == "idle", "right-click cycles back")
-    local n = scene.timeline_n
-    click(scene, "tl:inc")
-    assert(scene.timeline_n == n + 1, "tl:inc lengthens")
+    assert(UI.find(scene:ui_elements(), "psel:A").selected, "first pusher auto-selected")
+    click(scene, "chip:up")
+    assert(UI.find(scene:ui_elements(), "chip:up").selected, "chip armed")
+    click(scene, "slot:1:1")
+    local c = Timeline.get(scene.timeline, 1, 1)
+    assert(c and c.cmd == "up" and c.pusher == 1, "slot written")
+    click(scene, "slot:1:1", 2)
+    assert(Timeline.get(scene.timeline, 1, 1) == nil, "right-click clears")
     scene.running = true
-    assert(UI.find(scene:ui_elements(), "slot:A:1").enabled == false, "slot disabled while running")
-    assert(UI.find(scene:ui_elements(), "tl:inc").enabled == false, "inc disabled while running")
-    click(scene, "tl:inc")
-    assert(scene.timeline_n == n + 1, "inc ignored while running")
+    assert(UI.find(scene:ui_elements(), "slot:1:1").enabled == false, "slot disabled while running")
+    assert(UI.find(scene:ui_elements(), "chip:up").enabled == false, "chip disabled while running")
+    assert(UI.find(scene:ui_elements(), "psel:A").enabled == false, "selector disabled while running")
+    click(scene, "slot:1:1")
+    assert(Timeline.get(scene.timeline, 1, 1) == nil, "slot click ignored while running")
     print("PASS: timeline slots via registry")
 end
 
@@ -168,17 +174,17 @@ do
     print("PASS: ui_tile / ui_matrix")
 end
 
--- scroll_left button must not overlap the "TIMELINE" header text area (x=840 onwards).
--- With the fix, scroll_left.x = x0 - 14 = 826, so it ends at 826+12=838 < 840.
+-- tl:scroll_left sits left of the first slot and tl:scroll_right right of the last visible one.
 do
     local scene = new_scene()
-    local L = scene:_timeline_layout()
-    assert(L, "timeline layout available after draw")
-    local sl = L.scroll_left
-    local header_x = L.x0  -- "TIMELINE" text starts here
-    assert(sl.x + sl.w <= header_x,
-        string.format("scroll_left (%d..%d) must not overlap header_x=%d", sl.x, sl.x + sl.w, header_x))
-    print("PASS: scroll_left does not overlap TIMELINE header")
+    local els = scene:ui_elements()
+    local sl, sr = UI.find(els, "tl:scroll_left"), UI.find(els, "tl:scroll_right")
+    local first = UI.find(els, "slot:1:1")
+    assert(sl.rect.x + sl.rect.w <= first.rect.x, "scroll_left clear of the first slot")
+    local last
+    for _, e in ipairs(els) do if e.kind == "slot" and e.id:match("^slot:1:") then last = e end end
+    assert(last.rect.x + last.rect.w <= sr.rect.x, "scroll_right clear of the last visible slot")
+    print("PASS: timeline scroll arrows do not overlap slots")
 end
 
 -- MatrixScene:text_input(_) is a no-op and must not raise.

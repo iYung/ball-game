@@ -7,11 +7,6 @@ Sim.DIRS = {
     right = { dx =  1, dy =  0 },
 }
 
--- 1-based timeline slot for a 1-based tick, looping every n slots.
-function Sim.slot(tick, n)
-    return ((tick - 1) % n) + 1
-end
-
 local function covers(x, y, rows, cols, cx, cy)
     return cx >= x and cx <= x + cols - 1 and cy >= y and cy <= y + rows - 1
 end
@@ -52,16 +47,24 @@ function Sim.footprint_clear(x, y, rows, cols, w, h, gaps, pushers)
     return true
 end
 
--- Run one tick. st: { x, y, rows, cols, w, h, pushers, n, tick } where x,y is the matrix
--- anchor and pushers is an array of { x, y, cmds }; cmds[slot] is "up"|"down"|"left"|"right"|"idle"|nil.
--- Pushers act one at a time in array order, each stepping one cell in its command direction:
+-- Run one tick. st: { x, y, rows, cols, w, h, pushers, tick } where x,y is the matrix
+-- anchor and pushers is an array of { id, x, y, dir }; dir is the pusher's persistent
+-- direction ("up"|"down"|"left"|"right"|"stop"|nil; nil/"stop" = not moving).
+-- commands is this tick's list { {pusher=id, cmd=cmd}, ... } (may be nil/empty); each one
+-- sets the dir of the pusher with that id before the physics runs. dir is never cleared by
+-- physics: a blocked pusher keeps its dir and tries again next tick.
+-- Pushers act one at a time in array order, each stepping one cell in its dir:
 --   * off the grid, or into another pusher's cell: the pusher stays put
 --   * into a matrix cell: the matrix is shoved one cell the same way; if that would take it
 --     off the grid or onto another pusher, nothing moves
 -- Mutates st.tick, st.x/st.y and each pusher's x/y. Returns moved (bool): anything moved.
-function Sim.advance(st)
+function Sim.advance(st, commands)
     st.tick = st.tick + 1
-    local slot    = Sim.slot(st.tick, st.n)
+    for _, c in ipairs(commands or {}) do
+        for _, p in ipairs(st.pushers) do
+            if p.id == c.pusher then p.dir = c.cmd end
+        end
+    end
     local moved   = false
     local blocked = false
 
@@ -71,7 +74,7 @@ function Sim.advance(st)
     local contacts     = {}
     local non_contacts = {}
     for _, p in ipairs(st.pushers) do
-        local d = Sim.DIRS[(p.cmds and p.cmds[slot]) or "idle"]
+        local d = Sim.DIRS[p.dir or "stop"]
         if d then
             local tx, ty  = p.x + d.dx, p.y + d.dy
             local can_step = tx >= 1 and tx <= st.w and ty >= 1 and ty <= st.h

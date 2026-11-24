@@ -5,11 +5,20 @@ local function new_scene()
     return ctx.sm.current
 end
 
--- Place a pusher and program its timeline slots (slots = { [slot] = "right", ... }).
-local function add_pusher(scene, x, y, slots)
+-- Place a pusher and program its commands (cmds = { [tick] = "right", ... }). Commands
+-- persist, so one entry is enough to keep a pusher moving. Written straight into the shared
+-- timeline shape scene.timeline[lane][tick] = { pusher = id, cmd = cmd } (first free lane).
+local function add_pusher(scene, x, y, cmds)
     scene:_place_tile_at(x, y, { kind = "pusher" })
     local id = scene.grid:get(x, y).id
-    for s, cmd in pairs(slots) do scene.timeline[id][s] = cmd end
+    for tick, cmd in pairs(cmds) do
+        for lane = 1, 4 do
+            if scene.timeline[lane][tick] == nil then
+                scene.timeline[lane][tick] = { pusher = id, cmd = cmd }
+                break
+            end
+        end
+    end
     return id
 end
 
@@ -21,10 +30,12 @@ local function run_to_end(scene)
     end
 end
 
+-- NOTE (puzzle-scene-ui-overhaul Task 2): commands persist now, so "right" x8 became one
+-- "right" at tick 1; same physics (pusher keeps walking until the matrix is at the sink).
 -- Puzzle 1: 2x2 identity from source (2,5) to sink (10,5). A pusher starts just left
 -- of the source and pushes the matrix right until it hits the sink.
 local function carry(scene)
-    add_pusher(scene, 1, 6, { "right", "right", "right", "right", "right", "right", "right", "right" })
+    add_pusher(scene, 1, 6, { [1] = "right" })
 end
 
 do
@@ -50,12 +61,12 @@ do
     print("PASS: op fires once on path")
 end
 
--- No pushers: matrix never moves and the run reports stuck after one timeline loop.
+-- No pushers: matrix never moves and the run reports stuck as soon as a tick moves nothing (no commands pending).
 do
     local scene = new_scene()
     run_to_end(scene)
     assert(scene.status == "stuck", "idle run is stuck, got " .. tostring(scene.status))
-    assert(scene.sim.tick == scene.timeline_n, "stuck after one full timeline")
+    assert(scene.sim.tick == 1, "stuck on the first tick: no commands and nothing moved")
     print("PASS: idle run is stuck")
 end
 
@@ -71,22 +82,34 @@ do
     print("PASS: pusher ids")
 end
 
--- Timeline clicks cycle a slot and resize the timeline; clicks are ignored mid-run.
+-- Timeline clicks: an armed chip writes the selected pusher's command into a slot,
+-- right-click clears it, the scroll arrows page the window; all ignored mid-run.
+-- (Rewritten: old slot cycling and the +/- length buttons were removed by the timeline overhaul.)
 do
+    local Timeline = require("lua/game/timeline")
+    local UI = require("lua/core/ui")
     local scene = new_scene()
     local id = add_pusher(scene, 1, 6, {})
-    scene._tl_top = 500
-    local L = scene:_timeline_layout()
-    local slot1 = L.rows[1].slots[1]
-    scene:mouse_pressed(slot1.x + 1, slot1.y + 1, 1)
-    assert(scene.timeline[id][1] == "up", "left-click cycles forward from idle to up")
-    scene:mouse_pressed(slot1.x + 1, slot1.y + 1, 2)
-    assert(scene.timeline[id][1] == "idle", "right-click cycles back")
-    scene:mouse_pressed(L.inc.x + 1, L.inc.y + 1, 1)
-    assert(scene.timeline_n == 9, "+ lengthens timeline")
+    scene:draw()
+    local function click_id(eid, btn)
+        local e = UI.find(scene:ui_elements(), eid)
+        local x, y = UI.centre(e.rect)
+        scene:mouse_pressed(x, y, btn or 1)
+        scene:mouse_released(x, y, btn or 1)
+    end
+    click_id("chip:up")
+    click_id("slot:1:1")
+    local c = Timeline.get(scene.timeline, 1, 1)
+    assert(c and c.cmd == "up" and c.pusher == id, "armed chip written to the slot")
+    click_id("slot:1:1", 2)
+    assert(Timeline.get(scene.timeline, 1, 1) == nil, "right-click clears")
+    click_id("tl:scroll_right")
+    assert(scene.timeline_scroll > 0, "scroll arrow pages the window")
+    scene.timeline_scroll = 0
     scene.running = true
-    scene:mouse_pressed(L.inc.x + 1, L.inc.y + 1, 1)
-    assert(scene.timeline_n == 9, "timeline locked while running")
+    local e = UI.find(scene:ui_elements(), "slot:1:1")
+    scene:mouse_pressed(e.rect.x + 1, e.rect.y + 1, 1)
+    assert(Timeline.get(scene.timeline, 1, 1) == nil, "timeline locked while running")
     print("PASS: timeline editing")
 end
 
@@ -131,7 +154,7 @@ do
     assert(scene.status == "no_pusher", "Space without pusher keeps no_pusher")
     assert(scene.sim == nil, "sim still nil")
     -- After placing a pusher the guard clears and the run starts.
-    add_pusher(scene, 1, 6, { "right", "right", "right", "right", "right", "right", "right", "right" })
+    add_pusher(scene, 1, 6, { [1] = "right" })
     scene:key_pressed("r")
     assert(scene.status == "running" or scene.sim ~= nil, "run starts once a pusher is placed")
     print("PASS: no_pusher guard")
@@ -140,7 +163,7 @@ end
 -- A pusher that walks into the grid wall is a blocked move → "blocked" status.
 do
     local scene = new_scene()
-    add_pusher(scene, 1, 6, { "left" })
+    add_pusher(scene, 1, 6, { [1] = "left" })
     run_to_end(scene)
     assert(scene.status == "blocked", "blocked pusher (wall) gives blocked status, got " .. tostring(scene.status))
     print("PASS: blocked pusher wall gives blocked status")
@@ -151,7 +174,7 @@ end
 -- shoving it to (2,10) would put row 11 off the grid.
 do
     local scene = new_scene()
-    add_pusher(scene, 2, 4, { "down", "down", "down", "down", "down" })
+    add_pusher(scene, 2, 4, { [1] = "down" })
     run_to_end(scene)
     assert(scene.status == "blocked", "blocked pusher (matrix at wall) gives blocked status, got " .. tostring(scene.status))
     print("PASS: blocked pusher matrix-at-wall gives blocked status")
@@ -168,9 +191,9 @@ do
     assert(tile.params.row_a == 1, "default row_a=1, got " .. tostring(tile.params.row_a))
 
     -- Simulate clicking the right-third of the first strip (dc=0, would normally increment row_a).
-    -- GRID_X=95, CELL_SIZE=63: sx = 95+(5-1)*63 = 347, sy = 20+(5-1)*63 = 272
-    -- Right-third x: 347 + 42 = 389+, use 395; strip-1 y mid: 272+32 = 304
-    scene:mouse_pressed(395, 304, 1)
+    -- GRID_X=130, GRID_Y=10, CELL_SIZE=52: sx = 130+(5-1)*52 = 338, sy = 10+(5-1)*52 = 218
+    -- Right-third x: 338 + 35 = 373+, use 380; strip-1 y mid: 218+26 = 244
+    scene:mouse_pressed(380, 244, 1)
     assert(tile.params.row_a == 1,
         "fixed tile param unchanged after click, got row_a=" .. tostring(tile.params.row_a))
     print("PASS: fixed player-placed tile blocks param edits")
@@ -219,18 +242,20 @@ do
     print("PASS: locked op fires with correct params")
 end
 
--- Timeout: a pusher that oscillates (right/left) moves every tick so it never
--- triggers "stuck", but after 500 ticks the sim hits MAX_TICKS → "timeout".
+-- Run ends once the commands run out. (Replaces the old "timeout" test: with persistent commands
+-- and a 60-tick timeline every run ends in stuck/blocked/win/fail within a bounded number of
+-- ticks, so the old 500-tick MAX_TICKS "timeout" status was unreachable and has been removed.)
+-- A pusher away from the matrix oscillates, stops at tick 60, and the run is stuck at tick 61.
 do
     local scene = new_scene()
-    scene.timeline_n = 2
-    add_pusher(scene, 5, 2, { "right", "left" })
+    local cmds = {}
+    for t = 1, 59 do cmds[t] = (t % 2 == 1) and "right" or "left" end
+    cmds[60] = "stop"     -- an unstopped pusher would keep walking into the wall and end "blocked"
+    add_pusher(scene, 5, 2, cmds)
     run_to_end(scene)
-    assert(scene.status == "timeout",
-        "oscillating pusher times out after 500 ticks, got " .. tostring(scene.status))
-    assert(scene.sim.tick >= 500,
-        "sim ran at least 500 ticks, got " .. tostring(scene.sim.tick))
-    print("PASS: timeout status")
+    assert(scene.status == "stuck", "run ends stuck after the last command, got " .. tostring(scene.status))
+    assert(scene.sim.tick == 61, "stuck on the first tick after the last command, got " .. scene.sim.tick)
+    print("PASS: run ends after the last command")
 end
 
 -- Two pushers in the same direction: forces aggregate, matrix moves only one cell.

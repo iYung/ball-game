@@ -4,7 +4,7 @@ A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to tran
 
 ## How to play
 
-The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue) fixed by each puzzle. The Source tile spans the same number of cells as the input matrix (rows × cols), showing exactly where the matrix will sit at the start of a run. The matrix does not move on its own — you place **pushers** and program them on a shared **timeline**. Pushers walk around the board and shove the matrix when they walk into it. Op tiles in its path transform it; any matrix cell touching the Sink ends the run.
+The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue) fixed by each puzzle. The Source tile spans the same number of cells as the input matrix (rows × cols), showing exactly where the matrix will sit at the start of a run. The matrix does not move on its own — you place **pushers** and program them on the **timeline** along the bottom of the screen. Pushers walk around the board and shove the matrix when they walk into it. Op tiles in its path transform it; any matrix cell touching the Sink ends the run.
 
 **Level select:**
 
@@ -29,18 +29,19 @@ Puzzles are grouped into five worlds — **Basics** (1–5), **Combos** (6–11)
 | `← →` | Previous / next puzzle |
 | Left-click grid | Place selected tile (or pick up a tile in **[Mv]** mode) |
 | Right-click grid | Erase tile (or cancel an in-progress drag) |
-| Left-click palette | Select a tile type |
-| Click `<` / `>` in palette | Scroll the palette one button left / right (only shown when it doesn't fit) |
-| Left / right-click timeline slot | Cycle that slot's command forward / back |
-| Click `<` / `>` in timeline | Scroll the visible slot window left / right |
-| Click `^` / `v` in timeline | Scroll pusher rows up / down (shown when rows overflow the zone) |
+| Left-click or drag an op from the left column | Select a tile type; drag it onto a grid cell to place it |
+| Click `^` / `v` in the left column | Scroll the ops column one row (only shown when it doesn't fit) |
+| Drag an instruction chip (`^ v < > .`) onto a timeline slot | Write that command for the selected pusher (click the chip, then a slot, also works). Dragging a filled slot moves it; dragging it off the bar or right-clicking removes it |
+| Click `A`, `B`, ... above the chips | Choose which placed pusher the chips program |
+| Mouse wheel over the timeline | Scroll the visible ticks (wheel down or right = later ticks) |
+| Click `<` / `>` on the timeline | Scroll the visible ticks (the timeline is 60 ticks long, 4 lanes) |
 | `Esc` | Return to level select (from puzzle) or start screen (from level select) |
 
-The bottom bar spans the full screen width: the palette on the left, **Run**, **Reset**, **Menu**, and (after a win) **Continue** on the right. When the palette doesn't fit, `<` / `>` arrows appear at the edges of the palette section and scroll it one button at a time (an arrow is dimmed when you can't scroll further that way). Your selected tile stays selected while scrolling. Buttons that aren't applicable in the current state are shown dimmed, and the keyboard shortcuts follow the same rules as the buttons. The current puzzle number (`Puzzle N/23`) is shown at the top-left of the right-hand panel.
+The **left column** holds the op tiles (drag them onto the grid). The **bottom bar** holds the instruction chips and pusher selector on the left, the 4-lane **timeline** in the middle, and **Run**, **Reset**, **Menu** and (after a win) **Continue** on the right. Buttons that aren't applicable in the current state are shown dimmed, and the keyboard shortcuts follow the same rules as the buttons. The current puzzle number (`Puzzle N/23`) is shown at the top-left of the right-hand panel.
 
 **Tile types:**
 
-- **P** (Pusher) — a 1×1 mobile unit labelled A–H (up to 8). The tile you place is its start cell. Each tick its timeline command (`^ v < >`, or `.` idle) moves it one cell. Walking into a matrix cell shoves the whole matrix one cell the same way (a pusher starting under the matrix rides along inside it). Any non-idle command that cannot be executed — hitting the grid edge, a gap, another pusher, or trying to shove the matrix when it has nowhere to go — immediately ends the run as **FAIL**. If a transform (e.g. transpose) produces a footprint that extends off the grid, overlaps a gap, or overlaps a pusher, the run also ends as **FAIL**. Idle (`.`) commands never cause a fail. Pushers act in letter order each tick, so A moves before B.
+- **P** (Pusher) — a 1×1 mobile unit labelled A–H (up to 8). The tile you place is its start cell. A timeline command (`^ v < >`) sets its direction and it keeps walking that way, one cell per tick, until another command changes it; `.` (stop) halts it. Walking into a matrix cell shoves the whole matrix one cell the same way (a pusher starting under the matrix rides along inside it). Any moving pusher whose step cannot be executed — hitting the grid edge, a gap, another pusher, or trying to shove the matrix when it has nowhere to go — immediately ends the run as **FAIL**. If a transform (e.g. transpose) produces a footprint that extends off the grid, overlaps a gap, or overlaps a pusher, the run also ends as **FAIL**. A stopped pusher never causes a fail. Pushers act in letter order each tick, so A moves before B.
 - **×** (Gap) — dark impassable cells placed by the puzzle. Neither pushers nor any part of the matrix can enter them. Some puzzles require reshaping the matrix (e.g. transposing a 2×3 into a 3×2) to fit through a narrow gap corridor.
 - **×R** (Scale Row) — vertical tile spanning the matrix's row count; click a band to select the target row, then click left/right thirds of the selected band to adjust the scalar
 - **⇅R** (Swap Rows) — 1×2 vertical tile; click left/right thirds of each strip to adjust the row index
@@ -70,9 +71,9 @@ Op tiles span one board cell for the op plus one per parameter. Click the left t
 
 **Fixed ops:** some puzzles offer ops in two variants — editable (default) and fixed. Fixed ops in the palette are labelled with a `!` suffix (e.g. `xR!`). They can be placed and moved freely but their parameters are preset and cannot be changed. Puzzle-placed fixed ops (shown with a lock icon) are pre-positioned by the puzzle with set parameters; they cannot be moved, erased, or edited.
 
-**Timeline:** the panel in the right column has one row per pusher and `len` slots (default 8, adjustable 1–500, loops). When the loop is longer than the visible window, click `<` / `>` to scroll, or just run — the view auto-scrolls to follow the current slot and rewinds when the loop wraps. Edit it while stopped. Every pusher runs the same loop, so offset the commands to choreograph them.
+**Timeline:** 4 lanes by 60 ticks along the bottom bar, so up to 4 commands can happen on one tick. Each command is stamped with the pusher it targets (pick it with the `A`/`B`/... selector before dragging a chip). A pusher that already has a command on a tick gets it replaced. The timeline does not loop: after the last command every pusher keeps its direction. Edit it while stopped; use `<` / `>` or the mouse wheel to scroll, and during a run the view follows the current tick.
 
-**Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. Click the **Continue** button (or press `Enter`) to open the **solution recap screen**, which shows the number of ticks your solution took, the number of pieces you placed, and a looping animated playback of your solution — matrix ball and pushers moving in sync — on the board. Click the **Next puzzle**, **Replay**, or **Menu** button (or press `Enter`, `R`, or `Esc`) to advance to the next puzzle, replay the animation, or return to the level-select screen. Clicks outside the three buttons do nothing. A run with no movement for a full timeline loop ends as **STUCK**, and a run past 500 ticks ends as **TIMEOUT**.
+**Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. Click the **Continue** button (or press `Enter`) to open the **solution recap screen**, which shows the number of ticks your solution took, the number of pieces you placed, and a looping animated playback of your solution — matrix ball and pushers moving in sync — on the board. Click the **Next puzzle**, **Replay**, or **Menu** button (or press `Enter`, `R`, or `Esc`) to advance to the next puzzle, replay the animation, or return to the level-select screen. Clicks outside the three buttons do nothing. A run in which nothing moves after the last command ends as **STUCK**.
 
 **23 puzzles** — from a simple identity check (puzzle 1) through increasingly complex matrix transformations. Puzzles 1–11 each introduce or practice a single operation; puzzles 12–16 require two or three operations in sequence (e.g. transpose then scale, Gaussian elimination, or a three-step chain); puzzles 17–20 introduce the new ops: row reduction, column operations, flips, and absolute value with rotation; puzzles 21–23 introduce fixed ops (player-placed fixed tools and puzzle-placed locked ops; puzzle 21 offers only its fixed `!` ops, no editable ones). Puzzles can use non-square (n×m) matrices.
 
@@ -106,7 +107,7 @@ love . --headless tests/ui/01_solve_puzzle_1.lua    # one UI spec file
 love . --headless --coverage                        # all tests + per-file lua/game/ line-coverage report
 ```
 
-Unit tests print `PASS  tests/x.lua` / `FAIL  tests/x.lua — <error>`. UI specs drive the real scenes headlessly from the title screen (key presses, clicks on named buttons, cells and timeline slots) and print `PASS  tests/ui/x.lua :: <name>` or the failing step and reason. On every frame the runner also checks each scene's UI element registry (`scene:ui_elements()`): every clickable element must be well-formed, on screen, and must not overlap any other. The run ends with `<passed>/<total> passed` and exits non-zero on any failure.
+Unit tests print `PASS  tests/x.lua` / `FAIL  tests/x.lua — <error>`. UI specs drive the real scenes headlessly from the title screen (key presses, clicks on named buttons, cells, drags and timeline slots) and print `PASS  tests/ui/x.lua :: <name>` or the failing step and reason. On every frame the runner also checks each scene's UI element registry (`scene:ui_elements()`): every clickable element must be well-formed, on screen, and must not overlap any other. The run ends with `<passed>/<total> passed` and exits non-zero on any failure.
 
 See [`docs/testing.md`](docs/testing.md) for the spec format, the full step vocabulary, the element registry contract, and the mandatory process rules (for example, any edit to a pre-existing test is flagged as a potential regression).
 

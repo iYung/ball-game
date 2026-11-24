@@ -3,7 +3,7 @@
 --   1. _draw_status_banner  (lines 1664–1675)
 --   2. Ghost preview in draw_grid  (lines 848–883)
 --   3. -col / -row affordance strips in draw_grid  (lines 803–814, 829–840)
---   4. _timeline_element_click tl: and slot: branches  (lines 1649–1662)
+--   4. _bar_click psel/chip/tl/slot branches (the bottom bar; replaces the old _timeline_element_click)
 
 local runner = require("lua/headless/runner")
 
@@ -76,70 +76,42 @@ do
     print("PASS: draw_grid -col and -row affordance strips (2×2 tile)")
 end
 
--- ── 4. _timeline_element_click ────────────────────────────────────────────────
-
--- Seed _tl_top so _timeline_layout() returns a table instead of nil
+-- ── 4. _bar_click ─────────────────────────────────────────────────────────────
+-- Rewritten: the old test called _timeline_element_click with tl:inc/dec/scroll_up/down and
+-- slot:A:n, which no longer exist (length +/-, per-pusher rows, slot cycling were removed).
 do
+    local Timeline = require("lua/game/timeline")
     local scene = new_scene()
-    scene._tl_top = 500   -- any numeric value lets _timeline_layout proceed
-
-    -- tl:inc branch
-    local ok, err = pcall(function()
-        scene:_timeline_element_click({ id = "tl:inc", kind = "tl", enabled = true }, 1)
-    end)
-    assert(ok, "_timeline_element_click tl:inc threw: " .. tostring(err))
-    print("PASS: _timeline_element_click tl:inc")
-
-    -- tl:scroll_right branch
-    ok, err = pcall(function()
-        scene:_timeline_element_click({ id = "tl:scroll_right", kind = "tl", enabled = true }, 1)
-    end)
-    assert(ok, "_timeline_element_click tl:scroll_right threw: " .. tostring(err))
-    print("PASS: _timeline_element_click tl:scroll_right")
-
-    -- tl:dec branch
-    ok, err = pcall(function()
-        scene:_timeline_element_click({ id = "tl:dec", kind = "tl", enabled = true }, 1)
-    end)
-    assert(ok, "_timeline_element_click tl:dec threw: " .. tostring(err))
-    print("PASS: _timeline_element_click tl:dec")
-
-    -- tl:scroll_left branch
-    ok, err = pcall(function()
-        scene:_timeline_element_click({ id = "tl:scroll_left", kind = "tl", enabled = true }, 1)
-    end)
-    assert(ok, "_timeline_element_click tl:scroll_left threw: " .. tostring(err))
-    print("PASS: _timeline_element_click tl:scroll_left")
-
-    -- slot branch — requires a pusher on the grid first (slot "A" = pusher 1)
-    -- Place a pusher so the timeline has a row for pusher A
+    scene:draw()
+    local function bar(id, btn, enabled)
+        return scene:_bar_click({ id = id, enabled = enabled ~= false }, btn or 1)
+    end
     scene:_place_tile_at(1, 1, { kind = "pusher", id = 1 })
-    ok, err = pcall(function()
-        scene:_timeline_element_click({ id = "slot:A:1", kind = "slot", enabled = true }, 1)
-    end)
-    assert(ok, "_timeline_element_click slot:A:1 threw: " .. tostring(err))
-    print("PASS: _timeline_element_click slot:A:1")
+    scene:_place_tile_at(2, 1, { kind = "pusher", id = 2 })
 
-    -- tl:scroll_up branch
-    ok, err = pcall(function()
-        scene:_timeline_element_click({ id = "tl:scroll_up", kind = "tl", enabled = true }, 1)
-    end)
-    assert(ok, "_timeline_element_click tl:scroll_up threw: " .. tostring(err))
-    print("PASS: _timeline_element_click tl:scroll_up")
+    assert(bar("psel:B") and scene.sel_pusher == 2, "psel:B selects pusher 2")
+    assert(bar("chip:up") and scene.armed_chip == "up", "chip arms")
+    assert(bar("slot:1:3") and Timeline.get(scene.timeline, 1, 3).cmd == "up", "armed chip written to slot")
+    assert(Timeline.get(scene.timeline, 1, 3).pusher == 2, "stamped with the selected pusher")
+    assert(bar("slot:1:3", 2) and Timeline.get(scene.timeline, 1, 3) == nil, "right-click clears")
+    bar("tl:scroll_right")
+    assert(scene.timeline_scroll == 5, "scroll_right pages forward")
+    bar("tl:scroll_left")
+    assert(scene.timeline_scroll == 0, "scroll_left pages back")
 
-    -- tl:scroll_down branch
-    ok, err = pcall(function()
-        scene:_timeline_element_click({ id = "tl:scroll_down", kind = "tl", enabled = true }, 1)
-    end)
-    assert(ok, "_timeline_element_click tl:scroll_down threw: " .. tostring(err))
-    print("PASS: _timeline_element_click tl:scroll_down")
+    -- disabled elements are swallowed without effect
+    bar("psel:A", 1, false); assert(scene.sel_pusher == 2, "disabled psel ignored")
+    bar("chip:down", 1, false); assert(scene.armed_chip == "up", "disabled chip ignored")
+    bar("tl:scroll_right", 1, false); assert(scene.timeline_scroll == 0, "disabled scroll ignored")
+    assert(bar("slot:2:2", 1, false) and Timeline.get(scene.timeline, 2, 2) == nil, "disabled slot ignored")
 
-    -- disabled element — should return early without error
-    ok, err = pcall(function()
-        scene:_timeline_element_click({ id = "tl:inc", kind = "tl", enabled = false }, 1)
-    end)
-    assert(ok, "_timeline_element_click disabled threw: " .. tostring(err))
-    print("PASS: _timeline_element_click disabled (no-op)")
+    -- an unarmed chip / no pusher writes nothing
+    scene.armed_chip = nil
+    bar("slot:2:2"); assert(Timeline.get(scene.timeline, 2, 2) == nil, "no armed chip: nothing written")
+
+    -- ids that are not bar elements are not handled
+    assert(bar("cell:1,1") == false, "non-bar id returns false")
+    print("PASS: _bar_click branches")
 end
 
 print("ALL TESTS PASSED")

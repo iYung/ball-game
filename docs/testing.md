@@ -141,7 +141,7 @@ A full play-through looks like this (puzzle 1: a pusher at (1,5) pushing right f
 { click_button = { id = "puzzle:1" } },
 { click_button = "P" },                                             -- palette: pusher tool
 { click_cell = {1, 5} },                                            -- place it
-{ click_slot = { pusher = 1, slots = {1,2,3,4,5,6,7,8}, times = 2 } }, -- ". -> ^ -> >" on each slot
+{ drag = { from = { id = "chip:right" }, to = { slot = {1, 1} } } },    -- "right" chip at tick 1; commands persist
 { click_button = "Run" },
 { wait_until = { text = "SOLVED!", max_frames = 3000 } },           -- recap scene
 { click_button = "Next puzzle" },
@@ -164,7 +164,7 @@ A **selector** is either a label string (`"Run"`) or a table `{ id = "cmd:run" }
 | `click = {x, y}` / `right_click = {x, y}` | A raw click at logical coordinates. This is the escape hatch, for example to check that clicking a disabled button does nothing, or to click empty space. |
 | `click_button = sel` / `right_click_button = sel` | Click the centre of the matching element. It fails if the element is missing or disabled. |
 | `click_cell = {x, y [, part = "left" \| "centre" \| "right"]}` / `right_click_cell` | Click grid cell `cell:<x>,<y>`. `part` picks the -1 third (`x + w/6`), the centre (the default) or the +1 third (`x + 5w/6`) of a parameter cell. |
-| `click_slot = {pusher = 1 or "A", slots = {...}, times = k}` / `right_click_slot` | Click each listed slot of that pusher's timeline `k` times (default 1). Left click cycles `. ^ > v <`. A slot outside the visible window fails. The runner **never auto-scrolls**: click `tl:scroll_right` yourself. |
+| `drag = { from = <selector>, to = <selector> }` | Press at the centre of `from`, move to `to`, release there (frames in between). Selectors may also be `{ cell = {x, y} }` or `{ slot = {lane, tick} }`. Use it to drag ops onto cells and chips onto timeline slots; the runner **never auto-scrolls** the timeline: click `tl:scroll_right` yourself. |
 | `move_mouse = {x, y}` | Move the virtual cursor and fire `sm:mouse_moved`. |
 | `hover_button = sel` | Move to the element's centre. Disabled elements are allowed. |
 | `wait = n` | Run n frames. |

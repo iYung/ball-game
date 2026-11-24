@@ -4,7 +4,7 @@
 
 local runner = require("lua/headless/runner")
 
-local RIGHT8 = { "right", "right", "right", "right", "right", "right", "right", "right" }
+local Timeline = require("lua/game/timeline")
 local PRE    = { { 1, 2 }, { 3, 4 } }
 local POST   = { { 1, 3 }, { 2, 4 } }
 
@@ -15,7 +15,8 @@ local function new_scene()
     scene:_place_tile_at(5, 6, { kind = "op", op = "transpose" })
     scene:_place_tile_at(1, 5, { kind = "pusher" })
     local id = scene.grid:get(1, 5).id
-    for s, cmd in ipairs(RIGHT8) do scene.timeline[id][s] = cmd end
+    -- One persistent "right" command at tick 1 (the old test filled all 8 looping slots).
+    Timeline.set(scene.timeline, 1, 1, id, "right")
     return scene
 end
 

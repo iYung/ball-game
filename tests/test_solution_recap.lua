@@ -11,10 +11,13 @@ local function new_scene()
     return ctx.sm.current
 end
 
-local function add_pusher(scene, x, y, slots)
+-- cmds = { [tick] = command }; commands persist, so one "right" at tick 1 keeps the pusher moving.
+local function add_pusher(scene, x, y, cmds)
     scene:_place_tile_at(x, y, { kind = "pusher" })
     local id = scene.grid:get(x, y).id
-    for s, cmd in pairs(slots) do scene.timeline[id][s] = cmd end
+    for tick, cmd in pairs(cmds) do
+        require("lua/game/timeline").set(scene.timeline, 1, tick, id, cmd)
+    end
     return id
 end
 
@@ -29,7 +32,7 @@ end
 -- After a successful run, _run_frames should contain at least one frame.
 do
     local scene = new_scene()
-    add_pusher(scene, 1, 6, { "right", "right", "right", "right", "right", "right", "right", "right" })
+    add_pusher(scene, 1, 6, { [1] = "right" })
     run_to_end(scene)
     assert(scene.status == "win", "precondition: run wins")
     assert(type(scene._run_frames) == "table", "_run_frames is a table")
@@ -53,7 +56,7 @@ end
 -- _run_frames is cleared (reset) on each new run start.
 do
     local scene = new_scene()
-    add_pusher(scene, 1, 6, { "right", "right", "right", "right", "right", "right", "right", "right" })
+    add_pusher(scene, 1, 6, { [1] = "right" })
     run_to_end(scene)
     local first_count = #scene._run_frames
     assert(first_count > 0, "precondition: first run captured frames")
@@ -87,7 +90,7 @@ do
     local MatrixScene = require("lua/game/scenes/matrix_scene")
     local ctx = runner.setup(function(_, sm) return MatrixScene.new(1, sm) end)
     local scene = ctx.sm.current
-    add_pusher(scene, 1, 6, { "right", "right", "right", "right", "right", "right", "right", "right" })
+    add_pusher(scene, 1, 6, { [1] = "right" })
     run_to_end(scene)
     assert(scene.status == "win", "precondition: run wins")
 
@@ -144,7 +147,7 @@ do
     local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
     local scene = ctx.sm.current
 
-    add_pusher(scene, 1, 6, { "right","right","right","right","right","right","right","right" })
+    add_pusher(scene, 1, 6, { [1] = "right" })
     scene:_place_tile_at(8, 5, { kind="op", op="negate" })
     run_to_end(scene)
     -- Run ends when pushers idle; _run_frames is populated regardless of win/fail.

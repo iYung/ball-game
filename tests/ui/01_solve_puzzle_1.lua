@@ -13,8 +13,8 @@ return {
         { assert_button = { id = "palette:pusher", selected = true } },
         { click_cell = { 1, 5 } },
         { assert_tile = { x = 1, y = 5, kind = "pusher" } },
-        -- each slot cycles . ^ > v < ; two clicks set it to ">"
-        { click_slot = { pusher = 1, slots = { 1, 2, 3, 4, 5, 6, 7, 8 }, times = 2 } },
+        -- one 'right' chip at tick 1; the command persists for the whole run
+        { drag = { from = { id = "chip:right" }, to = { slot = { 1, 1 } } } },
         { assert_button = { id = "cmd:run", enabled = true } },
         { click_button = "Run" },
         { assert_button = { id = "cmd:run", enabled = false } },

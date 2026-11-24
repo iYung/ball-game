@@ -154,6 +154,14 @@ function love.mousereleased(x, y, btn)
     manager:mouse_released(lx, ly, btn)
 end
 
+function love.wheelmoved(dx, dy)
+    local scale = math.min(love.graphics.getWidth() / LOGICAL_W, love.graphics.getHeight() / LOGICAL_H)
+    local ox = (love.graphics.getWidth() - LOGICAL_W * scale) / 2
+    local oy = (love.graphics.getHeight() - LOGICAL_H * scale) / 2
+    local x, y = love.mouse.getPosition()
+    manager:wheel_moved((x - ox) / scale, (y - oy) / scale, dx, dy)
+end
+
 function love.textinput(text)
     manager:text_input(text)
 end

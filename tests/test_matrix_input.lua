@@ -8,9 +8,9 @@
 local runner = require("lua/headless/runner")
 
 -- Layout constants (must match matrix_scene.lua)
-local GRID_X    = 95
-local GRID_Y    = 20
-local CELL_SIZE = 63
+local GRID_X    = 130
+local GRID_Y    = 10
+local CELL_SIZE = 52
 
 local function new_scene()
     local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)

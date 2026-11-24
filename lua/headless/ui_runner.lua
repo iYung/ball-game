@@ -18,8 +18,8 @@ local VALID_KINDS = { button = true, cell = true, slot = true }
 
 local STEP_KEYS = {
     "press", "click", "right_click", "click_button", "right_click_button",
-    "click_cell", "right_click_cell", "click_slot", "right_click_slot",
-    "move_mouse", "hover_button", "wait", "wait_until", "assert_text",
+    "click_cell", "right_click_cell",
+    "drag", "wheel", "move_mouse", "hover_button", "wait", "wait_until", "assert_text",
     "assert_no_text", "assert_button", "assert_matrix", "assert_tile",
 }
 local STEP_KEY_SET = {}
@@ -93,12 +93,34 @@ function UIRunner.check_invariants(elements)
             return "invariant: '" .. e.id .. "' off screen"
         end
     end
-    for i = 1, #elements do
-        for j = i + 1, #elements do
-            if UI.overlaps(elements[i].rect, elements[j].rect) then
-                return "invariant: '" .. elements[i].id .. "' overlaps '" .. elements[j].id .. "'"
+    -- Sweep over rects sorted by x so only elements that overlap horizontally are compared
+    -- (the timeline bar makes ~250 elements per frame; all-pairs was far too slow under --coverage).
+    -- The reported pair is still the first one in all-pairs order (smallest i, then smallest j).
+    local order = {}
+    for i = 1, #elements do order[i] = i end
+    table.sort(order, function(a, b)
+        local ra, rb = elements[a].rect, elements[b].rect
+        if ra.x ~= rb.x then return ra.x < rb.x end
+        return a < b
+    end)
+    local best_i, best_j
+    for p = 1, #order do
+        local i = order[p]
+        local ri = elements[i].rect
+        for q = p + 1, #order do
+            local j = order[q]
+            local rj = elements[j].rect
+            if rj.x >= ri.x + ri.w then break end
+            if UI.overlaps(ri, rj) then
+                local lo, hi = math.min(i, j), math.max(i, j)
+                if not best_i or lo < best_i or (lo == best_i and hi < best_j) then
+                    best_i, best_j = lo, hi
+                end
             end
         end
+    end
+    if best_i then
+        return "invariant: '" .. elements[best_i].id .. "' overlaps '" .. elements[best_j].id .. "'"
     end
     return nil
 end
@@ -171,6 +193,11 @@ local function resolve(ctx, sel)
         label = sel
     elseif type(sel) == "table" then
         id, label = sel.id, sel.label
+        if sel.cell then
+            id = "cell:" .. tostring(sel.cell[1]) .. "," .. tostring(sel.cell[2])
+        elseif sel.slot then
+            id = "slot:" .. tostring(sel.slot[1]) .. ":" .. tostring(sel.slot[2])
+        end
     end
     if id ~= nil then
         return UI.find(elements, id), "id '" .. tostring(id) .. "'"
@@ -216,11 +243,6 @@ local function matrix_equal(a, b)
         end
     end
     return true
-end
-
-local function pusher_letter(p)
-    if type(p) == "number" then return string.char(64 + p) end
-    return tostring(p)
 end
 
 local handlers = {}
@@ -274,22 +296,33 @@ end
 handlers.click_cell       = cell_click(1)
 handlers.right_click_cell = cell_click(2)
 
-local function slot_click(b)
-    return function(ctx, arg)
-        settle(ctx)
-        local letter = pusher_letter(arg.pusher)
-        local times  = arg.times or 1
-        for _, s in ipairs(arg.slots or {}) do
-            for _ = 1, times do
-                local e = require_element(ctx, { id = "slot:" .. letter .. ":" .. tostring(s) }, true)
-                click_element(ctx, e, b)
-            end
-        end
-        run_frame(ctx)
-    end
+-- drag = { from = <selector>, to = <selector> }: press at the centre of
+-- `from`, move to the centre of `to`, release there, with frames between.
+function handlers.drag(ctx, arg)
+    settle(ctx)
+    local from = require_element(ctx, arg.from, true)
+    local to   = require_element(ctx, arg.to, true)
+    local fx, fy = UI.centre(from.rect)
+    local tx, ty = UI.centre(to.rect)
+    do_move(ctx, fx, fy)
+    ctx.sm:mouse_pressed(fx, fy, 1)
+    run_frame(ctx)
+    do_move(ctx, tx, ty)
+    run_frame(ctx)
+    ctx.sm:mouse_released(tx, ty, 1)
+    run_frame(ctx)
 end
-handlers.click_slot       = slot_click(1)
-handlers.right_click_slot = slot_click(2)
+
+-- wheel = { over = <selector>, dx = n, dy = n }: move the mouse to the centre of
+-- `over` and send a mouse-wheel event there.
+function handlers.wheel(ctx, arg)
+    settle(ctx)
+    local e = require_element(ctx, arg.over, false)
+    local x, y = UI.centre(e.rect)
+    do_move(ctx, x, y)
+    ctx.sm:wheel_moved(x, y, arg.dx or 0, arg.dy or 0)
+    run_frame(ctx)
+end
 
 function handlers.move_mouse(ctx, arg)
     settle(ctx)

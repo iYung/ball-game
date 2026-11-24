@@ -91,6 +91,12 @@ function SceneManager:mouse_released(x, y, btn)
     end
 end
 
+function SceneManager:wheel_moved(x, y, dx, dy)
+    if self.current and self.current.wheel_moved then
+        self.current:wheel_moved(x, y, dx, dy)
+    end
+end
+
 function SceneManager:text_input(text)
     if self.current and self.current.text_input then
         self.current:text_input(text)

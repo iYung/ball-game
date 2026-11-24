@@ -19,7 +19,7 @@ local VALID_KINDS = { button = true, cell = true, slot = true }
 local STEP_KEYS = {
     "press", "click", "right_click", "click_button", "right_click_button",
     "click_cell", "right_click_cell",
-    "drag", "move_mouse", "hover_button", "wait", "wait_until", "assert_text",
+    "drag", "wheel", "move_mouse", "hover_button", "wait", "wait_until", "assert_text",
     "assert_no_text", "assert_button", "assert_matrix", "assert_tile",
 }
 local STEP_KEY_SET = {}
@@ -310,6 +310,17 @@ function handlers.drag(ctx, arg)
     do_move(ctx, tx, ty)
     run_frame(ctx)
     ctx.sm:mouse_released(tx, ty, 1)
+    run_frame(ctx)
+end
+
+-- wheel = { over = <selector>, dx = n, dy = n }: move the mouse to the centre of
+-- `over` and send a mouse-wheel event there.
+function handlers.wheel(ctx, arg)
+    settle(ctx)
+    local e = require_element(ctx, arg.over, false)
+    local x, y = UI.centre(e.rect)
+    do_move(ctx, x, y)
+    ctx.sm:wheel_moved(x, y, arg.dx or 0, arg.dy or 0)
     run_frame(ctx)
 end
 

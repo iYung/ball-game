@@ -33,6 +33,7 @@ Puzzles are grouped into five worlds — **Basics** (1–5), **Combos** (6–11)
 | Click `^` / `v` in the left column | Scroll the ops column one row (only shown when it doesn't fit) |
 | Drag an instruction chip (`^ v < > .`) onto a timeline slot | Write that command for the selected pusher (click the chip, then a slot, also works). Dragging a filled slot moves it; dragging it off the bar or right-clicking removes it |
 | Click `A`, `B`, ... above the chips | Choose which placed pusher the chips program |
+| Mouse wheel over the timeline | Scroll the visible ticks (wheel down or right = later ticks) |
 | Click `<` / `>` on the timeline | Scroll the visible ticks (the timeline is 60 ticks long, 4 lanes) |
 | `Esc` | Return to level select (from puzzle) or start screen (from level select) |
 
@@ -70,7 +71,7 @@ Op tiles span one board cell for the op plus one per parameter. Click the left t
 
 **Fixed ops:** some puzzles offer ops in two variants — editable (default) and fixed. Fixed ops in the palette are labelled with a `!` suffix (e.g. `xR!`). They can be placed and moved freely but their parameters are preset and cannot be changed. Puzzle-placed fixed ops (shown with a lock icon) are pre-positioned by the puzzle with set parameters; they cannot be moved, erased, or edited.
 
-**Timeline:** 4 lanes by 60 ticks along the bottom bar, so up to 4 commands can happen on one tick. Each command is stamped with the pusher it targets (pick it with the `A`/`B`/... selector before dragging a chip). A pusher that already has a command on a tick gets it replaced. The timeline does not loop: after the last command every pusher keeps its direction. Edit it while stopped; use `<` / `>` to scroll, and during a run the view follows the current tick.
+**Timeline:** 4 lanes by 60 ticks along the bottom bar, so up to 4 commands can happen on one tick. Each command is stamped with the pusher it targets (pick it with the `A`/`B`/... selector before dragging a chip). A pusher that already has a command on a tick gets it replaced. The timeline does not loop: after the last command every pusher keeps its direction. Edit it while stopped; use `<` / `>` or the mouse wheel to scroll, and during a run the view follows the current tick.
 
 **Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. Click the **Continue** button (or press `Enter`) to open the **solution recap screen**, which shows the number of ticks your solution took, the number of pieces you placed, and a looping animated playback of your solution — matrix ball and pushers moving in sync — on the board. Click the **Next puzzle**, **Replay**, or **Menu** button (or press `Enter`, `R`, or `Esc`) to advance to the next puzzle, replay the animation, or return to the level-select screen. Clicks outside the three buttons do nothing. A run in which nothing moves after the last command ends as **STUCK**.
 

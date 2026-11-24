@@ -24,4 +24,17 @@ return {
             { assert_text  = "Identity Check" },                -- back in puzzle
         },
     },
+    {
+        name  = "Exit to Menu from matrix scene returns to level select",
+        given = { solved = {} },
+        steps = {
+            { press        = "return" },                        -- title → level select
+            { click_button = { id = "puzzle:1" } },             -- open puzzle 1
+            { assert_text  = "Identity Check" },
+            { press        = "escape" },                        -- open settings overlay
+            { assert_text  = "Settings" },
+            { click_button = { id = "settings:exit" } },        -- exit via on_exit callback
+            { assert_text  = "SELECT PUZZLE" },                 -- back on level select
+        },
+    },
 }

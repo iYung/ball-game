@@ -7,6 +7,7 @@ package.loaded["lua/core/sound"] = {
     is_music_playing = function() return false end,
     play_music       = function() end,
     fade_music       = function() end,
+    stop_music       = function() end,
 }
 package.loaded["lua/core/save"] = {
     write_settings = function() end,

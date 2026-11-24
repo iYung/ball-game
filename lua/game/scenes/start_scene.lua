@@ -47,7 +47,6 @@ function StartScene:_advance()
 
     local Progress = require("lua/game/progress")
     if not Progress.is_cutscene_seen(0) then
-        Progress.mark_cutscene_seen(0)
         local CutsceneScene = require("lua/game/scenes/cutscene_scene")
         self._scene_manager:switch(CutsceneScene.new(0, next_scene, self._scene_manager))
         return

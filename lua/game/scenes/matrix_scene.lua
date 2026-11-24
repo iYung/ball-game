@@ -595,7 +595,28 @@ function MatrixScene:_process_footprint(old_fp)
         end
     end
     self.current_matrix = mat
-    return new_fp
+
+    -- An op may have changed the matrix dimensions (e.g. transpose), so the pre-op
+    -- new_fp may no longer reflect which cells are covered. Recompute the true footprint
+    -- and re-arm any occupied op that the post-op matrix no longer overlaps.
+    local actual_fp = self:get_footprint()
+    for akey, info in pairs(self.occupied_ops) do
+        local tile   = self.grid:get(info.ax, info.ay)
+        local width  = (tile and tile.width)  or 1
+        local height = (tile and tile.height) or 1
+        local still_covered = false
+        for dy = 0, height - 1 do
+            for dx = 0, width - 1 do
+                if actual_fp[cell_key(info.ax + dx, info.ay + dy)] then
+                    still_covered = true; break
+                end
+            end
+            if still_covered then break end
+        end
+        if not still_covered then self.occupied_ops[akey] = nil end
+    end
+    self._last_fp = actual_fp
+    return actual_fp
 end
 
 -- Pushers on the board with their timeline commands, ordered by letter id.

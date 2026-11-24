@@ -62,6 +62,7 @@ function CutsceneScene:on_enter()
     self._beats      = beats
     self._beat_idx   = 1
     self._fade_alpha = 0
+    require("lua/game/progress").mark_cutscene_seen(self._world_num)
 end
 
 function CutsceneScene:_advance()

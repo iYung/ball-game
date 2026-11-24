@@ -2,6 +2,7 @@ local Scene        = require("lua/core/scene")
 local Matrix       = require("lua/game/matrix_math")
 local Grid         = require("lua/game/grid")
 local Sim          = require("lua/game/pusher_sim")
+local Timeline     = require("lua/game/timeline")
 local Palette      = require("lua/game/palette")
 local HUD          = require("lua/game/hud")
 local PuzzleLoader = require("lua/game/puzzle_loader")
@@ -14,21 +15,27 @@ local MatrixScene = {}
 MatrixScene.__index = MatrixScene
 
 -- Layout constants
-local GRID_X          = 95
-local GRID_Y          = 20
-local CELL_SIZE       = 63
-local PALETTE_Y       = 660
-local HUD_X           = 820
-local SCREEN_W         = 1280
-local CMD_BTN_X        = SCREEN_W - 193   -- right-aligns 4 cmd buttons (183px) with 10px right margin
-local PALETTE_REGION_W = CMD_BTN_X - 50   -- palette slot width, leaving breathing room before cmd buttons
+-- Layout (1280x720): ops column left, grid, HUD right, bottom bar (timeline area + run controls).
+local SCREEN_W        = 1280
+local BAR_Y           = 540                -- top of the bottom bar
+local BAR_H           = 180
+local OPS_W           = 120                -- ops column width (x 0..120)
+local GRID_X          = 130
+local GRID_Y          = 10
+local CELL_SIZE       = 52                 -- 10 cells -> 520px, grid ends at y=530
+local HUD_X           = 670
+local HUD_W           = SCREEN_W - HUD_X
+local CMD_BTN_W       = 72
+local CMD_BTN_H       = 40
+local CMD_BTN_GAP     = 6
+local CMD_BTN_X       = SCREEN_W - 10 - (2 * CMD_BTN_W + CMD_BTN_GAP)   -- 2x2 block, bottom-right corner
+local CMD_BTN_Y       = 720 - 10 - (2 * CMD_BTN_H + CMD_BTN_GAP)
 
 local STATUS_COLORS = {
     win       = {0.2, 0.8, 0.3, 1},
     fail      = {0.9, 0.2, 0.2, 1},
     blocked   = {0.9, 0.2, 0.2, 1},
     stuck     = {0.9, 0.6, 0.1, 1},
-    timeout   = {0.9, 0.6, 0.1, 1},
     running   = {0.4, 0.6, 1.0, 1},
     no_pusher = {0.9, 0.6, 0.1, 1},
 }
@@ -38,7 +45,6 @@ local STATUS_LABELS = {
     fail      = "FAIL — matrix mismatch",
     blocked   = "FAIL — matrix is blocked",
     stuck     = "STUCK — nothing is pushing",
-    timeout   = "TIMEOUT",
     running   = "Running...",
     no_pusher = "Place a pusher first",
 }
@@ -118,11 +124,22 @@ local OP_SIZES = {
     abs        = {1, 1},
 }
 
--- Timeline panel: one row per pusher, one slot per tick, shared length n.
-local TL = { ROW_H=15, SLOT_W=22, SLOT_GAP=2, LABEL_W=26, MIN_N=1, DEFAULT_N=8, MAX_PUSHERS=8 }
-local CMD_ORDER = { "idle", "up", "right", "down", "left" }
-local CMD_GLYPH = { idle=".", up="^", down="v", left="<", right=">" }
-local MAX_TICKS = 500
+-- Bottom bar (x 0..CMD_BTN_X-10): pusher selector + instruction chips, then 4 lanes x 60 ticks.
+local MAX_PUSHERS = 8
+local CMD_GLYPH   = { up="^", down="v", left="<", right=">", stop="." }
+local CHIP_ORDER  = { "up", "down", "left", "right", "stop" }
+local BAR = {
+    PANEL_X = 8,  PSEL_Y = BAR_Y + 10, PSEL_W = 28, PSEL_H = 28, PSEL_STEP = 30,
+    CHIP_Y  = BAR_Y + 60, CHIP_W = 44, CHIP_H = 44, CHIP_STEP = 48,
+    TL_X    = 260, TL_RIGHT = CMD_BTN_X - 10,
+    ARROW_W = 16,
+    HEAD_Y  = BAR_Y + 6,  HEAD_H = 16,
+    LANE_Y  = BAR_Y + 26, LANE_H = 34, LANE_STEP = 36,
+    SLOT_W  = 30, SLOT_STEP = 32, PAGE = 5,
+}
+BAR.SLOT_X   = BAR.TL_X + BAR.ARROW_W + 4
+BAR.SLOT_END = BAR.TL_RIGHT - BAR.ARROW_W - 4
+BAR.VIS      = math.floor((BAR.SLOT_END - BAR.SLOT_X) / BAR.SLOT_STEP)
 
 local function op_width(op, tile)
     if op == "scale_col" then return (tile and tile.tile_cols) or 4 end
@@ -208,7 +225,7 @@ function MatrixScene:on_enter()
         self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
     end)
     self.palette      = Palette.new()
-    self.hud          = HUD.new(HUD_X, 0, 460, PALETTE_Y)
+    self.hud          = HUD.new(HUD_X, 0, HUD_W, BAR_Y)
     self.font_cell    = love.graphics.newFont(14)
     self.font_ui      = love.graphics.newFont(11)
     self.font_key     = love.graphics.newFont(11)
@@ -269,10 +286,10 @@ function MatrixScene:load_puzzle(n)
     self.running        = false
     self.sim            = nil
     self.cur_slot       = nil
-    self.timeline       = {}
-    self.timeline_n     = TL.DEFAULT_N
-    self.timeline_scroll  = 0
-    self.tl_row_scroll    = 0
+    self.timeline       = Timeline.new()
+    self.timeline_scroll  = 0      -- first visible tick is timeline_scroll + 1
+    self.sel_pusher       = nil    -- selected pusher id (1 = A)
+    self.armed_chip       = nil    -- armed instruction ("up".."stop")
     self._palette_scroll  = 0
     self.grid            = Grid.new(p.grid_w, p.grid_h)
 
@@ -316,19 +333,19 @@ function MatrixScene:load_puzzle(n)
     self:_build_palette()
 end
 
--- Bottom-bar palette (layout from #33: one full-width bar, palette left, Run/Step/Reset/Menu
--- right-aligned at CMD_BTN_X). Positions are computed here, never in draw, so the
--- registry, hit-testing and drawing all read the same rects. Constants only, no font metrics.
-local PAL_LEFT      = 10
-local PAL_STEP      = 56    -- 48 wide + 8 gap
+-- Ops column (left, two buttons wide, scrolls by rows). Positions are computed here, never in
+-- draw, so the registry, hit-testing and drawing all read the same rects. Constants only.
+local PAL_LEFT      = 8
+local PAL_STEP      = 56    -- 48 wide + 8 gap (both axes)
 local PAL_BTN_W     = 48
-local PAL_SEP       = 20    -- extra gap at each separator
-local BAR_BTN_Y     = PALETTE_Y + 6
-local BAR_BTN_H     = 48
-local SCROLL_W      = 14
-local SCROLL_L_X    = PAL_LEFT                              -- 10..24
-local SCROLLED_LEFT = SCROLL_L_X + SCROLL_W + 4             -- buttons start here when the bar overflows
-local SCROLL_R_X    = PALETTE_REGION_W + 10                 -- 1047..1061, clear of cmd buttons at 1087
+local PAL_BTN_H     = 48
+local PAL_SEP       = 14    -- extra vertical gap at each separator
+local SCROLL_H      = 14
+local OPS_TOP       = GRID_Y + SCROLL_H + 4                  -- first button row (28)
+local OPS_BOTTOM    = GRID_Y + 520 - SCROLL_H - 4            -- buttons must end by here (512)
+local SCROLL_UP_Y   = GRID_Y                                 -- 10..24
+local SCROLL_DOWN_Y = GRID_Y + 520 - SCROLL_H                -- 516..530
+local SCROLL_BTN_W  = 2 * PAL_BTN_W + (PAL_STEP - PAL_BTN_W) -- spans both button columns (104)
 
 local function find_btn(pred)
     for _, btn in ipairs(PALETTE_BUTTONS) do
@@ -343,7 +360,8 @@ local function palette_id(btn)
     return "palette:" .. btn.kind
 end
 
--- Collects every palette item (PALETTE_BUTTONS order, then fixed ops) with its separator offset.
+-- Collects every palette item (PALETTE_BUTTONS order, then fixed ops) with row/col and the
+-- separator offset (px) accumulated before it. Each separator starts a new row.
 function MatrixScene:_build_palette()
     local allowed
     if self.puzzle.ops then
@@ -352,9 +370,18 @@ function MatrixScene:_build_palette()
     end
     local fixed_allowed = {}
     local items, sep_px, pending = {}, 0, false
+    local row, k = 0, 0   -- k = items placed in the current group
     local function push(btn)
-        if pending then sep_px = sep_px + PAL_SEP; pending = false end
-        items[#items + 1] = { id = palette_id(btn), btn = btn, sep = sep_px }
+        if pending then
+            sep_px = sep_px + PAL_SEP
+            pending = false
+            if k > 0 then row = row + 1 end
+            k = 0
+        elseif k > 0 and k % 2 == 0 then
+            row = row + 1
+        end
+        items[#items + 1] = { id = palette_id(btn), btn = btn, sep = sep_px, row = row, col = k % 2 }
+        k = k + 1
     end
     for _, btn in ipairs(PALETTE_BUTTONS) do
         if btn.sep then
@@ -382,21 +409,26 @@ function MatrixScene:_build_palette()
     self:_build_cmd_buttons()
 end
 
--- Rebuilds _palette_rects (visible palette buttons left to right, plus scroll arrows when
--- the bar overflows) for the current _palette_scroll. _btn_rects stays the full item list.
+-- Rebuilds _palette_rects (visible buttons, plus up/down arrows when the column overflows)
+-- for the current _palette_scroll (a row index). _btn_rects stays the full item list.
 function MatrixScene:_layout_palette()
     local items = self._palette_items or {}
     local n     = #items
-    local function x_of(i, scroll, left)
-        return left + items[i].sep - items[scroll + 1].sep + (i - 1 - scroll) * PAL_STEP
+    -- Separator offset of the first item in each row (rows are contiguous from 0).
+    local row_sep, last_row = {}, 0
+    for _, it in ipairs(items) do
+        if row_sep[it.row] == nil then row_sep[it.row] = it.sep end
+        last_row = it.row
     end
-    local fits = n == 0 or (PAL_LEFT + items[n].sep + (n - 1) * PAL_STEP + PAL_BTN_W <= PALETTE_REGION_W)
-    local left = fits and PAL_LEFT or SCROLLED_LEFT
+    local function y_of(it, scroll)
+        return OPS_TOP + (it.row - scroll) * PAL_STEP + it.sep - row_sep[scroll]
+    end
+    local fits = n == 0 or (OPS_TOP + last_row * PAL_STEP + items[n].sep + PAL_BTN_H <= OPS_BOTTOM)
 
-    -- Largest scroll that still shows the last item.
+    -- Largest scroll (in rows) that still shows the last item.
     local max_scroll = 0
     if not fits then
-        while max_scroll < n - 1 and x_of(n, max_scroll, left) + PAL_BTN_W > PALETTE_REGION_W do
+        while max_scroll < last_row and y_of(items[n], max_scroll) + PAL_BTN_H > OPS_BOTTOM do
             max_scroll = max_scroll + 1
         end
     end
@@ -405,25 +437,30 @@ function MatrixScene:_layout_palette()
     self._palette_max_scroll = max_scroll
 
     local rects = {}
-    local function add(id, x, w, btn, enabled)
-        rects[#rects + 1] = { id=id, x=x, y=BAR_BTN_Y, w=w, h=BAR_BTN_H, btn=btn, enabled=enabled }
+    local function add(id, x, y, w, h, btn, enabled)
+        rects[#rects + 1] = { id=id, x=x, y=y, w=w, h=h, btn=btn, enabled=enabled }
     end
     if not fits then
-        add("palette:scroll_left", SCROLL_L_X, SCROLL_W, { kind="scroll", dir=-1, label="<" }, scroll > 0)
+        add("palette:scroll_up", PAL_LEFT, SCROLL_UP_Y, SCROLL_BTN_W, SCROLL_H,
+            { kind="scroll", dir=-1, label="^" }, scroll > 0)
     end
-    for i = scroll + 1, n do
-        local x = x_of(i, scroll, left)
-        if x + PAL_BTN_W > PALETTE_REGION_W then break end
-        add(items[i].id, x, PAL_BTN_W, items[i].btn)
+    for _, it in ipairs(items) do
+        if it.row >= scroll then
+            local y = y_of(it, scroll)
+            if y + PAL_BTN_H <= OPS_BOTTOM then
+                add(it.id, PAL_LEFT + it.col * PAL_STEP, y, PAL_BTN_W, PAL_BTN_H, it.btn)
+            end
+        end
     end
     if not fits then
-        add("palette:scroll_right", SCROLL_R_X, SCROLL_W, { kind="scroll", dir=1, label=">" }, scroll < max_scroll)
+        add("palette:scroll_down", PAL_LEFT, SCROLL_DOWN_Y, SCROLL_BTN_W, SCROLL_H,
+            { kind="scroll", dir=1, label="v" }, scroll < max_scroll)
     end
     self._palette_rects = rects
     self._btn_rects     = items
 end
 
--- Scrolls the palette by dir (-1/+1) slots when that arrow is enabled.
+-- Scrolls the ops column by dir (-1/+1) rows when that arrow is enabled.
 function MatrixScene:_palette_scroll_by(dir)
     local s = (self._palette_scroll or 0) + dir
     if s < 0 or s > (self._palette_max_scroll or 0) then return end
@@ -433,18 +470,17 @@ end
 
 function MatrixScene:_build_cmd_buttons()
     self._cmd_btn_rects = {}
-    local bw, bh = 42, 48
-    local step   = 47
     for i, btn in ipairs(CMD_BUTTONS) do
+        local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
         self._cmd_btn_rects[i] = {
             id           = btn.id,
             label        = btn.label,
             color_fill   = btn.color_fill,
             color_border = btn.color_border,
-            x            = CMD_BTN_X + (i - 1) * step,
-            y            = PALETTE_Y + 6,
-            w            = bw,
-            h            = bh,
+            x            = CMD_BTN_X + col * (CMD_BTN_W + CMD_BTN_GAP),
+            y            = CMD_BTN_Y + row * (CMD_BTN_H + CMD_BTN_GAP),
+            w            = CMD_BTN_W,
+            h            = CMD_BTN_H,
         }
     end
 end
@@ -457,7 +493,6 @@ function MatrixScene:do_reset()
     self.sim            = nil
     self.cur_slot        = nil
     self.timeline_scroll = 0
-    self.tl_row_scroll   = 0
     self.occupied_ops   = {}
     self._last_fp       = {}
     self.anim_t         = 1
@@ -625,14 +660,14 @@ function MatrixScene:_process_footprint(old_fp)
     return actual_fp
 end
 
--- Pushers on the board with their timeline commands, ordered by letter id.
+-- Pushers on the board, ordered by letter id.
 function MatrixScene:_pusher_list()
     local list = {}
     for y = 1, self.grid.h do
         for x = 1, self.grid.w do
             local t = self.grid:get(x, y)
             if t and t.kind == "pusher" then
-                list[#list+1] = {x=x, y=y, id=t.id, cmds=self.timeline[t.id] or {}}
+                list[#list+1] = {x=x, y=y, id=t.id}
             end
         end
     end
@@ -657,9 +692,9 @@ function MatrixScene:do_step()
     local st = {
         x=sim.x, y=sim.y, rows=mat.rows, cols=mat.cols,
         w=grid.w, h=grid.h, pushers=sim.pushers,
-        n=self.timeline_n, tick=sim.tick, gaps=sim.gaps,
+        tick=sim.tick, gaps=sim.gaps,
     }
-    local moved, blocked = Sim.advance(st)
+    local moved, blocked = Sim.advance(st, Timeline.column(self.timeline, sim.tick + 1))
     if blocked then
         self.running = false
         self.status  = "blocked"
@@ -667,23 +702,8 @@ function MatrixScene:do_step()
     end
     sim.x, sim.y, sim.tick = st.x, st.y, st.tick
     sim.idle     = moved and 0 or sim.idle + 1
-    self.cur_slot = Sim.slot(sim.tick, self.timeline_n)
-
-    -- Auto-scroll the timeline to keep cur_slot visible during a run.
-    do
-        local L = self:_timeline_layout()
-        if L then
-            local scroll = self.timeline_scroll or 0
-            if self.cur_slot == 1 then
-                -- Loop wrapped — rewind to start.
-                self.timeline_scroll = 0
-            elseif self.cur_slot > scroll + L.vis then
-                self.timeline_scroll = self.cur_slot - L.vis
-            elseif self.cur_slot <= scroll then
-                self.timeline_scroll = self.cur_slot - 1
-            end
-        end
-    end
+    self.cur_slot = sim.tick
+    self:_follow_tick(sim.tick)
 
     local to_x, to_y = cell_top_left(sim.x, sim.y)
     -- Ops fire on entry, but the matrix slides in with its pre-op values (as in the recap).
@@ -709,10 +729,8 @@ function MatrixScene:do_step()
     local status = "ok"
     if new_fp[cell_key(self.puzzle.sink.x, self.puzzle.sink.y)] then
         status = "sink"
-    elseif sim.idle >= self.timeline_n then
+    elseif sim.tick > Timeline.last_tick(self.timeline) and not moved then
         status = "stuck"
-    elseif sim.tick >= MAX_TICKS then
-        status = "timeout"
     end
 
     if status == "sink" then
@@ -772,7 +790,7 @@ end
 
 function MatrixScene:draw_grid()
     love.graphics.setColor(0.08, 0.08, 0.13, 1)
-    love.graphics.rectangle("fill", 0, 0, HUD_X, PALETTE_Y)
+    love.graphics.rectangle("fill", 0, 0, HUD_X, BAR_Y)
 
     -- Pass 1: checkerboard backgrounds and grid lines
     for cy = 1, 10 do
@@ -925,7 +943,7 @@ function MatrixScene:draw_grid()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
-function MatrixScene:draw_pusher(id, sx, sy, ghost)
+function MatrixScene:draw_pusher(id, sx, sy, ghost, dir)
     local cs, a = CELL_SIZE, ghost and 0.25 or 0.95
     love.graphics.setColor(0.30, 0.18, 0.45, a)
     love.graphics.rectangle("fill", sx + 4, sy + 4, cs - 8, cs - 8, 6, 6)
@@ -936,11 +954,10 @@ function MatrixScene:draw_pusher(id, sx, sy, ghost)
     love.graphics.setFont(self.font_cell)
     love.graphics.printf(string.char(64 + (id or 1)), sx, sy + cs / 2 - 8, cs, "center")
     if not ghost then
-        local cmd = self.cur_slot and (self.timeline[id] or {})[self.cur_slot]
-        if cmd and cmd ~= "idle" then
+        if dir and dir ~= "stop" and CMD_GLYPH[dir] then
             love.graphics.setColor(1, 0.9, 0.4, 1)
             love.graphics.setFont(self.font_val)
-            love.graphics.printf(CMD_GLYPH[cmd], sx, sy + cs - 22, cs, "center")
+            love.graphics.printf(CMD_GLYPH[dir], sx, sy + cs - 22, cs, "center")
         end
     end
 end
@@ -949,7 +966,7 @@ function MatrixScene:draw_live_pushers()
     if not self.sim then return end
     for _, p in ipairs(self.sim.pushers) do
         local sx, sy = cell_top_left(p.x, p.y)
-        self:draw_pusher(p.id, sx, sy, false)
+        self:draw_pusher(p.id, sx, sy, false, p.dir)
     end
 end
 
@@ -1401,7 +1418,6 @@ function MatrixScene:_cmd_activate(id)
             local board = {
                 grid        = self.grid,
                 timeline    = self.timeline,
-                timeline_n  = self.timeline_n,
                 puzzle      = self.puzzle,
             }
             self._scene_manager:switch(
@@ -1446,7 +1462,7 @@ function MatrixScene:_draw_cmd_buttons()
             love.graphics.setColor(0.4, 0.4, 0.5, 1)
         end
         love.graphics.setFont(self.font_ui)
-        love.graphics.printf(r.label, r.x, r.y + 17, r.w, "center")
+        love.graphics.printf(r.label, r.x, r.y + math.floor((r.h - 11) / 2) - 1, r.w, "center")
     end
     love.graphics.setColor(1, 1, 1, 1)
 end
@@ -1478,7 +1494,12 @@ end
 
 function MatrixScene:draw_palette()
     love.graphics.setColor(0.06, 0.06, 0.10, 1)
-    love.graphics.rectangle("fill", 0, PALETTE_Y, SCREEN_W, 60)
+    -- Ops column background, then the bottom bar background.
+    love.graphics.rectangle("fill", 0, 0, OPS_W, BAR_Y)
+    love.graphics.setColor(0.04, 0.08, 0.12, 1)
+    love.graphics.rectangle("fill", 0, BAR_Y, SCREEN_W, BAR_H)
+    love.graphics.setColor(0.2, 0.4, 0.5, 1)
+    love.graphics.rectangle("fill", 0, BAR_Y, SCREEN_W, 1)
 
     for _, rect in ipairs(self._palette_rects) do
         local btn     = rect.btn
@@ -1501,7 +1522,7 @@ function MatrixScene:draw_palette()
             love.graphics.setColor(0.4, 0.4, 0.5, 1)
         end
         love.graphics.setFont(self.font_ui)
-        love.graphics.printf(btn.label, rect.x, rect.y + 17, rect.w, "center")
+        love.graphics.printf(btn.label, rect.x, rect.y + math.floor((rect.h - 11) / 2) - 1, rect.w, "center")
     end
 
     self:_draw_cmd_buttons()
@@ -1510,182 +1531,156 @@ end
 
 -- ── Draw ───────────────────────────────────────────────────────────────────
 
--- ── Timeline panel ─────────────────────────────────────────────────────────
+-- ── Bottom bar: pusher selector, instruction chips, timeline ───────────────
 
-local function cycle_cmd(cur, delta)
-    local idx = 1
-    for i, c in ipairs(CMD_ORDER) do
-        if c == (cur or "idle") then idx = i end
-    end
-    return CMD_ORDER[((idx - 1 + delta) % #CMD_ORDER) + 1]
+local function pusher_letter(id) return string.char(64 + id) end
+
+local function rect_el(id, label, kind, x, y, w, h, enabled, selected)
+    return { id = id, label = label, kind = kind,
+             rect = { x = x, y = y, w = w, h = h },
+             enabled = enabled, selected = selected }
 end
 
--- Rects for the length controls and every visible pusher slot; nil until the HUD has drawn once.
--- Slots are windowed: only the visible subset is returned, each carrying its actual index in .s.
-function MatrixScene:_timeline_layout()
-    local top = self._tl_top
-    if not top then return nil end
-    local x0           = HUD_X + 20
-    local len_x        = HUD_X + 460 - 20 - 78
-    local slot_x       = x0 + TL.LABEL_W
-    local slot_w_total = len_x - slot_x - 24  -- leave 12px each side for scroll buttons
-    local vis          = math.max(1, math.floor(slot_w_total / (TL.SLOT_W + TL.SLOT_GAP)))
-    local scroll       = self.timeline_scroll or 0
-    local first        = scroll + 1
-    local last         = math.min(first + vis - 1, self.timeline_n)
-
-    -- Vertical windowing: how many pusher rows fit, reserving 12px at the bottom for scroll_down.
-    local vis_rows      = math.max(1, math.floor((PALETTE_Y - top - 32) / TL.ROW_H))
-    local pushers       = self:_pusher_list()
-    local max_row_scroll = math.max(0, #pushers - vis_rows)
-    local row_scroll    = math.max(0, math.min(self.tl_row_scroll or 0, max_row_scroll))
-    self.tl_row_scroll  = row_scroll
-    local row_first     = row_scroll + 1
-    local row_last      = math.min(row_first + vis_rows - 1, #pushers)
-
-    local L = {
-        x0 = x0, top = top, rows = {},
-        vis = vis, first = first, last = last,
-        slot_x = slot_x, slot_w = slot_w_total,
-        vis_rows = vis_rows, row_first = row_first, row_last = row_last,
-        scroll_left  = { x = x0 - 14, y = top, w = 12, h = 16 },
-        scroll_right = { x = slot_x + slot_w_total + 2, y = top, w = 12, h = 16 },
-        -- Placed in the label column (x0..x0+LABEL_W-4) so they never overlap slots.
-        scroll_up    = { x = x0, y = top + 4, w = TL.LABEL_W - 4, h = 12 },
-        scroll_down  = { x = x0, y = top + 20 + vis_rows * TL.ROW_H, w = TL.LABEL_W - 4, h = 12 },
-        dec = { x=len_x,      y=top, w=18, h=16 },
-        val = { x=len_x + 18, y=top, w=42, h=16 },
-        inc = { x=len_x + 60, y=top, w=18, h=16 },
-    }
-    for i = row_first, row_last do
-        local p   = pushers[i]
-        local ri  = i - row_first  -- 0-based visual row index
-        local ry  = top + 20 + ri * TL.ROW_H
-        local row = { id=p.id, y=ry, slots={} }
-        for s = first, last do
-            local col = s - first
-            row.slots[#row.slots + 1] = {
-                x = slot_x + col * (TL.SLOT_W + TL.SLOT_GAP),
-                y = ry, w = TL.SLOT_W, h = TL.ROW_H - 1,
-                s = s,
-            }
+-- Keeps the selected pusher valid and drops commands of pushers no longer on the board.
+function MatrixScene:_sync_pushers()
+    local on_board = {}
+    local list = self:_pusher_list()
+    for _, p in ipairs(list) do on_board[p.id] = true end
+    for lane = 1, Timeline.LANES do
+        for _, c in pairs(self.timeline[lane]) do
+            if not on_board[c.pusher] then Timeline.remove_pusher(self.timeline, c.pusher) end
         end
-        L.rows[#L.rows + 1] = row
     end
-    return L
+    if not (self.sel_pusher and on_board[self.sel_pusher]) then
+        self.sel_pusher = list[1] and list[1].id or nil
+    end
 end
 
-function MatrixScene:draw_timeline()
-    local L = self:_timeline_layout()
-    if not L then return end
+function MatrixScene:_tl_max_scroll()
+    return math.max(0, Timeline.MAX_TICKS - BAR.VIS)
+end
 
-    -- Distinct background for the timeline zone
-    love.graphics.setColor(0.05, 0.10, 0.14, 1)
-    love.graphics.rectangle("fill", HUD_X, L.top, 460, PALETTE_Y - L.top)
-    love.graphics.setColor(0.2, 0.4, 0.5, 1)
-    love.graphics.rectangle("fill", HUD_X, L.top, 460, 1)
+function MatrixScene:_tl_scroll_by(delta)
+    self.timeline_scroll = math.max(0, math.min(self:_tl_max_scroll(), (self.timeline_scroll or 0) + delta))
+end
 
+-- Scrolls just enough to keep the tick visible.
+function MatrixScene:_follow_tick(tick)
+    local scroll = self.timeline_scroll or 0
+    if tick > scroll + BAR.VIS then
+        self.timeline_scroll = tick - BAR.VIS
+    elseif tick <= scroll then
+        self.timeline_scroll = math.max(0, tick - 1)
+    end
+    self:_tl_scroll_by(0)
+end
+
+-- Screen rect of the slot for (lane, tick), or nil when the tick is scrolled out of view.
+function MatrixScene:_slot_rect(lane, tick)
+    local col = tick - (self.timeline_scroll or 0) - 1
+    if col < 0 or col >= BAR.VIS then return nil end
+    return { x = BAR.SLOT_X + col * BAR.SLOT_STEP,
+             y = BAR.LANE_Y + (lane - 1) * BAR.LANE_STEP,
+             w = BAR.SLOT_W, h = BAR.LANE_H }
+end
+
+local function slot_label(c)
+    return pusher_letter(c.pusher) .. CMD_GLYPH[c.cmd]
+end
+
+function MatrixScene:_bar_elements(out)
+    local idle = not self.running
+    for i, p in ipairs(self:_pusher_list()) do
+        local letter = pusher_letter(p.id)
+        out[#out + 1] = rect_el("psel:" .. letter, letter, "button",
+            BAR.PANEL_X + (i - 1) * BAR.PSEL_STEP, BAR.PSEL_Y, BAR.PSEL_W, BAR.PSEL_H,
+            idle, self.sel_pusher == p.id)
+    end
+    for i, cmd in ipairs(CHIP_ORDER) do
+        out[#out + 1] = rect_el("chip:" .. cmd, CMD_GLYPH[cmd], "button",
+            BAR.PANEL_X + (i - 1) * BAR.CHIP_STEP, BAR.CHIP_Y, BAR.CHIP_W, BAR.CHIP_H,
+            idle, self.armed_chip == cmd)
+    end
+    local scroll = self.timeline_scroll or 0
+    local lanes_h = (Timeline.LANES - 1) * BAR.LANE_STEP + BAR.LANE_H
+    out[#out + 1] = rect_el("tl:scroll_left", "<", "button", BAR.TL_X, BAR.LANE_Y,
+        BAR.ARROW_W, lanes_h, scroll > 0)
+    out[#out + 1] = rect_el("tl:scroll_right", ">", "button", BAR.TL_RIGHT - BAR.ARROW_W, BAR.LANE_Y,
+        BAR.ARROW_W, lanes_h, scroll < self:_tl_max_scroll())
+    for lane = 1, Timeline.LANES do
+        for col = 1, BAR.VIS do
+            local tick = scroll + col
+            local r = self:_slot_rect(lane, tick)
+            local id = "slot:" .. lane .. ":" .. tick
+            out[#out + 1] = rect_el(id, id, "slot", r.x, r.y, r.w, r.h, idle)
+        end
+    end
+end
+
+-- Handles clicks on bottom-bar elements. Returns true when the element belonged to the bar.
+function MatrixScene:_bar_click(e, btn)
+    local id = e.id
+    local kind, a, b = id:match("^(%a+):([%w_]+):?(%d*)$")
+    if kind == "psel" then
+        if e.enabled and btn == 1 then self.sel_pusher = string.byte(a) - 64 end
+    elseif kind == "chip" then
+        if e.enabled and btn == 1 then self.armed_chip = a end
+    elseif kind == "tl" then
+        if e.enabled and btn == 1 then
+            self:_tl_scroll_by(a == "scroll_left" and -BAR.PAGE or BAR.PAGE)
+        end
+    elseif kind == "slot" then
+        if not e.enabled then return true end
+        local lane, tick = tonumber(a), tonumber(b)
+        if btn == 2 then
+            Timeline.clear(self.timeline, lane, tick)
+        elseif btn == 1 and self.armed_chip and self.sel_pusher then
+            Timeline.set(self.timeline, lane, tick, self.sel_pusher, self.armed_chip)
+        end
+    else
+        return false
+    end
+    return true
+end
+
+function MatrixScene:_draw_bar()
+    love.graphics.setColor(0.07, 0.08, 0.12, 1)
+    love.graphics.rectangle("fill", 0, BAR_Y, CMD_BTN_X - 4, BAR_H)
     love.graphics.setFont(self.font_ui)
-    love.graphics.setColor(0.6, 0.75, 1.0, 1)
-    love.graphics.print("TIMELINE", L.x0, L.top + 2)
-
-    -- Length controls
-    for _, b in ipairs({ { L.dec, "-" }, { L.inc, "+" } }) do
-        love.graphics.setColor(0.25, 0.25, 0.4, 1)
-        love.graphics.rectangle("fill", b[1].x, b[1].y, b[1].w, b[1].h, 2, 2)
-        love.graphics.setColor(0.85, 0.85, 0.95, 1)
-        love.graphics.printf(b[2], b[1].x, b[1].y + 2, b[1].w, "center")
-    end
-    love.graphics.setColor(0.85, 0.85, 0.95, 1)
-    love.graphics.printf("len " .. self.timeline_n, L.val.x, L.val.y + 2, L.val.w, "center")
-
-    -- Horizontal scroll buttons
-    local can_left, can_right = self:_tl_can_scroll(L)
-    for _, b in ipairs({ { L.scroll_left, "<", can_left }, { L.scroll_right, ">", can_right } }) do
-        love.graphics.setColor(b[3] and 0.25 or 0.15, b[3] and 0.25 or 0.15, b[3] and 0.4 or 0.25, 1)
-        love.graphics.rectangle("fill", b[1].x, b[1].y, b[1].w, b[1].h, 2, 2)
-        love.graphics.setColor(b[3] and 0.85 or 0.4, b[3] and 0.85 or 0.4, b[3] and 0.95 or 0.5, 1)
-        love.graphics.printf(b[2], b[1].x, b[1].y + 2, b[1].w, "center")
-    end
-
-    -- Vertical scroll buttons
-    local can_up   = L.row_first > 1
-    local can_down = L.row_last < #self:_pusher_list()
-    for _, b in ipairs({ { L.scroll_up, "^", can_up }, { L.scroll_down, "v", can_down } }) do
-        love.graphics.setColor(b[3] and 0.25 or 0.15, b[3] and 0.25 or 0.15, b[3] and 0.4 or 0.25, 1)
-        love.graphics.rectangle("fill", b[1].x, b[1].y, b[1].w, b[1].h, 2, 2)
-        love.graphics.setColor(b[3] and 0.85 or 0.4, b[3] and 0.85 or 0.4, b[3] and 0.95 or 0.5, 1)
-        love.graphics.printf(b[2], b[1].x, b[1].y + 1, b[1].w, "center")
-    end
-
-    if #L.rows == 0 then
-        love.graphics.setColor(0.45, 0.45, 0.6, 1)
-        love.graphics.print("Place a pusher [P], then program it here", L.x0, L.top + 24)
-        return
-    end
-
-    -- Clip slot drawing to the slot area (horizontal and vertical)
-    love.graphics.setScissor(L.slot_x, L.top + 20, L.slot_w, L.vis_rows * TL.ROW_H)
-    for _, row in ipairs(L.rows) do
-        love.graphics.setColor(0.80, 0.60, 1.0, 1)
-        love.graphics.printf(string.char(64 + row.id), L.x0, row.y + 1, TL.LABEL_W - 6, "right")
-        local cmds = self.timeline[row.id] or {}
-        for _, r in ipairs(row.slots) do
-            local current = self.sim and self.cur_slot == r.s
-            love.graphics.setColor(current and 0.35 or 0.14, current and 0.30 or 0.14, current and 0.15 or 0.22, 1)
-            love.graphics.rectangle("fill", r.x, r.y, r.w, r.h, 2, 2)
-            love.graphics.setColor(0.3, 0.3, 0.45, 1)
-            love.graphics.rectangle("line", r.x, r.y, r.w, r.h, 2, 2)
-            local cmd = cmds[r.s] or "idle"
-            love.graphics.setColor(cmd == "idle" and 0.4 or 1, cmd == "idle" and 0.4 or 0.9, cmd == "idle" and 0.5 or 0.4, 1)
-            love.graphics.printf(CMD_GLYPH[cmd], r.x, r.y + 1, r.w, "center")
+    for _, e in ipairs(self:ui_elements()) do
+        local id, r = e.id, e.rect
+        local kind = id:match("^(%a+):")
+        if kind == "psel" or kind == "chip" or kind == "tl" then
+            local a = e.enabled and 1 or 0.4
+            love.graphics.setColor(e.selected and 0.30 or 0.14, e.selected and 0.45 or 0.16, e.selected and 0.20 or 0.24, a)
+            love.graphics.rectangle("fill", r.x, r.y, r.w, r.h, 4, 4)
+            love.graphics.setColor(e.selected and 1 or 0.5, e.selected and 0.9 or 0.55, e.selected and 0.4 or 0.75, a)
+            love.graphics.rectangle("line", r.x, r.y, r.w, r.h, 4, 4)
+            love.graphics.setColor(1, 1, 1, a)
+            love.graphics.printf(e.label, r.x, r.y + r.h / 2 - 6, r.w, "center")
+        elseif kind == "slot" then
+            local lane, tick = id:match("^slot:(%d+):(%d+)$")
+            lane, tick = tonumber(lane), tonumber(tick)
+            local c = Timeline.get(self.timeline, lane, tick)
+            local current = self.sim and self.sim.tick == tick
+            love.graphics.setColor(current and 0.35 or 0.12, current and 0.30 or 0.13, current and 0.12 or 0.18, 1)
+            love.graphics.rectangle("fill", r.x, r.y, r.w, r.h, 3, 3)
+            love.graphics.setColor(current and 1 or 0.3, current and 0.9 or 0.35, current and 0.4 or 0.5, 1)
+            love.graphics.rectangle("line", r.x, r.y, r.w, r.h, 3, 3)
+            if c then
+                love.graphics.setColor(1, 0.9, 0.5, 1)
+                love.graphics.printf(slot_label(c), r.x, r.y + r.h / 2 - 6, r.w, "center")
+            end
         end
     end
-    love.graphics.setScissor()
+    -- Tick-number header
+    love.graphics.setColor(0.6, 0.65, 0.8, 1)
+    local scroll = self.timeline_scroll or 0
+    for col = 1, BAR.VIS do
+        love.graphics.printf(tostring(scroll + col), BAR.SLOT_X + (col - 1) * BAR.SLOT_STEP, BAR.HEAD_Y, BAR.SLOT_W, "center")
+    end
+    love.graphics.print("INSTRUCTIONS", BAR.PANEL_X, BAR_Y + 44)
     love.graphics.setColor(1, 1, 1, 1)
-end
-
--- Whether the timeline window can scroll left / right (shared by draw and registry).
-function MatrixScene:_tl_can_scroll(L)
-    return (self.timeline_scroll or 0) > 0, L.last < self.timeline_n
-end
-
-function MatrixScene:_tl_dec(L)
-    self.timeline_n = math.max(TL.MIN_N, self.timeline_n - 1)
-    -- keep scroll in bounds after shrink
-    self.timeline_scroll = math.min(self.timeline_scroll or 0, math.max(0, self.timeline_n - L.vis))
-end
-
-function MatrixScene:_tl_inc()
-    self.timeline_n = math.min(MAX_TICKS, self.timeline_n + 1)
-end
-
-function MatrixScene:_tl_scroll_left()
-    self.timeline_scroll = math.max(0, (self.timeline_scroll or 0) - 1)
-end
-
-function MatrixScene:_tl_scroll_right(L)
-    local max_scroll = math.max(0, self.timeline_n - L.vis)
-    self.timeline_scroll = math.min(max_scroll, (self.timeline_scroll or 0) + 1)
-end
-
-function MatrixScene:_tl_scroll_up()
-    self.tl_row_scroll = math.max(0, (self.tl_row_scroll or 0) - 1)
-end
-
-function MatrixScene:_tl_scroll_down()
-    local pushers = self:_pusher_list()
-    local L = self:_timeline_layout()
-    if not L then return end
-    local max_scroll = math.max(0, #pushers - L.vis_rows)
-    self.tl_row_scroll = math.min(max_scroll, (self.tl_row_scroll or 0) + 1)
-end
-
--- Left-click cycles a slot forward, right-click backward.
-function MatrixScene:_tl_cycle_slot(pusher_id, s, btn)
-    local cmds = self.timeline[pusher_id] or {}
-    self.timeline[pusher_id] = cmds
-    cmds[s] = cycle_cmd(cmds[s], btn == 2 and -1 or 1)
 end
 
 -- ── UI element registry (see docs/checklists/ui-tests.md, C1/C2) ───────────
@@ -1700,6 +1695,7 @@ function MatrixScene:ui_elements()
     if self._settings_menu and self._settings_menu.is_open then
         return self._settings_menu:ui_elements()
     end
+    self:_sync_pushers()
     local out = {}
     for _, r in ipairs(self._palette_rects or {}) do
         local enabled = r.enabled ~= false
@@ -1715,25 +1711,7 @@ function MatrixScene:ui_elements()
             out[#out + 1] = el(id, id, "cell", { x = sx, y = sy, w = CELL_SIZE, h = CELL_SIZE }, true)
         end
     end
-    local L = self:_timeline_layout()
-    if L then
-        local idle = not self.running
-        local can_left, can_right = self:_tl_can_scroll(L)
-        out[#out + 1] = el("tl:scroll_left",  "<", "button", L.scroll_left,  can_left and idle)
-        out[#out + 1] = el("tl:scroll_right", ">", "button", L.scroll_right, can_right and idle)
-        local pushers = self:_pusher_list()
-        out[#out + 1] = el("tl:scroll_up",   "^", "button", L.scroll_up,   L.row_first > 1 and idle)
-        out[#out + 1] = el("tl:scroll_down", "v", "button", L.scroll_down, L.row_last < #pushers and idle)
-        out[#out + 1] = el("tl:dec", "-", "button", L.dec, idle)
-        out[#out + 1] = el("tl:inc", "+", "button", L.inc, idle)
-        for _, row in ipairs(L.rows) do
-            local letter = string.char(64 + row.id)
-            for _, r in ipairs(row.slots) do
-                local id = "slot:" .. letter .. ":" .. r.s
-                out[#out + 1] = el(id, id, "slot", r, idle)
-            end
-        end
-    end
+    self:_bar_elements(out)
     return out
 end
 
@@ -1756,34 +1734,16 @@ function MatrixScene:ui_tile(x, y)
     return { kind = tile.kind, op = tile.op, dir = tile.dir }
 end
 
--- Handles a click on a tl:* or slot element. Kept as a helper for the registry dispatch.
-function MatrixScene:_timeline_element_click(e, btn)
-    if not e.enabled then return end
-    local L = self:_timeline_layout()
-    if not L then return end
-    if e.kind == "slot" then
-        local letter, s = e.id:match("^slot:(%u):(%d+)$")
-        self:_tl_cycle_slot(string.byte(letter) - 64, tonumber(s), btn)
-    elseif btn == 1 then
-        if e.id == "tl:dec" then self:_tl_dec(L)
-        elseif e.id == "tl:inc" then self:_tl_inc()
-        elseif e.id == "tl:scroll_left"  then self:_tl_scroll_left()
-        elseif e.id == "tl:scroll_right" then self:_tl_scroll_right(L)
-        elseif e.id == "tl:scroll_up"    then self:_tl_scroll_up()
-        elseif e.id == "tl:scroll_down"  then self:_tl_scroll_down() end
-    end
-end
-
 function MatrixScene:_draw_status_banner()
     local col = self.status and STATUS_COLORS[self.status]
     if not col then return end
     local bh = 40
-    local by = PALETTE_Y - bh
+    local by = BAR_Y - bh
     love.graphics.setColor(col[1], col[2], col[3], 0.9)
-    love.graphics.rectangle("fill", 0, by, HUD_X, bh)
+    love.graphics.rectangle("fill", OPS_W, by, HUD_X - OPS_W, bh)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setFont(self.font_ui)
-    love.graphics.printf(STATUS_LABELS[self.status] or self.status, 0, by + 13, HUD_X, "center")
+    love.graphics.printf(STATUS_LABELS[self.status] or self.status, OPS_W, by + 13, HUD_X - OPS_W, "center")
     love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -1792,13 +1752,14 @@ function MatrixScene:draw()
     self:draw_live_pushers()
     self:draw_travelling_matrix()
     self:draw_palette()
-    self._tl_top = self.hud:draw(self.input_matrix, self.target_matrix, self.puzzle.name)
+    self:_draw_bar()
+    self.hud:draw(self.input_matrix, self.target_matrix, self.puzzle.name)
     love.graphics.setColor(0.5, 0.65, 0.5, 1)
     love.graphics.setFont(self.font_key)
     love.graphics.print(string.format("Puzzle %d/%d", self.puzzle_index, PuzzleLoader.count()), HUD_X + 8, 12)
     love.graphics.setColor(1, 1, 1, 1)
-    self:draw_timeline()
     self:_draw_status_banner()
+    self:_draw_dnd_ghost()
     if self._settings_menu then
         self._settings_menu:draw()
     end
@@ -1831,7 +1792,7 @@ function MatrixScene:_place_tile_at(cx, cy, spec)
         for _, p in ipairs(self:_pusher_list()) do
             if not (p.x == cx and p.y == cy) then used[p.id] = true end
         end
-        for id = 1, TL.MAX_PUSHERS do
+        for id = 1, MAX_PUSHERS do
             if not used[id] then pusher_id = id; break end
         end
         if not pusher_id then return end
@@ -1889,7 +1850,7 @@ function MatrixScene:_place_tile_at(cx, cy, spec)
     else
         self.grid:set(cx, cy, tile)
     end
-    if pusher_id then self.timeline[pusher_id] = {} end
+    self:_sync_pushers()
 end
 
 function MatrixScene:_resize_tile(ax, ay, action)
@@ -1955,6 +1916,7 @@ function MatrixScene:_resize_tile(ax, ay, action)
 end
 
 function MatrixScene:mouse_moved(mx, my)
+    if self._dnd then self._dnd.x, self._dnd.y, self._dnd.moved = mx, my, true end
     if not self._drag_tile then return end
     if in_grid_panel(mx, my) then
         local cx, cy = screen_to_cell(mx, my)
@@ -1973,6 +1935,81 @@ function MatrixScene:mouse_pressed(mx, my, btn)
         self._settings_menu:mouse_pressed(mx, my)
         return
     end
+    self._dnd = nil
+    local e = (btn == 1 and not self.running) and UI.element_at(self:ui_elements(), mx, my) or nil
+    local dnd = e and self:_dnd_begin(e)
+    if dnd then
+        dnd.x, dnd.y = mx, my
+        self._dnd = dnd
+        if dnd.defer_click then return end   -- a filled slot acts on release
+    end
+    self:_mouse_pressed_inner(mx, my, btn)
+    self:_sync_pushers()
+end
+
+-- ── Drag-and-drop between registry elements (ops/chips/slots) ──────────────
+
+-- Returns a drag payload when element e can be picked up, else nil.
+function MatrixScene:_dnd_begin(e)
+    if not e.enabled then return nil end
+    local id = e.id
+    if id:sub(1, 8) == "palette:" then
+        for _, r in ipairs(self._palette_rects) do
+            if r.id == id and r.btn.kind ~= "scroll" and r.btn.kind ~= "drag" then
+                return { src = "palette", id = id, label = r.btn.label }
+            end
+        end
+    elseif id:sub(1, 5) == "chip:" then
+        return { src = "chip", id = id, label = e.label, cmd = id:sub(6) }
+    elseif id:sub(1, 5) == "slot:" then
+        local lane, tick = id:match("^slot:(%d+):(%d+)$")
+        lane, tick = tonumber(lane), tonumber(tick)
+        local c = Timeline.get(self.timeline, lane, tick)
+        if c then
+            return { src = "slot", id = id, lane = lane, tick = tick, cmd = c,
+                     label = slot_label(c), defer_click = true }
+        end
+    end
+    return nil
+end
+
+function MatrixScene:_dnd_drop(d, mx, my)
+    local e = UI.element_at(self:ui_elements(), mx, my)
+    local tid = e and e.enabled and e.id or nil
+    local tlane, ttick
+    if tid then tlane, ttick = tid:match("^slot:(%d+):(%d+)$") end
+    if d.src == "palette" then
+        if tid and tid:sub(1, 5) == "cell:" then
+            self:_mouse_pressed_inner(mx, my, 1)
+        end
+    elseif d.src == "chip" then
+        if tlane and self.sel_pusher then
+            Timeline.set(self.timeline, tonumber(tlane), tonumber(ttick), self.sel_pusher, d.cmd)
+        end
+    else -- slot
+        if tid == d.id then
+            self:_mouse_pressed_inner(mx, my, 1)   -- plain click on a filled slot
+        elseif tlane then
+            Timeline.clear(self.timeline, d.lane, d.tick)
+            Timeline.set(self.timeline, tonumber(tlane), tonumber(ttick), d.cmd.pusher, d.cmd.cmd)
+        elseif my < BAR_Y then
+            Timeline.clear(self.timeline, d.lane, d.tick)
+        end
+    end
+end
+
+function MatrixScene:_draw_dnd_ghost()
+    local d = self._dnd
+    if not d or not d.x or not d.moved then return end
+    love.graphics.setFont(self.font_ui)
+    love.graphics.setColor(0.2, 0.25, 0.4, 0.75)
+    love.graphics.rectangle("fill", d.x - 22, d.y - 16, 44, 32, 4, 4)
+    love.graphics.setColor(1, 1, 1, 0.9)
+    love.graphics.printf(d.label or "", d.x - 22, d.y - 6, 44, "center")
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function MatrixScene:_mouse_pressed_inner(mx, my, btn)
     -- All hit-testing goes through the UI element registry.
     local e = UI.element_at(self:ui_elements(), mx, my)
     if e == nil then return end
@@ -1994,8 +2031,7 @@ function MatrixScene:mouse_pressed(mx, my, btn)
             end
         end
         return
-    elseif id:sub(1, 3) == "tl:" or e.kind == "slot" then
-        self:_timeline_element_click(e, btn)
+    elseif self:_bar_click(e, btn) then
         return
     end
 
@@ -2239,6 +2275,15 @@ function MatrixScene:mouse_pressed(mx, my, btn)
 end
 
 function MatrixScene:mouse_released(mx, my, btn)
+    if btn == 1 and self._dnd then
+        local d = self._dnd
+        self._dnd = nil
+        if not self.running then
+            self:_dnd_drop(d, mx, my)
+            self:_sync_pushers()
+        end
+        return
+    end
     if btn ~= 1 or not self._drag_tile then return end
     local tile = self._drag_tile
     local ghost = self._drag_ghost

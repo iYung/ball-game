@@ -313,4 +313,48 @@ return {
     print("PASS: ui_runner: run_file")
 end
 
+-- drag step ------------------------------------------------------------------
+do
+    local scene = fake_scene({
+        btn("palette:P", "P", 10, 10, 20, 20),
+        { id = "cell:2,3", label = "cell 2,3", kind = "cell",
+          rect = { x = 100, y = 100, w = 40, h = 40 }, enabled = true },
+        { id = "slot:1:5", label = "slot 1 5", kind = "slot",
+          rect = { x = 200, y = 300, w = 30, h = 30 }, enabled = true },
+        btn("off", "Off", 400, 400, 20, 20, false),
+    })
+    local log = {}
+    function scene:mouse_pressed(x, y, b) log[#log + 1] = { "press", x, y, b } end
+    function scene:mouse_moved(x, y) log[#log + 1] = { "move", x, y } end
+    function scene:mouse_released(x, y, b) log[#log + 1] = { "release", x, y, b } end
+
+    local ok, err = run(scene, { { drag = { from = "P", to = { cell = { 2, 3 } } } } })
+    assert(ok, tostring(err))
+    local kinds = {}
+    for _, e in ipairs(log) do kinds[#kinds + 1] = e[1] end
+    local seq = table.concat(kinds, ",")
+    assert(seq:find("move,press,move,release", 1, true), "drag order: " .. seq)
+    local pr, rl
+    for _, e in ipairs(log) do
+        if e[1] == "press" then pr = e end
+        if e[1] == "release" then rl = e end
+    end
+    assert(pr[2] == 20 and pr[3] == 20 and pr[4] == 1, "press at centre of from")
+    assert(rl[2] == 120 and rl[3] == 120 and rl[4] == 1, "release at centre of to")
+
+    log = {}
+    ok, err = run(scene, { { drag = { from = { id = "palette:P" }, to = { slot = { 1, 5 } } } } })
+    assert(ok, tostring(err))
+    assert(log[#log][1] == "release" and log[#log][2] == 215 and log[#log][3] == 315,
+           "release on slot centre")
+
+    ok, err = run(scene, { { drag = { from = "P", to = { cell = { 9, 9 } } } } })
+    expect_fail(ok, err, "no visible element id 'cell:9,9'")
+    ok, err = run(scene, { { drag = { from = { slot = { 4, 4 } }, to = "P" } } })
+    expect_fail(ok, err, "no visible element id 'slot:4:4'")
+    ok, err = run(scene, { { drag = { from = "P", to = "Off" } } })
+    expect_fail(ok, err, "disabled")
+    print("PASS: ui_runner: drag step")
+end
+
 print("ALL TESTS PASSED")

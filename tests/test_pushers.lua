@@ -1,38 +1,88 @@
 local Sim    = require("lua/game/pusher_sim")
 local Matrix = require("lua/game/matrix_math")
 
--- slot() loops
-do
-    assert(Sim.slot(1, 4) == 1, "tick 1 -> slot 1")
-    assert(Sim.slot(4, 4) == 4, "tick 4 -> slot 4")
-    assert(Sim.slot(5, 4) == 1, "tick 5 wraps to slot 1")
-    assert(Sim.slot(9, 4) == 1, "tick 9 wraps to slot 1")
-    print("PASS: slot loops")
-end
+-- Puzzle-scene UI overhaul (Task 2): the sim's input model changed from looping per-pusher
+-- cmds[slot] (with "idle") to a persistent per-pusher `dir` plus a per-tick `commands` list
+-- { {pusher=id, cmd=cmd}, ... } passed to Sim.advance(st, commands). Sim.slot / st.n are gone.
+-- Every rewritten test below keeps its physics meaning (same positions, moves, blocks); only
+-- the way the direction is supplied changed: a pusher built with P(x, y, dir) already has
+-- that dir (what a command at tick 1 would give it), and tests that changed direction mid-run
+-- now issue a command at that tick. "idle" became nil/"stop" (not moving). The scroll-math
+-- tests that mirrored the old looping/resizable timeline UI were removed; Task 5/7 cover the
+-- new timeline bar.
 
 local function st(over)
-    local t = { x = 5, y = 5, rows = 2, cols = 2, w = 10, h = 10, pushers = {}, n = 4, tick = 0 }
+    local t = { x = 5, y = 5, rows = 2, cols = 2, w = 10, h = 10, pushers = {}, tick = 0 }
     for k, v in pairs(over) do t[k] = v end
+    for i, q in ipairs(t.pushers) do q.id = q.id or i end
     return t
 end
-local function P(x, y, ...) return { x = x, y = y, cmds = { ... } } end
+local function P(x, y, dir) return { x = x, y = y, dir = dir } end
+local function cmd(id, c) return { pusher = id, cmd = c } end
 
--- a pusher moves one cell per command; idle/nil stay put
+-- a pusher moves one cell per tick in its dir; commands change dir; stop halts
 do
-    local s = st({ pushers = { P(1, 1, "right", "down", "idle") } })
-    local moved1, blocked1 = Sim.advance(s)
+    local s = st({ pushers = { P(1, 1) } })
+    local moved1, blocked1 = Sim.advance(s, { cmd(1, "right") })
     assert(moved1 == true and s.pushers[1].x == 2 and s.pushers[1].y == 1, "moves right")
     assert(blocked1 == false, "right: not blocked")
-    local moved2, blocked2 = Sim.advance(s)
+    local moved2, blocked2 = Sim.advance(s, { cmd(1, "down") })
     assert(moved2 == true and s.pushers[1].x == 2 and s.pushers[1].y == 2, "moves down")
     assert(blocked2 == false, "down: not blocked")
-    local moved3, blocked3 = Sim.advance(s)
-    assert(moved3 == false and s.pushers[1].x == 2, "idle stays")
-    assert(blocked3 == false, "idle: not blocked")
+    local moved3, blocked3 = Sim.advance(s, { cmd(1, "stop") })
+    assert(moved3 == false and s.pushers[1].x == 2, "stop stays")
+    assert(blocked3 == false, "stop: not blocked")
     local moved4, blocked4 = Sim.advance(s)
-    assert(moved4 == false, "nil command is idle")
-    assert(blocked4 == false, "nil command: not blocked")
+    assert(moved4 == false, "no command after stop stays stopped")
+    assert(blocked4 == false, "stopped: not blocked")
+    assert(s.tick == 4, "tick incremented each advance")
     print("PASS: pusher moves")
+end
+
+-- a command persists across empty ticks (nil and {} commands)
+do
+    local s = st({ pushers = { P(1, 1) } })
+    Sim.advance(s, { cmd(1, "right") })
+    Sim.advance(s)
+    Sim.advance(s, {})
+    assert(s.pushers[1].x == 4 and s.pushers[1].dir == "right", "right persists over empty ticks")
+    print("PASS: command persists")
+end
+
+-- a pusher that never gets a command never moves
+do
+    local s = st({ pushers = { P(3, 3) } })
+    local moved, blocked = Sim.advance(s)
+    assert(moved == false and blocked == false and s.pushers[1].x == 3, "no command: stays")
+    print("PASS: no command stays stopped")
+end
+
+-- a blocked pusher keeps its dir and goes on when the obstacle clears
+do
+    local s = st({ pushers = { P(1, 1), P(3, 1) } })
+    Sim.advance(s, { cmd(1, "right"), cmd(2, "stop") })   -- A to x=2
+    local _, blocked = Sim.advance(s)                      -- A blocked by B at x=3
+    assert(blocked == true and s.pushers[1].x == 2, "blocked by other pusher")
+    assert(s.pushers[1].dir == "right", "blocked pusher keeps dir")
+    Sim.advance(s, { cmd(2, "down") })                     -- B leaves
+    assert(s.pushers[2].y == 2, "B moved away")
+    assert(s.pushers[1].x == 2, "A acts before B in array order, still blocked this tick")
+    Sim.advance(s)
+    assert(s.pushers[1].x == 3, "A resumes once the cell is free")
+    -- wall: dir kept as well
+    local w = st({ pushers = { P(1, 1) } })
+    Sim.advance(w, { cmd(1, "left") })
+    assert(w.pushers[1].dir == "left", "wall-blocked pusher keeps dir")
+    print("PASS: blocked keeps dir")
+end
+
+-- two commands in one tick for different pushers; unknown id ignored
+do
+    local s = st({ pushers = { P(1, 1), P(1, 8) } })
+    Sim.advance(s, { cmd(1, "right"), cmd(2, "up"), cmd(99, "left") })
+    assert(s.pushers[1].x == 2 and s.pushers[1].y == 1, "A moved right")
+    assert(s.pushers[2].x == 1 and s.pushers[2].y == 7, "B moved up in the same tick")
+    print("PASS: two commands same tick")
 end
 
 -- walking into the matrix shoves it one cell
@@ -50,7 +100,7 @@ do
     assert(blocked_t == false, "beside matrix: not blocked")
     -- a pusher that consistently follows the matrix one step behind carries it tick by tick;
     -- after each push the matrix moves one cell ahead, putting the pusher back outside
-    local r = st({ x = 1, y = 5, pushers = { P(0, 5, "right", "right") } })
+    local r = st({ x = 1, y = 5, pushers = { P(0, 5, "right") } })
     local _, blocked_r1 = Sim.advance(r)
     local _, blocked_r2 = Sim.advance(r)
     assert(r.x == 3 and r.pushers[1].x == 2, "follower pusher carries matrix 2 cells")
@@ -60,11 +110,11 @@ end
 
 -- blocking: grid edge stops pusher and matrix; matrix may not be shoved onto a pusher
 do
-    local s = st({ pushers = { P(1, 1, "left", "up") } })
-    local moved_sl, blocked_sl = Sim.advance(s)
+    local s = st({ pushers = { P(1, 1) } })
+    local moved_sl, blocked_sl = Sim.advance(s, { cmd(1, "left") })
     assert(moved_sl == false and s.pushers[1].x == 1, "pusher stops at left edge")
     assert(blocked_sl == true, "left edge: blocked")
-    local moved_su, blocked_su = Sim.advance(s)
+    local moved_su, blocked_su = Sim.advance(s, { cmd(1, "up") })
     assert(moved_su == false and s.pushers[1].y == 1, "pusher stops at top edge")
     assert(blocked_su == true, "top edge: blocked")
 
@@ -73,14 +123,14 @@ do
     assert(moved_w == false and w.x == 9 and w.pushers[1].x == 8, "matrix at wall: push does nothing")
     assert(blocked_w == true, "matrix at wall: blocked")
 
-    local b = st({ pushers = { P(4, 5, "right"), P(7, 5, "idle") } })  -- B sits where the matrix would land
+    local b = st({ pushers = { P(4, 5, "right"), P(7, 5) } })  -- B sits where the matrix would land
     local moved_b, blocked_b = Sim.advance(b)
     assert(moved_b == false and b.x == 5 and b.pushers[1].x == 4, "matrix cannot be shoved onto a pusher")
     assert(blocked_b == true, "matrix shove onto pusher: blocked")
 
     -- matrix cannot be shoved onto a pusher already inside the footprint
     -- matrix (1,5) cols=3: covers (1,5),(2,5),(3,5); B at (2,5) is in both old and new footprint after a right-push
-    local c = st({ x=1, y=5, rows=1, cols=3, pushers = { P(0, 5, "right"), P(2, 5, "idle") } })
+    local c = st({ x=1, y=5, rows=1, cols=3, pushers = { P(0, 5, "right"), P(2, 5) } })
     local moved_c, blocked_c = Sim.advance(c)
     assert(moved_c == false and c.x == 1 and c.pushers[1].x == 0, "matrix cannot be shoved onto an already-inside pusher")
     assert(blocked_c == true, "matrix shove onto inside pusher: blocked")
@@ -89,10 +139,10 @@ end
 
 -- pushers are solid to each other and act in order
 do
-    local s = st({ pushers = { P(1, 1, "right"), P(2, 1, "idle") } })
+    local s = st({ pushers = { P(1, 1, "right"), P(2, 1) } })
     local moved_s, blocked_s = Sim.advance(s)
     assert(moved_s == false and s.pushers[1].x == 1, "cannot walk into another pusher")
-    assert(blocked_s == true, "collision with idle pusher: blocked")
+    assert(blocked_s == true, "collision with stopped pusher: blocked")
     local t = st({ pushers = { P(1, 1, "right"), P(2, 1, "down") } })
     local _, blocked_t = Sim.advance(t)
     assert(t.pushers[1].x == 1 and t.pushers[2].y == 2, "first acts first: still blocked; second moves away")
@@ -149,7 +199,7 @@ do
     -- gap at top-right corner blocks the diagonal
     local g1 = { [2] = { [4] = true } }
     local d1 = st({ x=2, y=2, rows=2, cols=2,
-        pushers = { P(1,2,"right"), P(3,1,"down") }, gaps = g1 })
+        pushers = { P(1, 2, "right"), P(3, 1, "down") }, gaps = g1 })
     local moved_d1, blocked_d1 = Sim.advance(d1)
     assert(not moved_d1 and d1.x == 2, "diagonal blocked by top-right corner gap: matrix stayed")
     assert(blocked_d1, "diagonal blocked by top-right corner gap: blocked=true")
@@ -157,14 +207,14 @@ do
     -- gap at bottom-left corner also blocks
     local g2 = { [4] = { [2] = true } }
     local d2 = st({ x=2, y=2, rows=2, cols=2,
-        pushers = { P(1,2,"right"), P(3,1,"down") }, gaps = g2 })
+        pushers = { P(1, 2, "right"), P(3, 1, "down") }, gaps = g2 })
     local moved_d2, blocked_d2 = Sim.advance(d2)
     assert(not moved_d2 and d2.x == 2, "diagonal blocked by bottom-left corner gap: matrix stayed")
     assert(blocked_d2, "diagonal blocked by bottom-left corner gap: blocked=true")
 
     -- no corner gaps: diagonal move succeeds
     local d3 = st({ x=2, y=2, rows=2, cols=2,
-        pushers = { P(1,2,"right"), P(3,1,"down") } })
+        pushers = { P(1, 2, "right"), P(3, 1, "down") } })
     local moved_d3, blocked_d3 = Sim.advance(d3)
     assert(moved_d3 and d3.x == 3 and d3.y == 3, "diagonal with clear corners succeeds")
     assert(not blocked_d3, "diagonal with clear corners: not blocked")
@@ -220,65 +270,6 @@ do
     local pushers2 = {{x=8, y=5}}
     assert(Sim.footprint_clear(5, 5, 2, 2, 10, 10, nil, pushers2), "pusher outside footprint: ok")
     print("PASS: footprint_clear")
-end
-
--- ── Timeline scroll logic (pure-Lua, no LÖVE required) ───────────────────────
--- These mirror the math in MatrixScene:_timeline_layout and _timeline_click.
-
-local function visible_count(slot_w_total, slot_w, slot_gap)
-    return math.max(1, math.floor(slot_w_total / (slot_w + slot_gap)))
-end
-
-local function clamp_scroll_on_shrink(scroll, timeline_n, vis)
-    return math.min(scroll, math.max(0, timeline_n - vis))
-end
-
-local function auto_scroll(cur_slot, scroll, vis)
-    if cur_slot == 1 then
-        return 0
-    elseif cur_slot > scroll + vis then
-        return cur_slot - vis
-    elseif cur_slot <= scroll then
-        return cur_slot - 1
-    end
-    return scroll
-end
-
-do
-    -- visible_count: slot area of 316px, slot_w=22, gap=2 → 13 slots
-    assert(visible_count(316, 22, 2) == 13, "316px -> 13 visible slots")
-    -- very narrow area always returns at least 1
-    assert(visible_count(5, 22, 2) == 1, "tiny area -> 1 visible slot")
-    -- exactly fits 8 slots (8*24=192)
-    assert(visible_count(192, 22, 2) == 8, "192px -> 8 slots")
-    print("PASS: timeline visible_count")
-end
-
-do
-    -- shrinking timeline_n clamps scroll so last slot stays visible
-    -- n=10 -> 8, vis=5: scroll was 6, should clamp to max(0,8-5)=3
-    assert(clamp_scroll_on_shrink(6, 8, 5) == 3, "scroll clamped after shrink")
-    -- scroll already in bounds: unchanged
-    assert(clamp_scroll_on_shrink(2, 8, 5) == 2, "scroll in bounds: unchanged")
-    -- scroll=0 stays 0
-    assert(clamp_scroll_on_shrink(0, 8, 5) == 0, "scroll=0 stays 0")
-    -- timeline_n < vis: clamp to 0
-    assert(clamp_scroll_on_shrink(3, 4, 5) == 0, "n < vis: scroll -> 0")
-    print("PASS: timeline scroll clamp on shrink")
-end
-
-do
-    -- auto-scroll: cur_slot wraps to 1 → scroll rewinds to 0
-    assert(auto_scroll(1, 5, 5) == 0, "wrap to slot 1 resets scroll")
-    -- cur_slot ahead of window: scroll forward
-    assert(auto_scroll(10, 3, 5) == 5, "cur_slot past window: scroll forward")
-    -- cur_slot at window right edge: no change
-    assert(auto_scroll(8, 3, 5) == 3, "cur_slot at right edge: no change")
-    -- cur_slot behind window: scroll back
-    assert(auto_scroll(2, 5, 5) == 1, "cur_slot behind window: scroll back")
-    -- cur_slot inside window: no change
-    assert(auto_scroll(5, 3, 5) == 3, "cur_slot inside window: no change")
-    print("PASS: timeline auto-scroll")
 end
 
 -- add_rows (was missing from apply_op — now fixed)

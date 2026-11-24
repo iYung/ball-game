@@ -13,7 +13,7 @@ return {
         -- Place a pusher and run to completion
         { click_button = "P" },
         { click_cell = { 1, 5 } },
-        { click_slot = { pusher = 1, slots = { 1, 2, 3, 4, 5, 6, 7, 8 }, times = 2 } },
+        { drag = { from = { id = "chip:right" }, to = { slot = { 1, 1 } } } },
         { click_button = "Run" },
         { wait_until = { text = "WIN!", max_frames = 3000 } },
         -- Reset returns to idle; input matrix should still be readable

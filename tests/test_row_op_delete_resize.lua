@@ -13,7 +13,7 @@ end
 -- ── Erase ──────────────────────────────────────────────────────────────────
 
 -- Helper: simulate a left-click at grid cell (cx, cy) in screen coordinates.
-local GRID_X, GRID_Y, CELL_SIZE = 95, 20, 63
+local GRID_X, GRID_Y, CELL_SIZE = 130, 10, 52
 local function cell_center(cx, cy)
     return GRID_X + (cx - 1) * CELL_SIZE + CELL_SIZE / 2,
            GRID_Y + (cy - 1) * CELL_SIZE + CELL_SIZE / 2

@@ -8,7 +8,8 @@
 --   Negate op placed at (5,2) fires when the matrix passes through it
 --   during the rightward run (anchor (4,2) or (5,2) covers (5,2)).
 --
--- Timeline needs 11 slots (6 right + 5 down); extend default 8 by 3.
+-- Commands persist: A gets 'right' at tick 1 and 'stop' at tick 7, B gets
+-- 'down' at tick 7 (held until the end of the run).
 return {
     name  = "solve puzzle 3 (Sharp Left) end-to-end",
     given = { solved = {} },
@@ -19,27 +20,25 @@ return {
         { click_button = "Sharp Left" },
         { assert_text = "Sharp Left" },
 
-        -- Extend timeline from 8 to 11 slots (click + three times).
-        { click_button = { id = "tl:inc" } },
-        { click_button = { id = "tl:inc" } },
-        { click_button = { id = "tl:inc" } },
-
         -- Select pusher and place pusher R at (1,2) — left of matrix.
         { click_button = "P" },
         { assert_button = { id = "palette:pusher", selected = true } },
         { click_cell = { 1, 2 } },
         { assert_tile = { x = 1, y = 2, kind = "pusher" } },
 
-        -- Set pusher R (id=1) slots 1–6 to ">" (right).  times=2 cycles . → ^ → >.
-        { click_slot = { pusher = 1, slots = { 1, 2, 3, 4, 5, 6 }, times = 2 } },
+        -- Pusher A (selected automatically): 'right' at tick 1.
+        { drag = { from = { id = "chip:right" }, to = { slot = { 1, 1 } } } },
 
         -- Place pusher D at (9,1) — above where matrix will be at ax=8.
         { click_button = "P" },
         { click_cell = { 9, 1 } },
         { assert_tile = { x = 9, y = 1, kind = "pusher" } },
 
-        -- Set pusher D (id=2) slots 7–11 to "v" (down).  times=3 cycles . → ^ → > → v.
-        { click_slot = { pusher = 2, slots = { 7, 8, 9, 10, 11 }, times = 3 } },
+        -- Select pusher B; at tick 7 stop A (lane 1) and send B down (lane 2).
+        { click_button = { id = "psel:B" } },
+        { drag = { from = { id = "chip:down" }, to = { slot = { 2, 7 } } } },
+        { click_button = { id = "psel:A" } },
+        { drag = { from = { id = "chip:stop" }, to = { slot = { 1, 7 } } } },
 
         -- Select negate op and place it at (5,2) on the rightward path.
         { click_button = "-I" },

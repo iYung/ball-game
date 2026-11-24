@@ -16,8 +16,8 @@ local runner  = require("lua/headless/runner")
 local Matrix  = require("lua/game/matrix_math")
 local Grid    = require("lua/game/grid")
 
--- GRID_X=95, GRID_Y=20, CELL_SIZE=63 (from matrix_scene.lua)
-local GRID_X, GRID_Y, CELL_SIZE = 95, 20, 63
+-- GRID_X=130, GRID_Y=10, CELL_SIZE=52 (from matrix_scene.lua)
+local GRID_X, GRID_Y, CELL_SIZE = 130, 10, 52
 
 local function new_scene()
     local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
@@ -56,60 +56,43 @@ do
     print("PASS: blocked status when footprint_clear returns false after op (lines 573-576)")
 end
 
--- ── 2a. Timeline auto-scroll forward (line 637) ──────────────────────────────
--- Requires timeline_n > vis (vis == 12 for the standard layout).
--- With timeline_n=13 and an idle pusher, step 13 gives cur_slot=13 > 0+12.
+-- ── 2a. Timeline auto-scroll forward ─────────────────────────────────────────
+-- The visible window is 25 ticks wide. The pusher is told to stop at tick 1 and to move
+-- again at tick 40, so the run keeps ticking (nothing is "stuck" before tick 40) and the
+-- current tick passes the right edge of the window.
+-- (Rewritten: the old test grew a looping timeline with timeline_n = 13 > the old 12-slot window.)
+local Timeline = require("lua/game/timeline")
 do
     local scene = new_scene()
-
-    -- Place a pusher so the timeline has at least one row
-    scene:_place_tile_at(1, 5, { kind = "pusher", id = 1 })
-
-    -- Set _tl_top so _timeline_layout() returns a table (normally set by draw)
-    scene._tl_top    = 400
-    scene.timeline_n = 13   -- one more than vis (12)
-
+    scene:_place_tile_at(1, 5, { kind = "pusher" })
+    Timeline.set(scene.timeline, 1, 1, 1, "stop")
+    Timeline.set(scene.timeline, 1, 40, 1, "right")
     scene:start_run()
-
-    -- Advance 13 steps; at step 13 cur_slot=13 > scroll(0)+vis(12) → line 637
-    for _ = 1, 13 do
+    for _ = 1, 26 do
         scene.anim_ready = true
         scene:do_step()
     end
-
     assert((scene.timeline_scroll or 0) >= 1,
-        "timeline should have scrolled forward (line 637), scroll=" .. tostring(scene.timeline_scroll))
-    print("PASS: timeline auto-scroll forward (line 637)")
+        "timeline should have scrolled forward, scroll=" .. tostring(scene.timeline_scroll))
+    print("PASS: timeline auto-scroll forward")
 end
 
--- ── 2b. Timeline auto-scroll backward (line 639) ─────────────────────────────
--- After the first step cur_slot==1 → line 635 sets scroll=0.
--- Manually bump scroll forward, then take another step so cur_slot<=scroll.
+-- ── 2b. Timeline auto-scroll backward ────────────────────────────────────────
 do
     local scene = new_scene()
-
-    scene:_place_tile_at(1, 5, { kind = "pusher", id = 1 })
-    scene._tl_top    = 400
-    scene.timeline_n = 2    -- keeps idle-stuck quick; vis=12 so no forward scroll
-
+    scene:_place_tile_at(1, 5, { kind = "pusher" })
+    Timeline.set(scene.timeline, 1, 1, 1, "stop")
+    Timeline.set(scene.timeline, 1, 40, 1, "right")
     scene:start_run()
-
-    -- Step 1: tick=1, cur_slot=1 → line 635 fires, scroll reset to 0
     scene.anim_ready = true
     scene:do_step()
     assert(scene.cur_slot == 1, "cur_slot should be 1 after step 1")
-
-    -- Manually scroll forward past the upcoming cur_slot
-    scene.timeline_scroll = 2
-
-    -- Step 2: tick=2, cur_slot=2 ≤ scroll(2) → line 639 fires → scroll = cur_slot-1 = 1
-    -- (run ends due to stuck: idle==2 >= timeline_n==2, but scroll check runs first)
+    scene.timeline_scroll = 5          -- the player had scrolled ahead; the current tick is behind it
     scene.anim_ready = true
     scene:do_step()
-
-    assert((scene.timeline_scroll or 0) < 2,
-        "timeline should have scrolled back (line 639), scroll=" .. tostring(scene.timeline_scroll))
-    print("PASS: timeline auto-scroll backward (line 639)")
+    assert((scene.timeline_scroll or 0) < 5,
+        "timeline should have scrolled back, scroll=" .. tostring(scene.timeline_scroll))
+    print("PASS: timeline auto-scroll backward")
 end
 
 -- ── 3. Op-tile ghost preview label (line 878) ─────────────────────────────────
@@ -232,9 +215,9 @@ do
     -- Pre-set a ghost so we can confirm it gets cleared
     scene._drag_ghost = { cx = 3, cy = 3 }
 
-    -- Mouse at cell (6, 1) — inside panel (95+5*63=410 < 725) but cx=6 > grid.w=5
-    local mx = GRID_X + (6 - 1) * CELL_SIZE + 10   -- 95+315+10 = 420
-    local my = GRID_Y + (1 - 1) * CELL_SIZE + 10   -- 20+0+10   = 30
+    -- Mouse at cell (6, 1) — inside panel (130+5*52=390 < 650) but cx=6 > grid.w=5
+    local mx = GRID_X + (6 - 1) * CELL_SIZE + 10   -- 130+260+10 = 400
+    local my = GRID_Y + (1 - 1) * CELL_SIZE + 10   -- 10+0+10   = 20
 
     local ok, err = pcall(function() scene:mouse_moved(mx, my) end)
     assert(ok, "mouse_moved out-of-bounds cell threw: " .. tostring(err))
@@ -264,9 +247,9 @@ do
     scene.palette:select({ kind = "op", op = "negate" })
 
     -- Click in the left third of the ref cell (6,1) → rel_x < CELL_SIZE/3 → decrement
-    -- cell_top_left(6,1) = (95+5*63, 20+0*63) = (410, 20)
-    -- left-third: mx in [410, 431) → use 411
-    local mx, my = 411, 30
+    -- cell_top_left(6,1) = (130+5*52, 10+0*52) = (390, 10)
+    -- left-third: mx in [390, 407) → use 391
+    local mx, my = 391, 30
 
     local ok, err = pcall(function() scene:mouse_pressed(mx, my, 1) end)
     assert(ok, "mouse_pressed on set_row ref cell threw: " .. tostring(err))
@@ -294,8 +277,8 @@ do
     assert(scene.grid:get(8, 8) == nil, "pre-condition: cell (8,8) should be empty")
 
     -- Click at the centre of cell (8, 8)
-    -- cell_top_left(8,8) = (95+7*63, 20+7*63) = (536, 461)
-    local mx, my = 536 + math.floor(CELL_SIZE / 2), 461 + math.floor(CELL_SIZE / 2)  -- ≈ 567, 492
+    -- cell_top_left(8,8) = (130+7*52, 10+7*52) = (494, 374)
+    local mx, my = 494 + math.floor(CELL_SIZE / 2), 374 + math.floor(CELL_SIZE / 2)  -- 520, 400
 
     local ok, err = pcall(function() scene:mouse_pressed(mx, my, 1) end)
     assert(ok, "mouse_pressed on empty cell with nil palette threw: " .. tostring(err))
@@ -336,9 +319,9 @@ do
     scene.palette:select({ kind = "op", op = "negate" })
 
     -- Click the right third of ref cell (6,1):
-    -- cell_top_left(6,1) = (95+5*63, 20+0*63) = (410, 20)
-    -- right-third: rel_x >= CELL_SIZE*2/3 = 42 → mx >= 410+42 = 452 → use 455
-    local mx, my = 455, 30
+    -- cell_top_left(6,1) = (130+5*52, 10+0*52) = (390, 10)
+    -- right-third: rel_x >= CELL_SIZE*2/3 = 34.67 → mx >= 390+35 = 425 → use 430
+    local mx, my = 430, 30
 
     local ok, err = pcall(function() scene:mouse_pressed(mx, my, 1) end)
     assert(ok, "mouse_pressed right-third of set_row ref cell threw: " .. tostring(err))

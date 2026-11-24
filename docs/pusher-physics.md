@@ -4,6 +4,12 @@ Rules for how pushers interact with the matrix: what can push, how forces combin
 
 ---
 
+## Commands persist
+
+A pusher has a current direction (`dir`). A timeline command on a tick sets it (`stop` clears it) at the start of that tick; the pusher then steps in `dir` every tick until another command changes it. A pusher blocked by a wall, gap or another pusher stays put but keeps its `dir`. The timeline does not loop; after the last command every `dir` is held.
+
+---
+
 ## Invariant: pushers are never inside the matrix
 
 The game enforces this at all times via `footprint_clear`. A pusher can only push the matrix by stepping **into** it from outside. A pusher that is not currently adjacent to the matrix cannot push it, regardless of direction.

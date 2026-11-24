@@ -143,24 +143,6 @@ local function cell_top_left(cx, cy)
            GRID_Y + (cy - 1) * CELL_SIZE
 end
 
-local function screen_to_cell(mx, my)
-    local cx = math.floor((mx - GRID_X) / CELL_SIZE) + 1
-    local cy = math.floor((my - GRID_Y) / CELL_SIZE) + 1
-    return cx, cy
-end
-
-local function in_grid_panel(mx, my)
-    return mx >= GRID_X and mx < GRID_X + 10 * CELL_SIZE
-       and my >= GRID_Y and my < GRID_Y + 10 * CELL_SIZE
-end
-
-local function find_pal_btn(id)
-    for _, btn in ipairs(EDITOR_PALETTE) do
-        if btn.id == id then return btn end
-    end
-    return nil
-end
-
 local function fmt_values(values)
     local rows = {}
     for _, row in ipairs(values) do
@@ -435,11 +417,6 @@ function EditorScene:_erase_at(cx, cy)
     end
 end
 
-function EditorScene:_place(mx, my)
-    local cx, cy = screen_to_cell(mx, my)
-    self:_place_at(cx, cy)
-end
-
 function EditorScene:_place_at(cx, cy)
     if not self._sel then return end
     if not self._grid:in_bounds(cx, cy) then return end
@@ -577,7 +554,7 @@ function EditorScene:mouse_pressed(mx, my, btn)
                 self._copy_flash = 2.0
             elseif e.id == "editor:paste" then
                         local text = love.system.getClipboardText()
-                        local ok, def = pcall(function() return load("return " .. (text or ""))() end)
+                        local ok, def = pcall(function() return load(text or "")() end)
                         if ok and type(def) == "table" and def.input and def.target then
                             self:_load_def(def)
                         else
@@ -625,26 +602,19 @@ function EditorScene:mouse_pressed(mx, my, btn)
                     else                          self._allowed_ops[op] = true end
                     return
                 end
-                local pal_btn = find_pal_btn(e.id)
-                if pal_btn then
-                    if     pal_btn.kind == "erase" then self._sel = {kind="erase"}
-                    elseif pal_btn.kind == "op"    then self._sel = {kind="op", op=pal_btn.op}
-                    elseif pal_btn.kind and pal_btn.kind ~= "lock" then
-                        self._sel = {kind=pal_btn.kind}
+                for _, pal_btn in ipairs(EDITOR_PALETTE) do
+                    if pal_btn.id == e.id then
+                        if     pal_btn.kind == "erase" then self._sel = {kind="erase"}
+                        elseif pal_btn.kind == "op"    then self._sel = {kind="op", op=pal_btn.op}
+                        elseif pal_btn.kind then
+                            self._sel = {kind=pal_btn.kind}
+                        end
+                        break
                     end
                 end
             end
         end
         return
-    end
-
-    if in_grid_panel(mx, my) then
-        if btn == 1 then
-            self:_place(mx, my)
-        elseif btn == 2 then
-            local cx, cy = screen_to_cell(mx, my)
-            self:_erase_at(cx, cy)
-        end
     end
 end
 

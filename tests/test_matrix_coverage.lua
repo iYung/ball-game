@@ -334,4 +334,23 @@ do
     print("PASS: set_row value-cell right-third click increments value (lines 2072-2073)")
 end
 
+-- ── 15. _palette_is_selected: matching kind that is not op/pusher/drag (line 1500) ──
+-- sel.kind == btn.kind but neither is "op", "pusher", or "drag" → line 1500 fires.
+do
+    local scene = new_scene()
+    scene.palette:select({ kind = "custom_kind" })
+    local result = scene:_palette_is_selected({ kind = "custom_kind" })
+    assert(result == false, "_palette_is_selected matching unknown kind must return false, got: " .. tostring(result))
+    print("PASS: _palette_is_selected matching unknown kind returns false (line 1500)")
+end
+
+-- ── 16. key_pressed("return") with status == "win" calls _cmd_activate("continue") (line 2349) ──
+do
+    local scene = new_scene()
+    scene.status = "win"
+    local ok, err = pcall(function() scene:key_pressed("return") end)
+    assert(ok, "key_pressed return on win threw: " .. tostring(err))
+    print("PASS: key_pressed return on win triggers continue (line 2349)")
+end
+
 print("ALL MATRIX COVERAGE TESTS PASSED")

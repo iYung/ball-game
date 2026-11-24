@@ -91,8 +91,8 @@ do
     run_to_end(scene)
     assert(scene.status == "win", "precondition: run wins")
 
-    -- Advance enough time to trigger the win transition (needs >= 0.8 s).
-    ctx.sm:update(1.0)
+    -- Trigger the continue action explicitly (auto-timer removed).
+    scene:_cmd_activate("continue")
 
     local new_scene_obj = ctx.sm.current
     -- The scene should have switched; check it is a SolutionRecapScene by duck-typing.

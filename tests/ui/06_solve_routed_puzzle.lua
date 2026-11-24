@@ -48,6 +48,8 @@ return {
         -- Run and wait for win.
         { assert_button = { id = "cmd:run", enabled = true } },
         { click_button = "Run" },
-        { wait_until = { text = "SOLVED!", max_frames = 3000 } },
+        { wait_until = { text = "WIN!", max_frames = 3000 } },
+        { click_button = "Continue" },
+        { assert_text = "SOLVED!" },
     },
 }

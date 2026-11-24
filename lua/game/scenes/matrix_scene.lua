@@ -163,9 +163,10 @@ local PALETTE_BUTTONS = {
 }
 
 local CMD_BUTTONS = {
-    { id="run",   label="Run",   color_fill={0.12,0.28,0.12}, color_border={0.30,0.75,0.30} },
-    { id="reset", label="Reset", color_fill={0.28,0.16,0.06}, color_border={0.85,0.55,0.20} },
-    { id="menu",  label="Menu",  color_fill={0.12,0.15,0.28}, color_border={0.35,0.45,0.72} },
+    { id="run",      label="Run",      color_fill={0.12,0.28,0.12}, color_border={0.30,0.75,0.30} },
+    { id="reset",    label="Reset",    color_fill={0.28,0.16,0.06}, color_border={0.85,0.55,0.20} },
+    { id="menu",     label="Menu",     color_fill={0.12,0.15,0.28}, color_border={0.35,0.45,0.72} },
+    { id="continue", label="Continue", color_fill={0.12,0.28,0.12}, color_border={0.30,0.75,0.30} },
 }
 
 -- ── Helpers ────────────────────────────────────────────────────────────────
@@ -196,7 +197,6 @@ function MatrixScene.new(puzzle_index, scene_manager, settings_state)
     self._start_puzzle    = puzzle_index or 1
     self._scene_manager   = scene_manager
     self._settings_state  = settings_state
-    self._win_timer       = nil
     return self
 end
 
@@ -270,7 +270,6 @@ function MatrixScene:load_puzzle(n)
     self.timeline_scroll  = 0
     self.tl_row_scroll    = 0
     self._palette_scroll  = 0
-    self._win_timer      = nil
     self.grid            = Grid.new(p.grid_w, p.grid_h)
 
     if p.locked then
@@ -741,27 +740,6 @@ function MatrixScene:update(dt)
     if self.running and self.anim_ready then
         self.anim_ready = false
         self:do_step()
-    end
-    if self.status == "win" and self._scene_manager then
-        self._win_timer = (self._win_timer or 0) + dt
-        if self._win_timer >= 0.8 then
-            local SolutionRecapScene = require("lua/game/scenes/solution_recap_scene")
-            local stats = {
-                ticks        = self.sim.tick,
-                pieces       = self:_count_pieces(),
-                puzzle_name  = self.puzzle.name,
-                puzzle_index = self.puzzle_index,
-            }
-            local board = {
-                grid        = self.grid,
-                timeline    = self.timeline,
-                timeline_n  = self.timeline_n,
-                puzzle      = self.puzzle,
-            }
-            self._scene_manager:switch(
-                SolutionRecapScene.new(stats, board, self._run_frames or {}, self.run_speed, self._scene_manager, self._settings_state)
-            )
-        end
     end
 end
 
@@ -1368,6 +1346,8 @@ end
 function MatrixScene:_cmd_enabled(id)
     if id == "run" then
         return not self.running and self.status ~= "running" and self.status ~= "win"
+    elseif id == "continue" then
+        return self.status == "win"
     elseif id == "reset" then
         return self.sim ~= nil or self.status ~= nil
     elseif id == "menu" then
@@ -1383,6 +1363,25 @@ function MatrixScene:_cmd_activate(id)
             self.status = "no_pusher"
         else
             self:start_run()
+        end
+    elseif id == "continue" then
+        if self._scene_manager then
+            local SolutionRecapScene = require("lua/game/scenes/solution_recap_scene")
+            local stats = {
+                ticks        = self.sim.tick,
+                pieces       = self:_count_pieces(),
+                puzzle_name  = self.puzzle.name,
+                puzzle_index = self.puzzle_index,
+            }
+            local board = {
+                grid        = self.grid,
+                timeline    = self.timeline,
+                timeline_n  = self.timeline_n,
+                puzzle      = self.puzzle,
+            }
+            self._scene_manager:switch(
+                SolutionRecapScene.new(stats, board, self._run_frames or {}, self.run_speed, self._scene_manager, self._settings_state)
+            )
         end
     elseif id == "reset" then
         self:do_reset()
@@ -2255,6 +2254,8 @@ function MatrixScene:key_pressed(key)
     local cmd = KEY_CMD[key]
     if cmd then
         if self:_cmd_enabled(cmd) then self:_cmd_activate(cmd) end
+    elseif key == "return" and self.status == "win" then
+        self:_cmd_activate("continue")
     elseif key == "escape" then
         if self._settings_menu then
             self._settings_menu:open()

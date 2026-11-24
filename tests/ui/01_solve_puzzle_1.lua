@@ -18,7 +18,9 @@ return {
         { assert_button = { id = "cmd:run", enabled = true } },
         { click_button = "Run" },
         { assert_button = { id = "cmd:run", enabled = false } },
-        { wait_until = { text = "SOLVED!", max_frames = 3000 } },
+        { wait_until = { text = "WIN!", max_frames = 3000 } },
+        { click_button = "Continue" },
+        { assert_text = "SOLVED!" },
         { assert_text = "7" },   -- ticks stat
         { assert_button = { label = "Replay", enabled = true } },
         { assert_button = { label = "Next puzzle", enabled = true } },

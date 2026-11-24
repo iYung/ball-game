@@ -46,10 +46,8 @@ function SettingsMenu:_on_exit_to_menu()
     Save.write_settings(self._state:to_save())
     self:close()
     local Sound = require("lua/core/sound")
-    if Sound.fade_music then
-        for _, n in ipairs({"bg1","bg2","bg3","bg4"}) do
-            Sound.fade_music(n, 0, 1)
-        end
+    for _, n in ipairs({"bg1","bg2","bg3","bg4"}) do
+        Sound.stop_music(n)
     end
     if self._on_exit then
         self._on_exit()

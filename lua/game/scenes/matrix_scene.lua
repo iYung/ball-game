@@ -235,6 +235,10 @@ end
 
 function MatrixScene:on_exit()
     self.drawer:clear()
+    local Sound = require("lua/core/sound")
+    for _, n in ipairs({"bg1","bg2","bg3","bg4"}) do
+        Sound.stop_music(n)
+    end
 end
 
 -- ── Puzzle management ──────────────────────────────────────────────────────

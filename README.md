@@ -22,7 +22,7 @@ Puzzles are grouped into five worlds — **Basics** (1–5), **Combos** (6–11)
 
 | Key / Button | Action |
 |-------------|--------|
-| `R` or **Run** button | Run — one timeline tick at a time, animated (not available while running or after a win) |
+| `R` or **Run** button | Run — one timeline tick at a time, animated (not available while running or after a win). The matrix slides into an op tile with its old values; the result shows once it has arrived, exactly as in the solution recap |
 | `Space` or **Step** button | Step — advance one tick |
 | `Backspace` or **Reset** button | Reset — return the matrix to the source (no-op when there is nothing to reset) |
 | `Esc` or **Menu** button | Open settings overlay (SFX / music volume, Resume, Exit to Menu) |

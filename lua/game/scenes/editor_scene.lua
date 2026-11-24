@@ -1,6 +1,7 @@
-local Scene = require("lua/core/scene")
-local Grid  = require("lua/game/grid")
-local UI    = require("lua/core/ui")
+local Scene      = require("lua/core/scene")
+local Grid       = require("lua/game/grid")
+local UI         = require("lua/core/ui")
+local ParamPopup = require("lua/game/param_popup")
 
 -- Layout constants (matching MatrixScene)
 local GRID_X    = 95
@@ -208,6 +209,7 @@ function EditorScene.new(scene_manager)
     self._hud_ops_lbl_y  = 390
     self._hud_inp_cell_y = 118
     self._hud_tgt_cell_y = 278
+    self._param_popup    = ParamPopup.new()
     return self
 end
 
@@ -509,6 +511,10 @@ end
 -- ── Input ──────────────────────────────────────────────────────────────────
 
 function EditorScene:key_pressed(key)
+    if self._param_popup:is_open() then
+        self._param_popup:key_pressed(key)
+        return
+    end
     if self._name_focus then
         if key == "backspace" then
             self._name = self._name:sub(1, -2)
@@ -524,6 +530,10 @@ function EditorScene:key_pressed(key)
 end
 
 function EditorScene:text_input(ch)
+    if self._param_popup:is_open() then
+        self._param_popup:text_input(ch)
+        return
+    end
     if self._name_focus then
         self._name = self._name .. ch
     end
@@ -535,10 +545,19 @@ function EditorScene:mouse_pressed(mx, my, btn)
         -- Grid cell elements: route to place/erase.
         local cell_x, cell_y = e.id:match("^cell:(%d+),(%d+)$")
         if cell_x then
+            local cx, cy = tonumber(cell_x), tonumber(cell_y)
             if btn == 1 then
-                self:_place_at(tonumber(cell_x), tonumber(cell_y))
+                local ax, ay = self._grid:get_anchor(cx, cy)
+                local tile   = self._grid:get(ax, ay)
+                if tile and tile.kind == "op" and DEFAULT_PARAMS[tile.op] then
+                    self._param_popup:open(tile.op, tile.params, function(new_params)
+                        for k, v in pairs(new_params) do tile.params[k] = v end
+                    end, nil)
+                else
+                    self:_place_at(cx, cy)
+                end
             elseif btn == 2 then
-                self:_erase_at(tonumber(cell_x), tonumber(cell_y))
+                self:_erase_at(cx, cy)
             end
             return
         end
@@ -1075,6 +1094,7 @@ function EditorScene:draw()
     end
 
     love.graphics.setColor(1, 1, 1, 1)
+    self._param_popup:draw()
 end
 
 return EditorScene

@@ -201,6 +201,37 @@ return {
         },
     },
     {
+        name  = "click placed op with params opens popup; confirm updates tile",
+        given = { solved = {} },
+        steps = {
+            { click_button = "Editor" },
+            { click_button = { id = "editor:pal:scalar_mul" } },
+            { click_cell   = { 5, 5 } },
+            { assert_tile  = { x = 5, y = 5, kind = "op", op = "scalar_mul" } },
+            -- clicking the same cell again opens the param popup
+            { click_cell   = { 5, 5 } },
+            { assert_text  = "scalar_mul" },
+            -- type a value and confirm
+            { text_input   = "3" },
+            { press        = "return" },
+            -- popup is closed again
+            { assert_text  = "PUZZLE EDITOR" },
+        },
+    },
+    {
+        name  = "param popup: escape cancels without changing params",
+        given = { solved = {} },
+        steps = {
+            { click_button = "Editor" },
+            { click_button = { id = "editor:pal:scalar_mul" } },
+            { click_cell   = { 3, 3 } },
+            { click_cell   = { 3, 3 } },
+            { assert_text  = "scalar_mul" },
+            { press        = "escape" },
+            { assert_text  = "PUZZLE EDITOR" },
+        },
+    },
+    {
         name  = "paste full puzzle def and round-trip copy + test",
         given = { solved = {} },
         steps = {

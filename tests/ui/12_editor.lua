@@ -79,23 +79,16 @@ return {
         },
     },
     {
-        name  = "pusher placement and lock toggle",
+        name  = "pusher placement",
         given = { solved = {} },
         steps = {
             { click_button = "Editor" },
-            -- lock mode off by default; place a pusher (unlocked)
             { click_button = { id = "editor:pal:pusher" } },
             { assert_button = { id = "editor:pal:pusher", selected = true } },
             { click_cell   = { 3, 3 } },
             { assert_tile  = { x = 3, y = 3, kind = "pusher" } },
-            -- toggle lock mode on
-            { click_button = { id = "editor:lock" } },
-            { assert_button = { id = "editor:lock", selected = true } },
-            -- erase and re-place as locked
             { right_click_cell = { 3, 3 } },
             { assert_tile  = { x = 3, y = 3 } },
-            { click_cell   = { 3, 3 } },
-            { assert_tile  = { x = 3, y = 3, kind = "pusher" } },
         },
     },
     {

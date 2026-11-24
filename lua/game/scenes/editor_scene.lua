@@ -20,9 +20,6 @@ local PAL_LEFT  = 10
 local PAL_SEP   = 12
 local BAR_BTN_Y = PALETTE_Y + 6
 
-local LOCK_BTN_W = 48
-local LOCK_BTN_X = PALETTE_REGION_W - LOCK_BTN_W - 8  -- 754
-
 local CMD_BTN_W    = 56
 local CMD_BTN_H    = 48
 local CMD_BTN_STEP = 62
@@ -130,7 +127,6 @@ local EDITOR_PALETTE = {
     { id="editor:pal:abs",        kind="op", op="abs",        label="|x|"  },
     { sep=true },
     { id="editor:pal:erase",  kind="erase", label="[X]" },
-    { id="editor:lock",       kind="lock",  label="[L]" },
 }
 
 local CMD_BUTTONS = {
@@ -214,7 +210,6 @@ function EditorScene.new(scene_manager)
     self._name_focus     = false
     self._input          = { rows=2, cols=2, values={{1,0},{0,1}} }
     self._target         = { rows=2, cols=2, values={{1,0},{0,1}} }
-    self._lock_mode      = false
     self._sel            = nil
     self._copy_flash     = 0
     self._paste_error    = nil
@@ -252,22 +247,15 @@ function EditorScene:_layout_palette()
     for _, btn in ipairs(EDITOR_PALETTE) do
         if btn.sep then
             pending_sep = true
-        elseif btn.kind == "lock" then
-            -- positioned separately
         else
             if pending_sep then x = x + PAL_SEP; pending_sep = false end
-            if x + PAL_BTN_W <= LOCK_BTN_X - 4 then
+            if x + PAL_BTN_W <= PALETTE_REGION_W then
                 rects[#rects+1] = { id=btn.id, btn=btn, x=x, y=BAR_BTN_Y, w=PAL_BTN_W, h=PAL_BTN_H }
             end
             x = x + PAL_STEP
         end
     end
 
-    local lock_btn = find_pal_btn("editor:lock")
-    rects[#rects+1] = {
-        id=lock_btn.id, btn=lock_btn,
-        x=LOCK_BTN_X, y=BAR_BTN_Y, w=LOCK_BTN_W, h=PAL_BTN_H,
-    }
     self._pal_rects = rects
 end
 
@@ -371,7 +359,6 @@ function EditorScene:ui_tile(x, y)
 end
 
 function EditorScene:_sel_matches(btn)
-    if btn.kind == "lock"  then return self._lock_mode end
     if not self._sel       then return false end
     if btn.kind == "op"    then return self._sel.kind == "op" and self._sel.op == btn.op end
     if btn.kind == "erase" then return self._sel.kind == "erase" end
@@ -461,9 +448,18 @@ function EditorScene:_place_at(cx, cy)
     if sel.kind == "erase" then self:_erase_at(cx, cy); return end
 
     if sel.kind == "source" then
-        if self._source then self._grid.cells[self._source.y][self._source.x] = nil end
-        self._grid:set(cx, cy, {kind="source", locked=true})
-        self._source = {x=cx, y=cy}; return
+        if self._source then self:_erase_at(self._source.x, self._source.y) end
+        self._source = nil
+        local sc, sr = self._input.cols, self._input.rows
+        if not self._grid:in_bounds_multi_2d(cx, cy, sc, sr) then return end
+        for dy = 0, sr-1 do
+            for dx = 0, sc-1 do
+                if self._grid.cells[cy+dy] and self._grid.cells[cy+dy][cx+dx] then return end
+            end
+        end
+        self._grid:set_multi_2d(cx, cy, {kind="source", locked=true, width=sc, height=sr}, sc, sr)
+        self._source = {x=cx, y=cy}
+        return
     end
 
     if sel.kind == "sink" then
@@ -487,7 +483,7 @@ function EditorScene:_place_at(cx, cy)
                 if self._grid.cells[cy+dy] and self._grid.cells[cy+dy][cx+dx] then return end
             end
         end
-        local tile = {kind="op", op=sel.op, locked=self._lock_mode,
+        local tile = {kind="op", op=sel.op, locked=true,
                       params=deep_copy_params(DEFAULT_PARAMS[sel.op]), width=tw, height=th}
         if tw > 1 or th > 1 then self._grid:set_multi_2d(cx, cy, tile, tw, th)
         else                      self._grid:set(cx, cy, tile) end
@@ -497,11 +493,28 @@ function EditorScene:_place_at(cx, cy)
     if sel.kind == "pusher" then
         if self._grid.cells[cy][cx] ~= nil then return end
         self._pusher_count = self._pusher_count + 1
-        self._grid:set(cx, cy, {kind="pusher", locked=self._lock_mode, id=self._pusher_count})
+        self._grid:set(cx, cy, {kind="pusher", locked=true, id=self._pusher_count})
     end
 end
 
 -- ── Matrix helpers ─────────────────────────────────────────────────────────
+
+-- Re-places the source tile at its current position with the current input dimensions.
+-- Called whenever input rows/cols change so the source footprint stays in sync.
+function EditorScene:_refit_source()
+    if not self._source then return end
+    local sx, sy = self._source.x, self._source.y
+    self:_erase_at(sx, sy)   -- also sets self._source = nil
+    local sc, sr = self._input.cols, self._input.rows
+    if not self._grid:in_bounds_multi_2d(sx, sy, sc, sr) then return end
+    for dy = 0, sr-1 do
+        for dx = 0, sc-1 do
+            if self._grid.cells[sy+dy] and self._grid.cells[sy+dy][sx+dx] then return end
+        end
+    end
+    self._grid:set_multi_2d(sx, sy, {kind="source", locked=true, width=sc, height=sr}, sc, sr)
+    self._source = {x=sx, y=sy}
+end
 
 function EditorScene:_adjust_matrix(mat, new_rows, new_cols)
     mat.rows = math.max(1, math.min(4, new_rows))
@@ -559,8 +572,6 @@ function EditorScene:mouse_pressed(mx, my, btn)
                 self._scene_manager:switch(StartScene.new(self._scene_manager))
             elseif e.id == "editor:name" then
                 self._name_focus = true
-            elseif e.id == "editor:lock" then
-                self._lock_mode = not self._lock_mode
             elseif e.id == "editor:copy" then
                 love.system.setClipboardText(self:_serialize())
                 self._copy_flash = 2.0
@@ -579,12 +590,16 @@ function EditorScene:mouse_pressed(mx, my, btn)
                         self._scene_manager:switch(ms.new_from_def(def, self._scene_manager, self))
             elseif e.id == "editor:input_rows_dec" then
                 self:_adjust_matrix(self._input, self._input.rows-1, self._input.cols)
+                self:_refit_source()
             elseif e.id == "editor:input_rows_inc" then
                 self:_adjust_matrix(self._input, self._input.rows+1, self._input.cols)
+                self:_refit_source()
             elseif e.id == "editor:input_cols_dec" then
                 self:_adjust_matrix(self._input, self._input.rows, self._input.cols-1)
+                self:_refit_source()
             elseif e.id == "editor:input_cols_inc" then
                 self:_adjust_matrix(self._input, self._input.rows, self._input.cols+1)
+                self:_refit_source()
             elseif e.id == "editor:target_rows_dec" then
                 self:_adjust_matrix(self._target, self._target.rows-1, self._target.cols)
             elseif e.id == "editor:target_rows_inc" then

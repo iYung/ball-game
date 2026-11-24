@@ -208,12 +208,24 @@ local function lerp(a, b, t) return a + (b - a) * t end
 
 -- ── Constructor ────────────────────────────────────────────────────────────
 
-function MatrixScene.new(puzzle_index, scene_manager, settings_state)
+function MatrixScene.new(puzzle_index, scene_manager, settings_state, back_scene)
     local base = Scene.new(1280, 720)
     local self  = setmetatable(base, MatrixScene)
     self._start_puzzle    = puzzle_index or 1
     self._scene_manager   = scene_manager
     self._settings_state  = settings_state
+    self._back_scene      = back_scene
+    return self
+end
+
+function MatrixScene.new_from_def(puzzle_def, scene_manager, back_scene)
+    local base = Scene.new(1280, 720)
+    local self  = setmetatable(base, MatrixScene)
+    self._start_puzzle    = nil
+    self._custom_puzzle   = puzzle_def
+    self._scene_manager   = scene_manager
+    self._settings_state  = nil
+    self._back_scene      = back_scene
     return self
 end
 
@@ -261,8 +273,13 @@ end
 -- ── Puzzle management ──────────────────────────────────────────────────────
 
 function MatrixScene:load_puzzle(n)
-    self.puzzle_index   = math.max(1, math.min(n, PuzzleLoader.count()))
-    self.puzzle         = PuzzleLoader.load(self.puzzle_index)
+    if self._custom_puzzle then
+        self.puzzle_index = 0
+        self.puzzle       = self._custom_puzzle
+    else
+        self.puzzle_index = math.max(1, math.min(n, PuzzleLoader.count()))
+        self.puzzle       = PuzzleLoader.load(self.puzzle_index)
+    end
     local p             = self.puzzle
     self.input_matrix   = Matrix.new(p.input.rows,  p.input.cols,  p.input.values)
     self.target_matrix  = Matrix.new(p.target.rows, p.target.cols, p.target.values)
@@ -1428,8 +1445,12 @@ function MatrixScene:_cmd_activate(id)
         self:do_reset()
     elseif id == "menu" then
         if self._scene_manager then
-            local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
+            if self._back_scene then
+                self._scene_manager:switch(self._back_scene)
+            else
+                local LevelSelectScene = require("lua/game/scenes/level_select_scene")
+                self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
+            end
         end
     end
 end

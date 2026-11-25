@@ -8,7 +8,8 @@ local HUD          = require("lua/game/hud")
 local PuzzleLoader = require("lua/game/puzzle_loader")
 local UI           = require("lua/core/ui")
 local SettingsMenu = require("lua/game/scenes/settings_menu")
-local OpTiles      = require("lua/game/op_tiles")
+local Ops          = require("lua/game/ops")
+local OpTile       = require("lua/game/op_tile")
 
 local function cell_key(x, y) return x .. "," .. y end
 
@@ -50,28 +51,6 @@ local STATUS_LABELS = {
     no_pusher = "Place a pusher first",
 }
 
--- How many board cells each op tile spans: {cols, rows}
-local OP_SIZES = {
-    transpose  = {1, 1},
-    negate     = {1, 1},
-    scalar_mul = {2, 1},
-    scale_row  = {1, 4},
-    swap_rows  = {1, 2},
-    add_matrix = {1, 1},
-    sub_matrix = {1, 1},
-    mul_matrix = {1, 1},
-    set_row    = {2, 1},
-    add_rows   = {4, 1},
-    scale_col  = {4, 1},
-    swap_cols  = {2, 1},
-    add_cols   = {4, 1},
-    set_col    = {1, 2},
-    rotate_90  = {1, 1},
-    flip_h     = {1, 1},
-    flip_v     = {1, 1},
-    abs        = {1, 1},
-}
-
 -- Bottom bar (x 0..CMD_BTN_X-10): pusher selector + instruction chips, then 4 lanes x 60 ticks.
 local MAX_PUSHERS = 8
 local CMD_GLYPH   = { up="^", down="v", left="<", right=">", stop=".", clear="CLR" }
@@ -89,43 +68,17 @@ BAR.SLOT_X   = BAR.TL_X + BAR.ARROW_W + 4
 BAR.SLOT_END = BAR.TL_RIGHT - BAR.ARROW_W - 4
 BAR.VIS      = math.floor((BAR.SLOT_END - BAR.SLOT_X) / BAR.SLOT_STEP)
 
-local function op_width(op, tile)
-    if op == "scale_col" then return (tile and tile.tile_cols) or 4 end
-    return (OP_SIZES[op] or {1,1})[1]
-end
-local function op_height(op, tile)
-    if op == "scale_row" then return (tile and tile.tile_rows) or 4 end
-    if op == "set_col"   then return 1 + ((tile and tile.tile_rows) or 1) end
-    return (OP_SIZES[op] or {1,1})[2]
-end
-
 local DIR_ARROWS = { right="->", left="<-", up="^", down="v" }
 
-local PALETTE_BUTTONS = {
-    { kind="pusher", label="P" },
-    { sep=true },
-    { kind="op", op="transpose",  label="T"  },
-    { kind="op", op="scale_row",  label="xR" },
-    { kind="op", op="swap_rows",  label="<>R"},
-    { kind="op", op="negate",     label="-I" },
-    { kind="op", op="scalar_mul", label="xk" },
-    { kind="op", op="add_matrix", label="+M"  },
-    { kind="op", op="sub_matrix", label="-M"  },
-    { kind="op", op="mul_matrix", label="xM"  },
-    { kind="op", op="set_row",    label="=R"  },
-    { kind="op", op="add_rows",  label="+R"  },
-    { kind="op", op="scale_col", label="xC"  },
-    { kind="op", op="swap_cols", label="<>C" },
-    { kind="op", op="add_cols",  label="+C"  },
-    { kind="op", op="set_col",   label="=C"  },
-    { kind="op", op="rotate_90", label="R90" },
-    { kind="op", op="flip_h",    label="FLh" },
-    { kind="op", op="flip_v",    label="FLv" },
-    { kind="op", op="abs",       label="|x|" },
-    { sep=true },
-    { kind="drag", label="Mv" },
-    { erase=true, label="[X]" },
-}
+-- Pusher | the k ops | the shape ops | Mv, erase (op order and labels come from Ops).
+local PALETTE_BUTTONS = { { kind="pusher", label="P" }, { sep=true } }
+for i, op in ipairs(Ops.ORDER) do
+    table.insert(PALETTE_BUTTONS, { kind="op", op=op, label=Ops.label(op) })
+    if i == 6 then table.insert(PALETTE_BUTTONS, { sep=true }) end
+end
+table.insert(PALETTE_BUTTONS, { sep=true })
+table.insert(PALETTE_BUTTONS, { kind="drag", label="Mv" })
+table.insert(PALETTE_BUTTONS, { erase=true, label="[X]" })
 
 local CMD_BUTTONS = {
     { id="run",      label="Run",      color_fill={0.12,0.28,0.12}, color_border={0.30,0.75,0.30} },
@@ -195,7 +148,6 @@ function MatrixScene:on_enter()
     self.anim_to_x    = 0;  self.anim_to_y   = 0
     self.anim_t       = 1
     self.anim_ready   = false
-    self._expand_rects = {}
     self._drag_tile   = nil
     self._drag_origin = nil
     self._drag_ghost  = nil
@@ -233,8 +185,6 @@ function MatrixScene:load_puzzle(n)
     self.target_matrix  = Matrix.new(p.target.rows, p.target.cols, p.target.values)
     self.current_matrix = nil
     self._anim_display_matrix = nil
-    -- Upper bounds for index params on this puzzle's tiles
-    self._limits        = { rows = p.input.rows, cols = p.input.cols, set_row = 4 }
     self.status         = nil
     self.running        = false
     self.sim            = nil
@@ -246,29 +196,15 @@ function MatrixScene:load_puzzle(n)
     self._palette_scroll  = 0
     self.grid            = Grid.new(p.grid_w, p.grid_h)
 
-    if p.locked then
-        for _, t in ipairs(p.locked) do
-            local w = t.width  or op_width(t.op or "", t)
-            local h = t.height or op_height(t.op or "", t)
-            local tile = {
-                kind      = t.kind,
-                dir       = t.dir,
-                op        = t.op,
-                id        = t.id,
-                params    = t.params or {},
-                locked    = true,
-                width     = w,
-                height    = h,
-                tile_rows = t.tile_rows,
-                tile_cols = t.tile_cols,
-                values    = t.values,
-            }
-            if w > 1 or h > 1 then
-                self.grid:set_multi_2d(t.x, t.y, tile, w, h)
-            else
-                self.grid:set(t.x, t.y, tile)
-            end
-        end
+    -- Locked puzzle tiles are always one cell; any size fields on an entry are ignored.
+    for _, t in ipairs(p.locked or {}) do
+        self.grid:set(t.x, t.y, {
+            kind   = t.kind,
+            dir    = t.dir,
+            op     = t.op,
+            params = Ops.params(t.op, t.params),
+            locked = true,
+        })
     end
     local src_cols = p.input.cols
     local src_rows = p.input.rows
@@ -300,12 +236,6 @@ local OPS_BOTTOM    = GRID_Y + 520 - SCROLL_H - 4            -- buttons must end
 local SCROLL_UP_Y   = GRID_Y                                 -- 10..24
 local SCROLL_DOWN_Y = GRID_Y + 520 - SCROLL_H                -- 516..530
 local SCROLL_BTN_W  = 2 * PAL_BTN_W + (PAL_STEP - PAL_BTN_W) -- spans both button columns (104)
-
-local function find_btn(pred)
-    for _, btn in ipairs(PALETTE_BUTTONS) do
-        if pred(btn) then return btn end
-    end
-end
 
 local function palette_id(btn)
     if btn.fixed then return "palette:fixed:" .. btn.op end
@@ -346,10 +276,15 @@ function MatrixScene:_build_palette()
     end
     if self.puzzle.fixed_ops and #self.puzzle.fixed_ops > 0 then
         pending = true
-        for _, op in ipairs(self.puzzle.fixed_ops) do
-            fixed_allowed[op] = true
-            local base = find_btn(function(b) return b.op == op end)
-            if base then push({ kind="op", op=op, label=base.label .. "!", fixed=true }) end
+        -- An entry is an op id, or { op=, params= } to preset the placed tiles.
+        for _, entry in ipairs(self.puzzle.fixed_ops) do
+            local op, params = entry, nil
+            if type(entry) == "table" then op, params = entry.op, entry.params end
+            if Ops.is_op(op) then
+                fixed_allowed[op] = true
+                push({ kind="op", op=op, label=Ops.fixed_label(op, params),
+                       params=Ops.params(op, params), fixed=true })
+            end
         end
     end
     self._palette_items  = items
@@ -458,13 +393,7 @@ end
 
 function MatrixScene:_clear_drag()
     if self._drag_tile and self._drag_origin then
-        local tile = self._drag_tile
-        local ox, oy = self._drag_origin.x, self._drag_origin.y
-        if (tile.width or 1) > 1 or (tile.height or 1) > 1 then
-            self.grid:set_multi_2d(ox, oy, tile, tile.width or 1, tile.height or 1)
-        else
-            self.grid:set(ox, oy, tile)
-        end
+        self.grid:set(self._drag_origin.x, self._drag_origin.y, self._drag_tile)
     end
     self._drag_tile   = nil
     self._drag_origin = nil
@@ -533,51 +462,30 @@ function MatrixScene:_count_pieces()
     return count
 end
 
--- Recomputes the footprint, re-arms op tiles the matrix has fully left, and fires
--- each newly entered op tile once (deduplicated by anchor). Returns the new footprint.
+-- Recomputes the footprint, re-arms op tiles the matrix has left, and fires each
+-- newly entered op tile once. Returns the new footprint.
 function MatrixScene:_process_footprint(old_fp)
     local new_fp  = self:get_footprint()
     self._last_fp = new_fp
+    self:_rearm_ops(new_fp)
 
-    for akey, info in pairs(self.occupied_ops) do
-        local tile   = self.grid:get(info.ax, info.ay)
-        local width  = (tile and tile.width)  or 1
-        local height = (tile and tile.height) or 1
-        local still_covered = false
-        for dy = 0, height - 1 do
-            for dx = 0, width - 1 do
-                if new_fp[cell_key(info.ax + dx, info.ay + dy)] then
-                    still_covered = true; break
-                end
-            end
-            if still_covered then break end
-        end
-        if not still_covered then self.occupied_ops[akey] = nil end
-    end
-
-    local entered_anchors = {}
-    local seen = {}
+    local entered = {}
     for key, cell in pairs(new_fp) do
-        if not old_fp[key] then
-            local ax, ay = self.grid:get_anchor(cell.x, cell.y)
-            local akey = cell_key(ax, ay)
-            if not self.occupied_ops[akey] and not seen[akey] then
-                seen[akey] = true
-                entered_anchors[#entered_anchors+1] = {x=ax, y=ay, akey=akey}
-            end
+        if not old_fp[key] and not self.occupied_ops[key] then
+            entered[#entered+1] = {x=cell.x, y=cell.y, key=key}
         end
     end
-    -- Fire in top-to-bottom, left-to-right order (by anchor position).
-    table.sort(entered_anchors, function(a, b)
+    -- Fire in top-to-bottom, left-to-right order.
+    table.sort(entered, function(a, b)
         return a.y < b.y or (a.y == b.y and a.x < b.x)
     end)
 
     local mat = self.current_matrix
-    for _, info in ipairs(entered_anchors) do
+    for _, info in ipairs(entered) do
         local tile = self.grid:get(info.x, info.y)
         if tile and tile.kind == "op" then
             mat = Sim.apply_op(tile, mat)
-            self.occupied_ops[info.akey] = {ax=info.x, ay=info.y}
+            self.occupied_ops[info.key] = true
             if not Sim.footprint_clear(self.sim.x, self.sim.y,
                                         mat.rows, mat.cols,
                                         self.grid.w, self.grid.h,
@@ -595,23 +503,16 @@ function MatrixScene:_process_footprint(old_fp)
     -- new_fp may no longer reflect which cells are covered. Recompute the true footprint
     -- and re-arm any occupied op that the post-op matrix no longer overlaps.
     local actual_fp = self:get_footprint()
-    for akey, info in pairs(self.occupied_ops) do
-        local tile   = self.grid:get(info.ax, info.ay)
-        local width  = (tile and tile.width)  or 1
-        local height = (tile and tile.height) or 1
-        local still_covered = false
-        for dy = 0, height - 1 do
-            for dx = 0, width - 1 do
-                if actual_fp[cell_key(info.ax + dx, info.ay + dy)] then
-                    still_covered = true; break
-                end
-            end
-            if still_covered then break end
-        end
-        if not still_covered then self.occupied_ops[akey] = nil end
-    end
+    self:_rearm_ops(actual_fp)
     self._last_fp = actual_fp
     return actual_fp
+end
+
+-- Forgets fired op tiles that footprint fp no longer covers, so they can fire again.
+function MatrixScene:_rearm_ops(fp)
+    for key in pairs(self.occupied_ops) do
+        if not fp[key] then self.occupied_ops[key] = nil end
+    end
 end
 
 -- Pushers on the board, ordered by letter id.
@@ -768,90 +669,14 @@ function MatrixScene:draw_grid()
         end
     end
 
-    -- Pass 2: tile content — anchor cells draw their full span, ref cells draw param content
+    -- Pass 2: tile content. The source anchor draws its full span; its ref cells fill in.
     for cy = 1, 10 do
         for cx = 1, 10 do
-            local is_r, ax, ay = self.grid:is_ref(cx, cy)
-            if is_r then
-                local anchor_tile = self.grid:get(cx, cy)
-                local dc = cx - ax
-                local dr = cy - ay
-                self:draw_ref_cell(anchor_tile, dc, dr, cx, cy)
+            if self.grid:is_ref(cx, cy) then
+                self:draw_ref_cell(cx, cy)
             else
                 local tile = self.grid:get(cx, cy)
                 if tile then self:draw_tile(tile, cx, cy) end
-            end
-        end
-    end
-
-    -- Pass 3: expand/shrink affordances for resizable ops
-    self._expand_rects = {}
-    local EXPAND_OPS = {add_matrix=true, sub_matrix=true, mul_matrix=true, set_row=true, scale_row=true, scale_col=true, set_col=true}
-    for cy2 = 1, 10 do
-        for cx2 = 1, 10 do
-            local is_r2, _, _ = self.grid:is_ref(cx2, cy2)
-            if not is_r2 then
-                local tile2 = self.grid:get(cx2, cy2)
-                if tile2 and tile2.kind == "op" and EXPAND_OPS[tile2.op] and not tile2.locked and not tile2.fixed then
-                    local ax2, ay2 = cx2, cy2
-                    local tc = tile2.tile_cols or 1
-                    local tr = tile2.tile_rows
-                    local has_col_resize = tile2.tile_cols ~= nil
-
-                    -- +col strip to the right
-                    if has_col_resize and tc < 4 then
-                        local sx2, sy2 = cell_top_left(ax2 + tc, ay2)
-                        local sh = (tr or 1) * CELL_SIZE
-                        local sw = CELL_SIZE / 3
-                        love.graphics.setColor(0.23, 0.44, 0.23, 1)
-                        love.graphics.rectangle("fill", sx2, sy2, sw, sh)
-                        love.graphics.setColor(0.5, 1.0, 0.5, 1)
-                        love.graphics.setFont(self.font_ui)
-                        love.graphics.printf("+", sx2, sy2 + (tr or 1) * CELL_SIZE / 2 - 7, sw, "center")
-                        table.insert(self._expand_rects, {ax=ax2,ay=ay2,action="grow_col",x=sx2,y=sy2,w=sw,h=sh})
-                    end
-
-                    -- -col strip (right inside edge), only if tc > 1
-                    if has_col_resize and tc > 1 then
-                        local sx2, sy2 = cell_top_left(ax2 + tc - 1, ay2)
-                        local sw = CELL_SIZE / 4
-                        local sh = (tr or 1) * CELL_SIZE
-                        local rx = sx2 + CELL_SIZE - sw
-                        love.graphics.setColor(0.44, 0.15, 0.15, 1)
-                        love.graphics.rectangle("fill", rx, sy2, sw, sh)
-                        love.graphics.setColor(1.0, 0.4, 0.4, 1)
-                        love.graphics.setFont(self.font_ui)
-                        love.graphics.printf("-", rx, sy2 + (tr or 1) * CELL_SIZE / 2 - 7, sw, "center")
-                        table.insert(self._expand_rects, {ax=ax2,ay=ay2,action="shrink_col",x=rx,y=sy2,w=sw,h=sh})
-                    end
-
-                    -- +row and -row only for matrix ops (not set_row)
-                    if tr then
-                        if tr < 4 then
-                            local sx2, sy2 = cell_top_left(ax2, ay2 + tr)
-                            local sw = tc * CELL_SIZE
-                            local sh = CELL_SIZE / 3
-                            love.graphics.setColor(0.23, 0.44, 0.23, 1)
-                            love.graphics.rectangle("fill", sx2, sy2, sw, sh)
-                            love.graphics.setColor(0.5, 1.0, 0.5, 1)
-                            love.graphics.setFont(self.font_ui)
-                            love.graphics.printf("+", sx2, sy2 + sh / 2 - 7, sw, "center")
-                            table.insert(self._expand_rects, {ax=ax2,ay=ay2,action="grow_row",x=sx2,y=sy2,w=sw,h=sh})
-                        end
-                        if tr > 1 then
-                            local sx2, sy2 = cell_top_left(ax2, ay2 + tr - 1)
-                            local sh = CELL_SIZE / 4
-                            local ry = sy2 + CELL_SIZE - sh
-                            local sw = tc * CELL_SIZE
-                            love.graphics.setColor(0.44, 0.15, 0.15, 1)
-                            love.graphics.rectangle("fill", sx2, ry, sw, sh)
-                            love.graphics.setColor(1.0, 0.4, 0.4, 1)
-                            love.graphics.setFont(self.font_ui)
-                            love.graphics.printf("-", sx2, ry + sh / 2 - 7, sw, "center")
-                            table.insert(self._expand_rects, {ax=ax2,ay=ay2,action="shrink_row",x=sx2,y=ry,w=sw,h=sh})
-                        end
-                    end
-                end
             end
         end
     end
@@ -860,38 +685,27 @@ function MatrixScene:draw_grid()
     if self._drag_tile and self._drag_ghost then
         local tile = self._drag_tile
         local gx, gy = self._drag_ghost.cx, self._drag_ghost.cy
-        local w = tile.width  or 1
-        local h = tile.height or 1
-        local valid = self.grid:in_bounds_multi_2d(gx, gy, w, h)
-        if valid then
-            for dy = 0, h - 1 do
-                for dx = 0, w - 1 do
-                    local cell = self.grid.cells[gy + dy] and self.grid.cells[gy + dy][gx + dx]
-                    if cell ~= nil then valid = false; break end
-                end
-                if not valid then break end
-            end
-        end
+        local valid = self:_can_drop(gx, gy)
         local sx, sy = cell_top_left(gx, gy)
         if valid then
             love.graphics.setColor(0.14, 0.35, 0.14, 1)
         else
             love.graphics.setColor(0.35, 0.14, 0.14, 1)
         end
-        love.graphics.rectangle("fill", sx, sy, w * CELL_SIZE, h * CELL_SIZE)
+        love.graphics.rectangle("fill", sx, sy, CELL_SIZE, CELL_SIZE)
         love.graphics.setColor(valid and 0.34 or 0.74, valid and 0.74 or 0.26, valid and 0.34 or 0.26, 1)
         love.graphics.setLineWidth(2)
-        love.graphics.rectangle("line", sx + 1, sy + 1, w * CELL_SIZE - 2, h * CELL_SIZE - 2)
+        love.graphics.rectangle("line", sx + 1, sy + 1, CELL_SIZE - 2, CELL_SIZE - 2)
         love.graphics.setLineWidth(1)
         local label
         if tile.kind == "pusher" then
             label = string.char(64 + (tile.id or 1))
         else
-            label = OpTiles.SYMBOLS[tile.op] or "?"
+            label = Ops.tile_text(tile.op, tile.params)
         end
         love.graphics.setColor(0.82, 0.82, 0.82, 1)
         love.graphics.setFont(self.font_cell)
-        love.graphics.printf(label, sx, sy + h * CELL_SIZE / 2 - 8, w * CELL_SIZE, "center")
+        love.graphics.printf(label, sx, sy + CELL_SIZE / 2 - 8, CELL_SIZE, "center")
     end
 
     love.graphics.setColor(1, 1, 1, 1)
@@ -924,25 +738,14 @@ function MatrixScene:draw_live_pushers()
     end
 end
 
-function MatrixScene:_draw_op_cell(tile, dc, dr, cx, cy)
+-- Only the source tile spans several cells; this fills one of its non-anchor cells.
+function MatrixScene:draw_ref_cell(cx, cy)
     local sx, sy = cell_top_left(cx, cy)
-    OpTiles.draw_cell(tile, dc, dr, sx, sy, CELL_SIZE,
-        { cell = self.font_cell, ui = self.font_ui }, not (tile.fixed or tile.locked))
+    love.graphics.setColor(0.09, 0.29, 0.17, 1)
+    love.graphics.rectangle("fill", sx, sy, CELL_SIZE, CELL_SIZE)
 end
 
--- draw_ref_cell: called for each ref cell in Pass 2.
--- dc, dr are 0-based offsets from the anchor.
-function MatrixScene:draw_ref_cell(tile, dc, dr, cx, cy)
-    if tile.kind == "source" then
-        local sx, sy = cell_top_left(cx, cy)
-        love.graphics.setColor(0.09, 0.29, 0.17, 1)
-        love.graphics.rectangle("fill", sx, sy, CELL_SIZE, CELL_SIZE)
-        return
-    end
-    self:_draw_op_cell(tile, dc, dr, cx, cy)
-end
-
--- draw_tile takes cell coordinates so multi-cell ops can draw a spanning background.
+-- draw_tile takes cell coordinates; the source draws a background spanning its cells.
 function MatrixScene:draw_tile(tile, cx, cy)
     local sx, sy = cell_top_left(cx, cy)
     local cs     = CELL_SIZE
@@ -974,35 +777,9 @@ function MatrixScene:draw_tile(tile, cx, cy)
         love.graphics.printf("×", sx, mid_y - 8, cs, "center")
 
     elseif tile.kind == "op" then
-        local w = op_width(tile.op, tile)
-        local h = op_height(tile.op, tile)
-        local span_w = w * cs
-        local span_h = h * cs
-
-        -- Spanning background
-        love.graphics.setColor(0.21, 0.14, 0.04, 1)
-        love.graphics.rectangle("fill", sx, sy, span_w, span_h)
-        love.graphics.setColor(0.9, 0.7, 0.3, 1)
-        love.graphics.setLineWidth(2)
-        love.graphics.rectangle("line", sx + 1, sy + 1, span_w - 2, span_h - 2)
-        love.graphics.setLineWidth(1)
-
-        -- The anchor draws these cells of its tile; Pass 2 covers the ref cells.
-        local op = tile.op
-        local last_dc, last_dr = 0, 0
-        if     op == "scale_row" then last_dr = h - 1
-        elseif op == "scale_col" then last_dc = w - 1
-        elseif op == "swap_rows" then last_dr = 1
-        elseif op == "swap_cols" then last_dc = 1
-        elseif op == "set_row"   then last_dc = tile.tile_cols or 1
-        elseif op == "set_col"   then last_dr = tile.tile_rows or 1
-        end
-        for dr = 0, last_dr do
-            for dc = 0, last_dc do
-                self:_draw_op_cell(tile, dc, dr, cx + dc, cy + dr)
-            end
-        end
-        OpTiles.draw_overlay(tile, sx, sy, cs)
+        local immutable = (tile.fixed or tile.locked) and true or false
+        OpTile.draw(tile, sx, sy, cs, { cell = self.font_cell, ui = self.font_ui },
+            { marks = not immutable, immutable = immutable })
     end
 
     if tile.locked and tile.kind ~= "gap" then
@@ -1013,7 +790,7 @@ function MatrixScene:draw_tile(tile, cx, cy)
     if tile.fixed then
         love.graphics.setColor(0.42, 0.62, 0.83, 1)
         love.graphics.setFont(self.font_ui)
-        love.graphics.printf("=", sx + (tile.width or 1)*CELL_SIZE - 14, sy + 4, 12, "right")
+        love.graphics.printf("=", sx + cs - 14, sy + 4, 12, "right")
     end
 end
 
@@ -1196,7 +973,7 @@ function MatrixScene:_palette_select(btn)
     elseif btn.kind == "pusher" then
         self.palette:select({kind="pusher"})
     elseif btn.kind == "op" then
-        self.palette:select({kind="op", op=btn.op, fixed=btn.fixed})
+        self.palette:select({kind="op", op=btn.op, fixed=btn.fixed, params=btn.params})
     elseif btn.kind == "drag" then
         self.palette:select({kind="drag"})
     end
@@ -1448,7 +1225,9 @@ function MatrixScene:ui_tile(x, y)
     if not self.grid:in_bounds(x, y) then return nil end
     local tile = self.grid:get(x, y)
     if tile == nil then return nil end
-    return { kind = tile.kind, op = tile.op, dir = tile.dir }
+    local params = tile.params or {}
+    return { kind = tile.kind, op = tile.op, dir = tile.dir,
+             edge = params.edge, scalar = params.scalar }
 end
 
 function MatrixScene:_draw_status_banner()
@@ -1487,20 +1266,9 @@ end
 -- ── Input ──────────────────────────────────────────────────────────────────
 
 function MatrixScene:_place_tile_at(cx, cy, spec)
-    local matrix_rows = self.input_matrix and self.input_matrix.rows or 4
-    local matrix_cols = self.input_matrix and self.input_matrix.cols or 4
-    local w = op_width(spec.op or "", {tile_cols = matrix_cols})
-    local h = op_height(spec.op or "", {matrix_rows = matrix_rows})
-
-    if not self.grid:in_bounds_multi_2d(cx, cy, w, h) then return end
-
-    -- Reject if any cell in range is locked
-    for dy = 0, h - 1 do
-        for dx = 0, w - 1 do
-            local t = self.grid:get(cx + dx, cy + dy)
-            if t and t.locked then return end
-        end
-    end
+    if not self.grid:in_bounds(cx, cy) then return end
+    local old = self.grid:get(cx, cy)
+    if old and old.locked then return end
 
     -- Pushers get the lowest free letter id (a pusher being replaced frees its own id)
     local pusher_id
@@ -1515,118 +1283,18 @@ function MatrixScene:_place_tile_at(cx, cy, spec)
         if not pusher_id then return end
     end
 
-    -- Clear existing tiles
-    for dy = 0, h - 1 do
-        for dx = 0, w - 1 do
-            self.grid:clear(cx + dx, cy + dy)
-        end
-    end
-
-    local params = OpTiles.default_params(spec.op)
-    if spec.params then
-        for k, v in pairs(spec.params) do params[k] = v end
-    end
-
-    -- Build tile values for matrix ops
-    local values = nil
-    local tile_rows, tile_cols = nil, nil
-    if spec.op == "add_matrix" or spec.op == "sub_matrix" then
-        tile_rows, tile_cols = 1, 1
-        values = {{0}}
-    elseif spec.op == "mul_matrix" then
-        tile_rows, tile_cols = 1, 1
-        values = {{1}}
-    elseif spec.op == "set_row" then
-        tile_cols = 1
-        values = {{0}}
-    elseif spec.op == "scale_row" then
-        tile_rows = 4
-    elseif spec.op == "scale_col" then
-        tile_cols = 4
-    elseif spec.op == "set_col" then
-        tile_rows = matrix_rows
-        values = {}
-        for r = 1, matrix_rows do values[r] = {0} end
-    end
-
-    local tile = {
+    self.grid:clear(cx, cy)
+    self.grid:set(cx, cy, {
         kind=spec.kind, dir=spec.dir, op=spec.op, id=pusher_id,
-        params=params, locked=false,
+        params=Ops.params(spec.op, spec.params), locked=false,
         fixed=spec.fixed or false,
-        width=w, height=h,
-        tile_rows=tile_rows, tile_cols=tile_cols,
-        values=values,
-        matrix_rows=(spec.op == "scale_row") and matrix_rows or nil,
-    }
-
-    if w > 1 or h > 1 then
-        self.grid:set_multi_2d(cx, cy, tile, w, h)
-    else
-        self.grid:set(cx, cy, tile)
-    end
+    })
     self:_sync_pushers()
 end
 
-function MatrixScene:_resize_tile(ax, ay, action)
-    local tile = self.grid:get(ax, ay)
-    if not tile or tile.locked or tile.fixed then return end
-
-    local old_w = tile.width  or 1
-    local old_h = tile.height or 1
-    local tc    = tile.tile_cols or 1
-    local tr    = tile.tile_rows or 1
-
-    if action == "grow_col" and tc < 4 then
-        -- Clear old footprint
-        self.grid:clear(ax, ay)
-        -- Grow (scale_col has no values table)
-        if tile.values then
-            local fill = (tile.op == "mul_matrix") and 1 or 0
-            for r = 1, tr do
-                if not tile.values[r] then tile.values[r] = {} end
-                tile.values[r][tc + 1] = fill
-            end
-        end
-        tile.tile_cols = tc + 1
-        tile.width     = old_w + 1
-        self.grid:set_multi_2d(ax, ay, tile, tile.tile_cols, tile.tile_rows or 1)
-
-    elseif action == "shrink_col" and tc > 1 then
-        self.grid:clear(ax, ay)
-        if tile.values then
-            for r = 1, tr do
-                if tile.values[r] then tile.values[r][tc] = nil end
-            end
-        end
-        tile.tile_cols = tc - 1
-        tile.width     = old_w - 1
-        local new_w = (tile.op == "set_row") and (1 + tile.tile_cols) or tile.tile_cols
-        tile.width = new_w
-        self.grid:set_multi_2d(ax, ay, tile, new_w, tile.tile_rows or 1)
-
-    elseif action == "grow_row" and tr < 4 then
-        self.grid:clear(ax, ay)
-        if tile.values then
-            local fill = (tile.op == "mul_matrix") and 1 or 0
-            tile.values[tr + 1] = {}
-            for c = 1, tc do tile.values[tr + 1][c] = fill end
-        end
-        tile.tile_rows = tr + 1
-        tile.height    = old_h + 1
-        local place_h = (tile.op == "set_col") and (1 + tile.tile_rows) or tile.tile_rows
-        self.grid:set_multi_2d(ax, ay, tile, tc, place_h)
-
-    elseif action == "shrink_row" and tr > 1 then
-        self.grid:clear(ax, ay)
-        if tile.values then tile.values[tr] = nil end
-        tile.tile_rows = tr - 1
-        tile.height    = old_h - 1
-        if tile.params and tile.params.row then
-            tile.params.row = math.min(tile.params.row, tile.tile_rows)
-        end
-        local place_h = (tile.op == "set_col") and (1 + tile.tile_rows) or tile.tile_rows
-        self.grid:set_multi_2d(ax, ay, tile, tc, place_h)
-    end
+-- True when a dragged tile may be dropped on (cx, cy): on the board and empty.
+function MatrixScene:_can_drop(cx, cy)
+    return self.grid:in_bounds(cx, cy) and self.grid.cells[cy][cx] == nil
 end
 
 function MatrixScene:mouse_moved(mx, my)
@@ -1749,7 +1417,7 @@ function MatrixScene:_mouse_pressed_inner(mx, my, btn)
         return
     end
 
-    -- Grid cell: existing grid logic (resize strips, clear, drag, params, placement).
+    -- Grid cell: clear, drag, edit or place.
     local cx, cy = screen_to_cell(mx, my)
     if not self.grid:in_bounds(cx, cy) then return end
 
@@ -1763,66 +1431,36 @@ function MatrixScene:_mouse_pressed_inner(mx, my, btn)
     end
 
     if btn == 1 then
+        local tile = self.grid:get(cx, cy)
+
         -- Drag pickup: when in drag mode, pick up an existing unlocked tile
         if self.palette:is_drag() and not self.running then
-            local is_r, ax, ay = self.grid:is_ref(cx, cy)
-            if not is_r then ax, ay = cx, cy end
-            local tile = self.grid:get(cx, cy)
             if tile and not tile.locked and tile.kind ~= "gap" then
                 self._drag_tile   = tile
-                self._drag_origin = {x=ax, y=ay}
-                self._drag_ghost  = {cx=ax, cy=ay}
-                self.grid:clear(ax, ay)
-                return
+                self._drag_origin = {x=cx, y=cy}
+                self._drag_ghost  = {cx=cx, cy=cy}
+                self.grid:clear(cx, cy)
             end
             return
         end
 
-        -- Check expand/shrink affordances first
-        for _, rect in ipairs(self._expand_rects or {}) do
-            if mx >= rect.x and mx < rect.x + rect.w
-            and my >= rect.y and my < rect.y + rect.h then
-                self:_resize_tile(rect.ax, rect.ay, rect.action)
-                return
-            end
-        end
-
-        local is_r, ax, ay = self.grid:is_ref(cx, cy)
-        local anchor_tile
-        if is_r then
-            anchor_tile = self.grid:get(cx, cy)
-        else
-            anchor_tile = self.grid:get(cx, cy)
-            ax, ay = cx, cy
-        end
-
-        local dc = cx - ax
-        local dr = cy - ay
-
-        if anchor_tile and not anchor_tile.locked and self.palette:is_eraser() then
+        local spec = self.palette:selected()
+        if spec == nil and tile and not tile.locked then
             self.grid:clear(cx, cy)
             return
         end
 
-        -- Handle op-specific clicks
-        if anchor_tile and anchor_tile.kind == "op" then
-            -- Fixed and locked tiles can't have params edited
-            if anchor_tile.fixed or anchor_tile.locked then return end
-            local cell_sx = cell_top_left(cx, cy)
-            if OpTiles.click(anchor_tile, dc, dr, mx - cell_sx, CELL_SIZE, self._limits) then
-                return
+        -- Clicking an op tile edits it (thirds of the cell); it is never replaced.
+        if tile and tile.kind == "op" then
+            if not (tile.fixed or tile.locked) then
+                local left = cell_top_left(cx, cy)
+                Ops.click(tile.op, tile.params, Ops.part(mx - left, CELL_SIZE))
             end
+            return
         end
 
-        -- Clicking empty or non-op cell: apply palette tool
-        if not is_r then
-            local spec = self.palette:selected()
-            if spec == nil then
-                self.grid:clear(cx, cy)
-            else
-                self:_place_tile_at(cx, cy, spec)
-            end
-        end
+        -- Empty or non-op cell: apply the palette tool (locked tiles refuse it)
+        if spec then self:_place_tile_at(cx, cy, spec) end
     end
 end
 
@@ -1839,31 +1477,12 @@ function MatrixScene:mouse_released(mx, my, btn)
     if btn ~= 1 or not self._drag_tile then return end
     local tile = self._drag_tile
     local ghost = self._drag_ghost
-    if ghost then
-        local gx, gy = ghost.cx, ghost.cy
-        local w = tile.width  or 1
-        local h = tile.height or 1
-        local valid = self.grid:in_bounds_multi_2d(gx, gy, w, h)
-        if valid then
-            for dy = 0, h - 1 do
-                for dx = 0, w - 1 do
-                    local cell = self.grid.cells[gy + dy] and self.grid.cells[gy + dy][gx + dx]
-                    if cell ~= nil then valid = false; break end
-                end
-                if not valid then break end
-            end
-        end
-        if valid then
-            if w > 1 or h > 1 then
-                self.grid:set_multi_2d(gx, gy, tile, w, h)
-            else
-                self.grid:set(gx, gy, tile)
-            end
-            self._drag_tile   = nil
-            self._drag_origin = nil
-            self._drag_ghost  = nil
-            return
-        end
+    if ghost and self:_can_drop(ghost.cx, ghost.cy) then
+        self.grid:set(ghost.cx, ghost.cy, tile)
+        self._drag_tile   = nil
+        self._drag_origin = nil
+        self._drag_ghost  = nil
+        return
     end
     self:_clear_drag()
 end

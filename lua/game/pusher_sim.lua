@@ -1,3 +1,5 @@
+local Ops = require("lua/game/ops")
+
 local Sim = {}
 
 Sim.DIRS = {
@@ -204,85 +206,33 @@ function Sim.advance(st, commands)
     return moved, blocked
 end
 
--- Applies an op tile to a matrix; row params are clamped to the matrix size.
+-- Applies an op tile to a matrix. Missing params take the op's defaults; non-op tiles and
+-- unknown ops return the same matrix object.
 function Sim.apply_op(tile, matrix)
     if tile.kind ~= "op" then return matrix end
     local op = tile.op
-    local p  = tile.params or {}
-    local n  = matrix.rows
+    local p  = Ops.params(op, tile.params)
 
-    if op == "transpose" then
+    if op == "scalar_mul" then
+        return matrix:scalar_mul(p.scalar)
+    elseif op == "scalar_add" then
+        return matrix:scalar_add(p.scalar)
+    elseif op == "scalar_sub" then
+        return matrix:scalar_sub(p.scalar)
+    elseif op == "edge_scale" then
+        return matrix:edge_scale(p.edge, p.scalar)
+    elseif op == "edge_add" then
+        return matrix:edge_add(p.edge, p.scalar)
+    elseif op == "edge_sub" then
+        return matrix:edge_sub(p.edge, p.scalar)
+    elseif op == "transpose" then
         return matrix:transpose()
-    elseif op == "negate" then
-        return matrix:negate()
-    elseif op == "scale_row" then
-        local r = math.max(1, math.min(n, p.row or 1))
-        return matrix:scale_row(r, p.scalar or 1)
-    elseif op == "swap_rows" then
-        local a = math.max(1, math.min(n, p.row_a or 1))
-        local b = math.max(1, math.min(n, p.row_b or 2))
-        return matrix:swap_rows(a, b)
-    elseif op == "scalar_mul" then
-        return matrix:scalar_mul(p.scalar or 1)
-    elseif op == "add_matrix" then
-        local rows = tile.tile_rows or 1
-        local cols = tile.tile_cols or 1
-        local Matrix = require("lua/game/matrix_math")
-        local addend = Matrix.new(rows, cols, tile.values)
-        return matrix:add_matrix(addend)
-    elseif op == "sub_matrix" then
-        local rows = tile.tile_rows or 1
-        local cols = tile.tile_cols or 1
-        local Matrix = require("lua/game/matrix_math")
-        local operand = Matrix.new(rows, cols, tile.values)
-        return matrix:sub_matrix(operand)
-    elseif op == "mul_matrix" then
-        local rows = tile.tile_rows or 1
-        local cols = tile.tile_cols or 1
-        local Matrix = require("lua/game/matrix_math")
-        local factor = Matrix.new(rows, cols, tile.values)
-        return matrix:mul_matrix(factor)
-    elseif op == "set_row" then
-        local row = p.row or 1
-        local values = {}
-        local tv = tile.values or {{}}
-        for c = 1, tile.tile_cols or 1 do
-            values[c] = (tv[1] and tv[1][c]) or 0
-        end
-        return matrix:set_row(row, values)
-    elseif op == "add_rows" then
-        local src = math.max(1, math.min(n, p.src or 1))
-        local dst = math.max(1, math.min(n, p.dst or 2))
-        if src == dst then return matrix end
-        return matrix:add_rows(src, dst, p.scalar or 1)
-    elseif op == "scale_col" then
-        local c = math.max(1, math.min(matrix.cols, p.col or 1))
-        return matrix:scale_col(c, p.scalar or 1)
-    elseif op == "swap_cols" then
-        local a = math.max(1, math.min(matrix.cols, p.col_a or 1))
-        local b = math.max(1, math.min(matrix.cols, p.col_b or 2))
-        return matrix:swap_cols(a, b)
-    elseif op == "add_cols" then
-        local src = math.max(1, math.min(matrix.cols, p.src or 1))
-        local dst = math.max(1, math.min(matrix.cols, p.dst or 2))
-        if src == dst then return matrix end
-        return matrix:add_cols(src, dst, p.scalar or 1)
-    elseif op == "set_col" then
-        local col = p.col or 1
-        local values = {}
-        local tv = tile.values or {{}}
-        for r = 1, tile.tile_rows or 1 do
-            values[r] = (tv[r] and tv[r][1]) or 0
-        end
-        return matrix:set_col(col, values)
     elseif op == "rotate_90" then
         return matrix:rotate_90()
     elseif op == "flip_h" then
         return matrix:flip_h()
     elseif op == "flip_v" then
         return matrix:flip_v()
-    elseif op == "abs" then
-        return matrix:abs()
     end
     return matrix
 end

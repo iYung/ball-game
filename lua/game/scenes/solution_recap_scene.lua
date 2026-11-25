@@ -1,6 +1,7 @@
 local Scene        = require("lua/core/scene")
 local PuzzleLoader = require("lua/game/puzzle_loader")
 local UI           = require("lua/core/ui")
+local OpTile       = require("lua/game/op_tile")
 
 local W, H = 1280, 720
 
@@ -15,18 +16,6 @@ local PAUSE_AT_END = 0.6  -- seconds to hold at the last frame before looping
 
 local SolutionRecapScene = setmetatable({}, { __index = Scene })
 SolutionRecapScene.__index = SolutionRecapScene
-
-local OP_SYMBOLS = {
-    transpose  = "T",
-    scale_row  = "xRn",
-    swap_rows  = "<>R",
-    negate     = "-I",
-    scalar_mul = "xk",
-    add_matrix = "+M",
-    sub_matrix = "-M",
-    mul_matrix = "xM",
-    set_row    = "=R",
-}
 
 local function cell_top_left(cx, cy)
     return GRID_X + (cx - 1) * CELL_SIZE,
@@ -186,17 +175,8 @@ function SolutionRecapScene:_draw_tile(tile, cx, cy)
         love.graphics.printf(string.char(64 + (tile.id or 1)), sx, mid_y - 8, cs, "center")
 
     elseif tile.kind == "op" then
-        local w = (tile.width  or 1)
-        local h = (tile.height or 1)
-        love.graphics.setColor(0.21, 0.14, 0.04, 1)
-        love.graphics.rectangle("fill", sx, sy, w * cs, h * cs)
-        love.graphics.setColor(0.9, 0.7, 0.3, 1)
-        love.graphics.setLineWidth(2)
-        love.graphics.rectangle("line", sx + 1, sy + 1, w * cs - 2, h * cs - 2)
-        love.graphics.setLineWidth(1)
-        love.graphics.setFont(self._font_cell)
-        love.graphics.setColor(0.9, 0.7, 0.3, 1)
-        love.graphics.printf(OP_SYMBOLS[tile.op] or "?", sx, sy + h * cs / 2 - 8, w * cs, "center")
+        OpTile.draw(tile, sx, sy, cs, { cell = self._font_cell, ui = self._font_ui },
+                    { marks = false, immutable = tile.locked or tile.fixed })
 
     elseif tile.kind == "gap" then
         love.graphics.setColor(0.5, 0.15, 0.15, 1)

@@ -20,6 +20,6 @@ for _, size in ipairs({ 1, 4 }) do
             assert(e.rect.y + e.rect.h <= 656, e.id .. " runs into the palette bar")
         end
     end
-    assert(count == 18, "all 18 allowlist buttons shown, got " .. count)
+    assert(count == 10, "all 10 allowlist buttons shown, got " .. count)
 end
 print("PASS: OPS label clear of allowlist buttons")

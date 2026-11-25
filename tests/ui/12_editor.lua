@@ -264,4 +264,20 @@ return {
             { assert_text   = "PUZZLE EDITOR" },
         },
     },
+    {
+        name  = "paste does not run clipboard code",
+        given = { solved = {} },
+        steps = {
+            { click_button  = "Editor" },
+            -- would load a puzzle (and could do anything else) if it were executed
+            { set_clipboard = [[return (function() return {
+    input  = { rows=1, cols=1, values={ {1} } },
+    target = { rows=1, cols=1, values={ {1} } },
+    gaps   = { {x=2,y=2} },
+} end)()]] },
+            { click_button  = { id = "editor:paste" } },
+            { assert_text   = "Parse error" },
+            { assert_tile   = { x = 2, y = 2 } },
+        },
+    },
 }

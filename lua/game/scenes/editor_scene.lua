@@ -2,6 +2,7 @@ local Scene      = require("lua/core/scene")
 local Grid       = require("lua/game/grid")
 local UI         = require("lua/core/ui")
 local ParamPopup = require("lua/game/param_popup")
+local DefParser  = require("lua/game/def_parser")
 
 -- Layout constants (matching MatrixScene)
 local GRID_X    = 95
@@ -572,18 +573,17 @@ function EditorScene:mouse_pressed(mx, my, btn)
                 love.system.setClipboardText(self:_serialize())
                 self._copy_flash = 2.0
             elseif e.id == "editor:paste" then
-                        local text = love.system.getClipboardText()
-                        local ok, def = pcall(function() return load(text or "")() end)
-                        if ok and type(def) == "table" and def.input and def.target then
-                            self:_load_def(def)
-                        else
-                            self._paste_error   = "Parse error"
-                            self._paste_error_t = 2.0
-                        end
-                    elseif e.id == "editor:test" then
-                        local def = self:_build_def()
-                        local ms  = require("lua/game/scenes/matrix_scene")
-                        self._scene_manager:switch(ms.new_from_def(def, self._scene_manager, self))
+                local def = DefParser.parse(love.system.getClipboardText())
+                if def and def.input and def.target then
+                    self:_load_def(def)
+                else
+                    self._paste_error   = "Parse error"
+                    self._paste_error_t = 2.0
+                end
+            elseif e.id == "editor:test" then
+                local def = self:_build_def()
+                local ms  = require("lua/game/scenes/matrix_scene")
+                self._scene_manager:switch(ms.new_from_def(def, self._scene_manager, self))
             elseif e.id == "editor:input_rows_dec" then
                 self:_adjust_matrix(self._input, self._input.rows-1, self._input.cols)
                 self:_refit_source()

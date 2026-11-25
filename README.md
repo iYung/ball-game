@@ -86,7 +86,7 @@ The editor shares the same 10×10 grid and op-tile palette as the main game. Pla
 - Edit the **INPUT** and **TARGET** matrices (rows/cols spinners and click-to-edit value cells)
 - Choose which ops the player can freely use (**op allowlist** toggles)
 
-**Copy** serialises the current puzzle to a Lua string and copies it to the clipboard in the same format as `data/puzzles/*.lua`. **Paste** reads from the clipboard and loads a previously copied puzzle back into the editor. **Test** opens the puzzle directly in the game for play-testing; pressing Menu there returns to the editor. **Back** returns to the title screen.
+**Copy** serialises the current puzzle to a Lua string and copies it to the clipboard in the same format as `data/puzzles/*.lua`. **Paste** reads from the clipboard and loads a previously copied puzzle back into the editor. The text is read as data and never run: only plain table literals (strings, numbers, booleans, nested tables, comments) are accepted. **Test** opens the puzzle directly in the game for play-testing; pressing Menu there returns to the editor. **Back** returns to the title screen.
 
 To add a custom puzzle to the game, copy the Lua source into a new file under `data/puzzles/` and register it in `lua/game/puzzle_loader.lua`.
 

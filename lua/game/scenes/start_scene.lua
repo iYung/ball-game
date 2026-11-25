@@ -22,18 +22,21 @@ function StartScene:on_enter()
     self._time = 0
     self._play_rect    = { x = W / 2 - 120, y = 572, w = 240, h = 32 }
     self._unlock_rect  = { x = W / 2 - 80, y = 625, w = 160, h = 22 }
+    self._editor_rect  = { x = W / 2 - 60, y = 650, w = 120, h = 22 }
     local Sound = require("lua/core/sound")
     if not Sound.is_music_playing("menu") then Sound.play_music("menu") end
 end
 
 -- UI element registry (see docs/design/ui-tests.md). Fresh table each call.
 function StartScene:ui_elements()
-    local p, u = self._play_rect, self._unlock_rect
+    local p, u, ed = self._play_rect, self._unlock_rect, self._editor_rect
     return {
         { id = "start:play", label = "Play", kind = "button",
           rect = { x = p.x, y = p.y, w = p.w, h = p.h }, enabled = true },
         { id = "start:unlock_all", label = "Unlock All", kind = "button",
           rect = { x = u.x, y = u.y, w = u.w, h = u.h }, enabled = true },
+        { id = "start:editor", label = "Editor", kind = "button",
+          rect = { x = ed.x, y = ed.y, w = ed.w, h = ed.h }, enabled = true },
     }
 end
 
@@ -61,9 +64,18 @@ function StartScene:_unlock_all()
     self:_advance()
 end
 
+function StartScene:_open_editor()
+    local EditorScene = require("lua/game/scenes/editor_scene")
+    self._scene_manager:switch(EditorScene.new(self._scene_manager))
+end
+
 function StartScene:key_pressed(key)
     if key == "d" then
         self:_unlock_all()
+        return
+    end
+    if key == "e" then
+        self:_open_editor()
         return
     end
     self:_advance()
@@ -73,6 +85,10 @@ function StartScene:mouse_pressed(mx, my, _)
     local e = UI.element_at(self:ui_elements(), mx, my)
     if e and e.id == "start:unlock_all" then
         self:_unlock_all()
+        return
+    end
+    if e and e.id == "start:editor" then
+        self:_open_editor()
         return
     end
     self:_advance()
@@ -92,16 +108,20 @@ function StartScene:draw()
     love.graphics.setColor(0.65, 0.60, 0.80, 1)
     love.graphics.printf("a matrix transformation puzzle", 0, 320, W, "center")
 
-    -- Prompt (pulse)
-    local alpha = 0.5 + 0.5 * math.sin(self._time * 3)
+    -- Prompt
     love.graphics.setFont(self._font_prompt)
-    love.graphics.setColor(0.60, 0.60, 0.70, alpha)
+    love.graphics.setColor(0.60, 0.60, 0.70, 1)
     love.graphics.printf("[Enter] or click to play", 0, 580, W, "center")
 
     -- Debug: unlock all
     love.graphics.setFont(self._font_debug)
-    love.graphics.setColor(0.35, 0.32, 0.42, 0.7)
+    love.graphics.setColor(0.35, 0.32, 0.42, 1)
     love.graphics.printf("(D) Unlock All", 0, 630, W, "center")
+
+    -- Editor link
+    love.graphics.setFont(self._font_debug)
+    love.graphics.setColor(0.35, 0.32, 0.42, 0.7)
+    love.graphics.printf("(E) Editor", 0, 655, W, "center")
 
     love.graphics.setColor(1, 1, 1, 1)
 end

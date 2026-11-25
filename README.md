@@ -77,6 +77,20 @@ Op tiles span one board cell for the op plus one per parameter. Click the left t
 
 **23 puzzles** — from a simple identity check (puzzle 1) through increasingly complex matrix transformations. Puzzles 1–11 each introduce or practice a single operation; puzzles 12–16 require two or three operations in sequence (e.g. transpose then scale, Gaussian elimination, or a three-step chain); puzzles 17–20 introduce the new ops: row reduction, column operations, flips, and absolute value with rotation; puzzles 21–23 introduce fixed ops (player-placed fixed tools and puzzle-placed locked ops; puzzle 21 offers only its fixed `!` ops, no editable ones). Puzzles can use non-square (n×m) matrices.
 
+## Puzzle editor
+
+A built-in puzzle editor is accessible from the title screen — press **E** or click **(E) Editor**.
+
+The editor shares the same 10×10 grid and op-tile palette as the main game. Place a **Source**, **Sink**, **Gap** or any op tile on the grid; toggle the **[L]** lock button to mark placed tiles as immovable in the exported puzzle. The right-hand HUD lets you:
+
+- Set the **puzzle name** (click the name field to type)
+- Edit the **INPUT** and **TARGET** matrices (rows/cols spinners and click-to-edit value cells)
+- Choose which ops the player can freely use (**op allowlist** toggles)
+
+**Copy** serialises the current puzzle to a Lua string and copies it to the clipboard in the same format as `data/puzzles/*.lua`. **Paste** reads from the clipboard and loads a previously copied puzzle back into the editor. **Test** opens the puzzle directly in the game for play-testing; pressing Menu there returns to the editor. **Back** returns to the title screen.
+
+To add a custom puzzle to the game, copy the Lua source into a new file under `data/puzzles/` and register it in `lua/game/puzzle_loader.lua`.
+
 ## Structure
 
 ```

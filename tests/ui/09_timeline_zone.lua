@@ -27,6 +27,26 @@ return {
         },
     },
     {
+        name  = "CLR chip registered; arms and clears a filled slot",
+        given = { solved = {} },
+        steps = {
+            { press        = "return" },
+            { click_button = { id = "puzzle:1" } },
+            { assert_text  = "Identity Check" },
+            { click_button = "P" },
+            { click_cell   = { 3, 3 } },
+            { assert_button = { id = "chip:clear", enabled = true } },
+
+            -- Fill a slot, then clear it with the CLR chip.
+            { click_button = { id = "chip:right" } },
+            { click_button = { id = "slot:1:2" } },
+            { click_button = { id = "chip:clear" } },
+            { assert_button = { id = "chip:clear", selected = true } },
+            { click_button = { id = "slot:1:2" } },
+            { assert_slot  = { lane = 1, tick = 2, empty = true } },
+        },
+    },
+    {
         name  = "timeline label still drawn after background draw (regression)",
         given = { solved = {} },
         steps = {

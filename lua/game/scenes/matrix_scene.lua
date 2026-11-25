@@ -83,7 +83,7 @@ local BAR = {
     ARROW_W = 16,
     HEAD_Y  = BAR_Y + 6,  HEAD_H = 16,
     LANE_Y  = BAR_Y + 26, LANE_H = 34, LANE_STEP = 36,
-    SLOT_W  = 30, SLOT_STEP = 32, PAGE = 5, WHEEL = 3,
+    SLOT_W  = 30, SLOT_STEP = 32, PAGE = 5,
 }
 BAR.SLOT_X   = BAR.TL_X + BAR.ARROW_W + 4
 BAR.SLOT_END = BAR.TL_RIGHT - BAR.ARROW_W - 4
@@ -1882,18 +1882,6 @@ function MatrixScene:key_pressed(key)
         if self._settings_menu then
             self._settings_menu:open()
         end
-    end
-end
-
--- Mouse wheel over the timeline scrolls it: wheel down / right scrolls toward later ticks.
-function MatrixScene:wheel_moved(mx, my, dx, dy)
-    if self._settings_menu and self._settings_menu.is_open then return end
-    if my < BAR_Y or mx < BAR.TL_X or mx > BAR.TL_RIGHT then return end
-    local step = (dx ~= 0) and dx or -dy
-    if step > 0 then
-        self:_tl_scroll_by(BAR.WHEEL)
-    elseif step < 0 then
-        self:_tl_scroll_by(-BAR.WHEEL)
     end
 end
 

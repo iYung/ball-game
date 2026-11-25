@@ -67,6 +67,12 @@ function Sim.advance(st, commands)
     end
     local moved   = false
     local blocked = false
+    local pushed  = false   -- the matrix + contact pushers were moved this tick
+
+    -- Snapshot so a tick whose matrix push turns out blocked can be rolled back: no pusher
+    -- may be left half-way inside the matrix.
+    local snap_x, snap_y, snap_pos = st.x, st.y, {}
+    for i, p in ipairs(st.pushers) do snap_pos[i] = { p.x, p.y } end
 
     -- Pass 1: classify each commanded pusher.
     -- contact: its step lands on a matrix cell (using start-of-tick positions).
@@ -135,19 +141,6 @@ function Sim.advance(st, commands)
             end
         end
 
-        -- New matrix position must not overlap any pusher that is not part of this push.
-        if ok then
-            for _, q in ipairs(st.pushers) do
-                local is_contact = false
-                for _, c in ipairs(contacts) do
-                    if c.p == q then is_contact = true; break end
-                end
-                if not is_contact and covers(nx, ny, st.rows, st.cols, q.x, q.y) then
-                    ok = false; break
-                end
-            end
-        end
-
         -- Contact pushers must not land on the same cell as each other.
         if ok and #contacts > 1 then
             local seen_landing = {}
@@ -160,6 +153,7 @@ function Sim.advance(st, commands)
 
         if ok then
             st.x, st.y = nx, ny
+            pushed = true
             for _, c in ipairs(contacts) do
                 c.p.x, c.p.y = c.tx, c.ty
             end
@@ -184,6 +178,27 @@ function Sim.advance(st, commands)
         else
             blocked = true
         end
+    end
+
+    -- Pass 4: when the matrix moved, no pusher outside the push may end the tick inside it.
+    -- Checked on final positions, so a pusher stepping out of the way as the matrix arrives
+    -- is fine; one left (or pushed) inside it is a collision.
+    if pushed then
+        for _, q in ipairs(st.pushers) do
+            local is_contact = false
+            for _, c in ipairs(contacts) do
+                if c.p == q then is_contact = true; break end
+            end
+            if not is_contact and covers(st.x, st.y, st.rows, st.cols, q.x, q.y) then
+                blocked = true; break
+            end
+        end
+    end
+
+    if blocked and pushed then
+        st.x, st.y = snap_x, snap_y
+        for i, p in ipairs(st.pushers) do p.x, p.y = snap_pos[i][1], snap_pos[i][2] end
+        moved = false
     end
 
     return moved, blocked

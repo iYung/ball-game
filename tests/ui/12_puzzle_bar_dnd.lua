@@ -115,29 +115,6 @@ return {
         }),
     },
     {
-        name  = "mouse wheel over the timeline scrolls it",
-        given = { solved = {} },
-        steps = with_pusher({
-            { assert_button = { id = "slot:1:30", visible = false } },
-            { wheel = { over = { slot = { 1, 3 } }, dy = -1 } },   -- wheel down: later ticks
-            { wheel = { over = { slot = { 1, 4 } }, dy = -1 } },
-            { wheel = { over = { slot = { 1, 8 } }, dy = -1 } },
-            { assert_button = { id = "slot:1:1", visible = false } },
-            { wheel = { over = { slot = { 1, 12 } }, dx = 1 } },   -- horizontal wheel right
-            { wheel = { over = { slot = { 1, 20 } }, dy = 1 } },   -- wheel up: earlier ticks
-            { wheel = { over = { slot = { 1, 20 } }, dy = 0, dx = 0 } },   -- no movement: no-op
-            { assert_button = { id = "tl:scroll_left", enabled = true } },
-            -- wheeling outside the timeline (over a chip) does nothing
-            { wheel = { over = { id = "chip:right" }, dy = 5 } },
-            { assert_button = { id = "tl:scroll_left", enabled = true } },
-            { wheel = { over = { id = "tl:scroll_left" }, dy = 1 } },
-            { wheel = { over = { id = "tl:scroll_left" }, dy = 1 } },
-            { wheel = { over = { id = "tl:scroll_left" }, dy = 1 } },
-            { wheel = { over = { id = "tl:scroll_left" }, dy = 1 } },
-            { assert_button = { id = "tl:scroll_left", enabled = false } },   -- back at tick 1
-        }),
-    },
-    {
         name  = "psel selector follows pusher erase",
         given = { solved = {} },
         steps = with_pusher({

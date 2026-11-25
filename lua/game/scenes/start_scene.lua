@@ -120,7 +120,7 @@ function StartScene:draw()
 
     -- Editor link
     love.graphics.setFont(self._font_debug)
-    love.graphics.setColor(0.35, 0.32, 0.42, 0.7)
+    love.graphics.setColor(0.35, 0.32, 0.42, 1)
     love.graphics.printf("(E) Editor", 0, 655, W, "center")
 
     love.graphics.setColor(1, 1, 1, 1)

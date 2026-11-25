@@ -14,7 +14,7 @@ local SCREEN_W, SCREEN_H = 1280, 720
 local SETTLE_MAX         = 60
 local WAIT_UNTIL_DEFAULT = 600
 
-local VALID_KINDS = { button = true, cell = true, slot = true }
+local VALID_KINDS = { button = true, cell = true, slot = true, resize = true }
 
 local STEP_KEYS = {
     "press", "click", "right_click", "click_button", "right_click_button",
@@ -59,6 +59,12 @@ end
 UIRunner.serialise = serialise
 
 -- Invariants (C9) ----------------------------------------------------------
+
+-- The only overlap allowed: a resize strip drawn on top of a grid cell.
+local function may_overlap(a, b)
+    return (a.kind == "resize" and b.kind == "cell")
+        or (a.kind == "cell" and b.kind == "resize")
+end
 
 function UIRunner.check_invariants(elements)
     elements = elements or {}
@@ -112,7 +118,7 @@ function UIRunner.check_invariants(elements)
             local j = order[q]
             local rj = elements[j].rect
             if rj.x >= ri.x + ri.w then break end
-            if UI.overlaps(ri, rj) then
+            if UI.overlaps(ri, rj) and not may_overlap(elements[i], elements[j]) then
                 local lo, hi = math.min(i, j), math.max(i, j)
                 if not best_i or lo < best_i or (lo == best_i and hi < best_j) then
                     best_i, best_j = lo, hi

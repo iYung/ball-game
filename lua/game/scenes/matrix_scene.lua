@@ -8,6 +8,7 @@ local HUD          = require("lua/game/hud")
 local PuzzleLoader = require("lua/game/puzzle_loader")
 local UI           = require("lua/core/ui")
 local SettingsMenu = require("lua/game/scenes/settings_menu")
+local OpTiles      = require("lua/game/op_tiles")
 
 local function cell_key(x, y) return x .. "," .. y end
 
@@ -47,59 +48,6 @@ local STATUS_LABELS = {
     stuck     = "STUCK — nothing is pushing",
     running   = "Running...",
     no_pusher = "Place a pusher first",
-}
-
--- Ops that expose editable parameters
-local PARAM_DEFS = {
-    scale_row  = { {key="row",    label="row", min=1, max=4},
-                   {key="scalar", label="x",   min=-9, max=9} },
-    swap_rows  = { {key="row_a",  label="r1",  min=1, max=4},
-                   {key="row_b",  label="r2",  min=1, max=4} },
-    scalar_mul = { {key="scalar", label="x",   min=-9, max=9} },
-    set_row    = { {key="row",    label="row", min=1, max=4} },
-    add_rows   = { {key="src",    label="sr",  min=1, max=4},
-                   {key="dst",    label="dr",  min=1, max=4},
-                   {key="scalar", label="x",   min=-9, max=9} },
-    scale_col  = { {key="col",    label="col", min=1, max=4},
-                   {key="scalar", label="x",   min=-9, max=9} },
-    swap_cols  = { {key="col_a",  label="c1",  min=1, max=4},
-                   {key="col_b",  label="c2",  min=1, max=4} },
-    add_cols   = { {key="src",    label="sc",  min=1, max=4},
-                   {key="dst",    label="dc",  min=1, max=4},
-                   {key="scalar", label="x",   min=-9, max=9} },
-    set_col    = { {key="col",    label="col", min=1, max=4} },
-}
-
-local DEFAULT_PARAMS = {
-    scale_row  = {row=1,   scalar=2},
-    swap_rows  = {row_a=1, row_b=2},
-    scalar_mul = {scalar=2},
-    set_row    = {row=1},
-    add_rows   = {src=1,   dst=2, scalar=1},
-    scale_col  = {col=1,   scalar=2},
-    swap_cols  = {col_a=1, col_b=2},
-    add_cols   = {src=1,   dst=2, scalar=1},
-}
-
-local OP_SYMBOLS = {
-    transpose  = "T",
-    scale_row  = "xRn",
-    swap_rows  = "<>R",
-    negate     = "-I",
-    scalar_mul = "xk",
-    add_matrix = "+M",
-    sub_matrix = "-M",
-    mul_matrix = "xM",
-    set_row    = "=R",
-    add_rows   = "+R",
-    scale_col  = "xCn",
-    swap_cols  = "<>C",
-    add_cols   = "+C",
-    set_col    = "=C",
-    rotate_90  = "R90",
-    flip_h     = "FLh",
-    flip_v     = "FLv",
-    abs        = "|x|",
 }
 
 -- How many board cells each op tile spans: {cols, rows}
@@ -285,20 +233,8 @@ function MatrixScene:load_puzzle(n)
     self.target_matrix  = Matrix.new(p.target.rows, p.target.cols, p.target.values)
     self.current_matrix = nil
     self._anim_display_matrix = nil
-    -- Clamp row-index params to actual matrix row count
-    local nr = p.input.rows
-    local nc = p.input.cols
-    PARAM_DEFS.scale_row[1].max  = nr
-    PARAM_DEFS.swap_rows[1].max  = nr
-    PARAM_DEFS.swap_rows[2].max  = nr
-    PARAM_DEFS.add_rows[1].max   = nr
-    PARAM_DEFS.add_rows[2].max   = nr
-    PARAM_DEFS.scale_col[1].max  = nc
-    PARAM_DEFS.swap_cols[1].max  = nc
-    PARAM_DEFS.swap_cols[2].max  = nc
-    PARAM_DEFS.add_cols[1].max   = nc
-    PARAM_DEFS.add_cols[2].max   = nc
-    PARAM_DEFS.set_col[1].max    = nc
+    -- Upper bounds for index params on this puzzle's tiles
+    self._limits        = { rows = p.input.rows, cols = p.input.cols, set_row = 4 }
     self.status         = nil
     self.running        = false
     self.sim            = nil
@@ -318,6 +254,7 @@ function MatrixScene:load_puzzle(n)
                 kind      = t.kind,
                 dir       = t.dir,
                 op        = t.op,
+                id        = t.id,
                 params    = t.params or {},
                 locked    = true,
                 width     = w,
@@ -950,7 +887,7 @@ function MatrixScene:draw_grid()
         if tile.kind == "pusher" then
             label = string.char(64 + (tile.id or 1))
         else
-            label = OP_SYMBOLS[tile.op] or "?"
+            label = OpTiles.SYMBOLS[tile.op] or "?"
         end
         love.graphics.setColor(0.82, 0.82, 0.82, 1)
         love.graphics.setFont(self.font_cell)
@@ -987,34 +924,22 @@ function MatrixScene:draw_live_pushers()
     end
 end
 
+function MatrixScene:_draw_op_cell(tile, dc, dr, cx, cy)
+    local sx, sy = cell_top_left(cx, cy)
+    OpTiles.draw_cell(tile, dc, dr, sx, sy, CELL_SIZE,
+        { cell = self.font_cell, ui = self.font_ui }, not (tile.fixed or tile.locked))
+end
+
 -- draw_ref_cell: called for each ref cell in Pass 2.
 -- dc, dr are 0-based offsets from the anchor.
 function MatrixScene:draw_ref_cell(tile, dc, dr, cx, cy)
-    if tile and tile.kind == "source" then
+    if tile.kind == "source" then
         local sx, sy = cell_top_left(cx, cy)
         love.graphics.setColor(0.09, 0.29, 0.17, 1)
         love.graphics.rectangle("fill", sx, sy, CELL_SIZE, CELL_SIZE)
         return
     end
-    local op = tile and tile.op
-    if op == "add_matrix" or op == "sub_matrix" or op == "mul_matrix" then
-        self:draw_matrix_value_cell(tile, dc + 1, dr + 1, cx, cy)
-    elseif op == "scale_row" then
-        self:draw_scale_band(tile, dr + 1, cx, cy)
-    elseif op == "swap_rows" then
-        self:draw_swap_strip(tile, dr + 1, cx, cy)
-    elseif op == "set_row" then
-        self:draw_set_row_value_cell(tile, dc, cx, cy)
-    elseif op == "scale_col" then
-        self:draw_scale_col_band(tile, dc + 1, cx, cy)
-    elseif op == "swap_cols" then
-        self:draw_swap_col_strip(tile, dc + 1, cx, cy)
-    elseif op == "set_col" then
-        self:draw_set_col_value_cell(tile, dr, cx, cy)
-    else
-        -- existing ops (scalar_mul, add_rows, add_cols, etc.)
-        self:draw_param_cell(tile, dc, cx, cy)
-    end
+    self:_draw_op_cell(tile, dc, dr, cx, cy)
 end
 
 -- draw_tile takes cell coordinates so multi-cell ops can draw a spanning background.
@@ -1062,50 +987,22 @@ function MatrixScene:draw_tile(tile, cx, cy)
         love.graphics.rectangle("line", sx + 1, sy + 1, span_w - 2, span_h - 2)
         love.graphics.setLineWidth(1)
 
+        -- The anchor draws these cells of its tile; Pass 2 covers the ref cells.
         local op = tile.op
-        if op == "add_matrix" or op == "sub_matrix" or op == "mul_matrix" then
-            -- Small op symbol top-left; anchor cell value
-            love.graphics.setColor(0.56, 0.44, 0.21, 1)
-            love.graphics.setFont(self.font_ui)
-            love.graphics.print(OP_SYMBOLS[op] or "?", sx + 2, sy + 2)
-            self:draw_matrix_value_cell(tile, 1, 1, cx, cy)
-        elseif op == "scale_row" then
-            for band = 1, h do
-                self:draw_scale_band(tile, band, cx, cy + band - 1)
-            end
-        elseif op == "swap_rows" then
-            self:draw_swap_strip(tile, 1, cx, cy)
-            self:draw_swap_strip(tile, 2, cx, cy + 1)
-            -- ⇅ symbol at the border between the two cells
-            love.graphics.setColor(0.9, 0.7, 0.3, 1)
-            love.graphics.setFont(self.font_ui)
-            love.graphics.printf("⇅", sx, sy + cs - 8, cs, "center")
-        elseif op == "set_row" then
-            self:draw_param_cell(tile, 1, cx, cy)
-            for dc = 1, tile.tile_cols or 1 do
-                self:draw_set_row_value_cell(tile, dc, cx + dc, cy)
-            end
-        elseif op == "scale_col" then
-            for band = 1, w do
-                self:draw_scale_col_band(tile, band, cx + band - 1, cy)
-            end
-        elseif op == "swap_cols" then
-            self:draw_swap_col_strip(tile, 1, cx, cy)
-            self:draw_swap_col_strip(tile, 2, cx + 1, cy)
-            love.graphics.setColor(0.9, 0.7, 0.3, 1)
-            love.graphics.setFont(self.font_ui)
-            love.graphics.printf("⇄", sx + cs - 8, sy, cs, "left")
-        elseif op == "set_col" then
-            self:draw_param_cell(tile, 1, cx, cy)
-            for idr = 1, tile.tile_rows or 1 do
-                self:draw_set_col_value_cell(tile, idr, cx, cy + idr)
-            end
-        else
-            -- Existing 1D ops (transpose, negate, scalar_mul anchor, add_rows, add_cols, rotate_90, flip_h, flip_v, abs)
-            love.graphics.setColor(0.9, 0.7, 0.3, 1)
-            love.graphics.setFont(self.font_cell)
-            love.graphics.printf(OP_SYMBOLS[op] or "?", sx, mid_y - 8, cs, "center")
+        local last_dc, last_dr = 0, 0
+        if     op == "scale_row" then last_dr = h - 1
+        elseif op == "scale_col" then last_dc = w - 1
+        elseif op == "swap_rows" then last_dr = 1
+        elseif op == "swap_cols" then last_dc = 1
+        elseif op == "set_row"   then last_dc = tile.tile_cols or 1
+        elseif op == "set_col"   then last_dr = tile.tile_rows or 1
         end
+        for dr = 0, last_dr do
+            for dc = 0, last_dc do
+                self:_draw_op_cell(tile, dc, dr, cx + dc, cy + dr)
+            end
+        end
+        OpTiles.draw_overlay(tile, sx, sy, cs, { cell = self.font_cell, ui = self.font_ui })
     end
 
     if tile.locked and tile.kind ~= "gap" then
@@ -1117,214 +1014,6 @@ function MatrixScene:draw_tile(tile, cx, cy)
         love.graphics.setColor(0.42, 0.62, 0.83, 1)
         love.graphics.setFont(self.font_ui)
         love.graphics.printf("=", sx + (tile.width or 1)*CELL_SIZE - 14, sy + 4, 12, "right")
-    end
-end
-
--- Draw a parameter cell for a multi-cell op tile.
--- param_index is 1-based (1 = first param of the op).
-function MatrixScene:draw_param_cell(tile, param_index, cx, cy)
-    local sx, sy = cell_top_left(cx, cy)
-    local cs     = CELL_SIZE
-    local defs   = PARAM_DEFS[tile.op]
-    if not defs or not defs[param_index] then return end
-    local def = defs[param_index]
-    local val = tostring((tile.params or {})[def.key] or 0)
-    local immutable = tile.fixed or tile.locked
-    local val_color = immutable and {0.65,0.65,0.4,1} or {0.95,0.85,0.5,1}
-
-    -- Param label
-    love.graphics.setColor(0.65, 0.5, 0.15, 1)
-    love.graphics.setFont(self.font_ui)
-    love.graphics.printf(def.label, sx, sy + 5, cs, "center")
-
-    -- Value
-    love.graphics.setColor(unpack(val_color))
-    love.graphics.setFont(self.font_cell)
-    love.graphics.printf(val, sx, sy + cs / 2 - 10, cs, "center")
-
-    -- [-] / [+] affordances (omitted for fixed/locked tiles)
-    if not immutable then
-        love.graphics.setColor(0.50, 0.38, 0.14, 1)
-        love.graphics.setFont(self.font_ui)
-        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
-    end
-end
-
-function MatrixScene:draw_matrix_value_cell(tile, col_1, row_1, cx, cy)
-    local sx, sy = cell_top_left(cx, cy)
-    local cs = CELL_SIZE
-    local v = 0
-    if tile.values and tile.values[row_1] then
-        v = tile.values[row_1][col_1] or 0
-    end
-    local val = tostring(v)
-    local immutable = tile.fixed or tile.locked
-    local val_color = immutable and {0.65,0.65,0.4,1} or {0.95,0.85,0.5,1}
-
-    love.graphics.setColor(0.65, 0.5, 0.15, 1)
-    love.graphics.setFont(self.font_ui)
-    love.graphics.printf(col_1 .. "," .. row_1, sx, sy + 5, cs, "center")
-
-    love.graphics.setColor(unpack(val_color))
-    love.graphics.setFont(self.font_cell)
-    love.graphics.printf(val, sx, sy + cs / 2 - 10, cs, "center")
-
-    if not immutable then
-        love.graphics.setColor(0.50, 0.38, 0.14, 1)
-        love.graphics.setFont(self.font_ui)
-        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
-    end
-end
-
-function MatrixScene:draw_scale_band(tile, band, cx, cy)
-    local sx, sy = cell_top_left(cx, cy)
-    local cs = CELL_SIZE
-    local selected = (band == (tile.params or {}).row)
-    local scalar = (tile.params or {}).scalar or 2
-    local immutable = tile.fixed or tile.locked
-
-    if selected then
-        love.graphics.setColor(0.35, 0.22, 0.04, 1)
-        love.graphics.rectangle("fill", sx, sy, cs, cs)
-        local val_color = immutable and {0.65,0.65,0.4,1} or {1.0,0.85,0.4,1}
-        love.graphics.setColor(unpack(val_color))
-        love.graphics.setFont(self.font_ui)
-        love.graphics.print("R" .. band, sx + 4, sy + cs / 2 - 7)
-        love.graphics.setFont(self.font_cell)
-        love.graphics.printf("×" .. scalar, sx, sy + cs / 2 - 9, cs, "right")
-        if not immutable then
-            love.graphics.setColor(0.63, 0.50, 0.19, 1)
-            love.graphics.setFont(self.font_ui)
-            love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-            love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
-        end
-    else
-        love.graphics.setColor(0.55, 0.40, 0.12, 1)
-        love.graphics.setFont(self.font_ui)
-        love.graphics.printf("R" .. band, sx, sy + cs / 2 - 7, cs, "center")
-    end
-end
-
-function MatrixScene:draw_swap_strip(tile, strip, cx, cy)
-    local sx, sy = cell_top_left(cx, cy)
-    local cs = CELL_SIZE
-    local params = tile.params or {}
-    local row_n = (strip == 1) and (params.row_a or 1) or (params.row_b or 2)
-    local immutable = tile.fixed or tile.locked
-    local val_color = immutable and {0.65,0.65,0.4,1} or {0.95,0.85,0.5,1}
-
-    love.graphics.setColor(unpack(val_color))
-    love.graphics.setFont(self.font_cell)
-    love.graphics.printf("R" .. row_n, sx, sy + cs / 2 - 9, cs, "center")
-
-    if not immutable then
-        love.graphics.setColor(0.50, 0.38, 0.14, 1)
-        love.graphics.setFont(self.font_ui)
-        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
-    end
-end
-
-function MatrixScene:draw_set_row_value_cell(tile, dc, cx, cy)
-    local sx, sy = cell_top_left(cx, cy)
-    local cs = CELL_SIZE
-    local v = 0
-    if tile.values and tile.values[1] then
-        v = tile.values[1][dc] or 0
-    end
-    local immutable = tile.fixed or tile.locked
-    local val_color = immutable and {0.65,0.65,0.4,1} or {0.95,0.85,0.5,1}
-
-    love.graphics.setColor(0.65, 0.5, 0.15, 1)
-    love.graphics.setFont(self.font_ui)
-    love.graphics.printf("c" .. dc, sx, sy + 5, cs, "center")
-
-    love.graphics.setColor(unpack(val_color))
-    love.graphics.setFont(self.font_cell)
-    love.graphics.printf(tostring(v), sx, sy + cs / 2 - 10, cs, "center")
-
-    if not immutable then
-        love.graphics.setColor(0.50, 0.38, 0.14, 1)
-        love.graphics.setFont(self.font_ui)
-        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
-    end
-end
-
-function MatrixScene:draw_scale_col_band(tile, band, cx, cy)
-    local sx, sy = cell_top_left(cx, cy)
-    local cs = CELL_SIZE
-    local selected = (band == (tile.params or {}).col)
-    local scalar = (tile.params or {}).scalar or 2
-    local immutable = tile.fixed or tile.locked
-
-    if selected then
-        love.graphics.setColor(0.35, 0.22, 0.04, 1)
-        love.graphics.rectangle("fill", sx, sy, cs, cs)
-        local val_color = immutable and {0.65,0.65,0.4,1} or {1.0,0.85,0.4,1}
-        love.graphics.setColor(unpack(val_color))
-        love.graphics.setFont(self.font_ui)
-        love.graphics.print("C" .. band, sx + 4, sy + 5)
-        love.graphics.setFont(self.font_cell)
-        love.graphics.printf("×" .. scalar, sx, sy + cs / 2 - 9, cs, "center")
-        if not immutable then
-            love.graphics.setColor(0.63, 0.50, 0.19, 1)
-            love.graphics.setFont(self.font_ui)
-            love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-            love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
-        end
-    else
-        love.graphics.setColor(0.55, 0.40, 0.12, 1)
-        love.graphics.setFont(self.font_ui)
-        love.graphics.printf("C" .. band, sx, sy + cs / 2 - 7, cs, "center")
-    end
-end
-
-function MatrixScene:draw_swap_col_strip(tile, strip, cx, cy)
-    local sx, sy = cell_top_left(cx, cy)
-    local cs = CELL_SIZE
-    local params = tile.params or {}
-    local col_n = (strip == 1) and (params.col_a or 1) or (params.col_b or 2)
-    local immutable = tile.fixed or tile.locked
-    local val_color = immutable and {0.65,0.65,0.4,1} or {0.95,0.85,0.5,1}
-
-    love.graphics.setColor(unpack(val_color))
-    love.graphics.setFont(self.font_cell)
-    love.graphics.printf("C" .. col_n, sx, sy + cs / 2 - 9, cs, "center")
-
-    if not immutable then
-        love.graphics.setColor(0.50, 0.38, 0.14, 1)
-        love.graphics.setFont(self.font_ui)
-        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
-    end
-end
-
-function MatrixScene:draw_set_col_value_cell(tile, dr, cx, cy)
-    local sx, sy = cell_top_left(cx, cy)
-    local cs = CELL_SIZE
-    local v = 0
-    if tile.values and tile.values[dr] then
-        v = tile.values[dr][1] or 0
-    end
-    local immutable = tile.fixed or tile.locked
-    local val_color = immutable and {0.65,0.65,0.4,1} or {0.95,0.85,0.5,1}
-
-    love.graphics.setColor(0.65, 0.5, 0.15, 1)
-    love.graphics.setFont(self.font_ui)
-    love.graphics.printf("r" .. dr, sx, sy + 5, cs, "center")
-
-    love.graphics.setColor(unpack(val_color))
-    love.graphics.setFont(self.font_cell)
-    love.graphics.printf(tostring(v), sx, sy + cs / 2 - 10, cs, "center")
-
-    if not immutable then
-        love.graphics.setColor(0.50, 0.38, 0.14, 1)
-        love.graphics.setFont(self.font_ui)
-        love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
-        love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
     end
 end
 
@@ -1833,10 +1522,7 @@ function MatrixScene:_place_tile_at(cx, cy, spec)
         end
     end
 
-    local params = {}
-    if DEFAULT_PARAMS[spec.op] then
-        for k, v in pairs(DEFAULT_PARAMS[spec.op]) do params[k] = v end
-    end
+    local params = OpTiles.default_params(spec.op)
     if spec.params then
         for k, v in pairs(spec.params) do params[k] = v end
     end
@@ -2112,7 +1798,6 @@ function MatrixScene:_mouse_pressed_inner(mx, my, btn)
 
         local dc = cx - ax
         local dr = cy - ay
-        local op = anchor_tile and anchor_tile.op
 
         if anchor_tile and not anchor_tile.locked and self.palette:is_eraser() then
             self.grid:clear(cx, cy)
@@ -2123,169 +1808,8 @@ function MatrixScene:_mouse_pressed_inner(mx, my, btn)
         if anchor_tile and anchor_tile.kind == "op" then
             -- Fixed and locked tiles can't have params edited
             if anchor_tile.fixed or anchor_tile.locked then return end
-            if op == "add_matrix" or op == "sub_matrix" or op == "mul_matrix" then
-                if is_r or (dc == 0 and dr == 0) then
-                    -- value cell: left/right third = dec/inc
-                    local cell_sx, _ = cell_top_left(cx, cy)
-                    local rel_x = mx - cell_sx
-                    local row_1 = dr + 1
-                    local col_1 = dc + 1
-                    if not anchor_tile.values then anchor_tile.values = {} end
-                    if not anchor_tile.values[row_1] then anchor_tile.values[row_1] = {} end
-                    local cur = anchor_tile.values[row_1][col_1] or 0
-                    if rel_x < CELL_SIZE / 3 then
-                        anchor_tile.values[row_1][col_1] = math.max(-9, cur - 1)
-                    elseif rel_x >= CELL_SIZE * 2 / 3 then
-                        anchor_tile.values[row_1][col_1] = math.min(9, cur + 1)
-                    end
-                end
-                return
-
-            elseif op == "set_row" then
-                if dc == 0 then
-                    -- Row selector param cell
-                    local defs = PARAM_DEFS["set_row"]
-                    if defs and defs[1] then
-                        local def = defs[1]
-                        local cell_sx, _ = cell_top_left(cx, cy)
-                        local rel_x = mx - cell_sx
-                        if rel_x < CELL_SIZE / 3 then
-                            anchor_tile.params[def.key] = math.max(def.min, (anchor_tile.params[def.key] or 1) - 1)
-                        elseif rel_x >= CELL_SIZE * 2 / 3 then
-                            anchor_tile.params[def.key] = math.min(def.max, (anchor_tile.params[def.key] or 1) + 1)
-                        end
-                    end
-                else
-                    -- Value cell
-                    local cell_sx, _ = cell_top_left(cx, cy)
-                    local rel_x = mx - cell_sx
-                    if not anchor_tile.values then anchor_tile.values = {{}} end
-                    if not anchor_tile.values[1] then anchor_tile.values[1] = {} end
-                    local cur = anchor_tile.values[1][dc] or 0
-                    if rel_x < CELL_SIZE / 3 then
-                        anchor_tile.values[1][dc] = math.max(-9, cur - 1)
-                    elseif rel_x >= CELL_SIZE * 2 / 3 then
-                        anchor_tile.values[1][dc] = math.min(9, cur + 1)
-                    end
-                end
-                return
-
-            elseif op == "scale_row" then
-                local band = dr + 1  -- 1-based band index
-                local params = anchor_tile.params
-                if band ~= params.row then
-                    -- Select this band
-                    params.row = band
-                else
-                    -- Already selected: left/right = scalar dec/inc
-                    local cell_sx, _ = cell_top_left(cx, cy)
-                    local rel_x = mx - cell_sx
-                    if rel_x < CELL_SIZE / 3 then
-                        params.scalar = math.max(-9, (params.scalar or 2) - 1)
-                    elseif rel_x >= CELL_SIZE * 2 / 3 then
-                        params.scalar = math.min(9, (params.scalar or 2) + 1)
-                    end
-                end
-                return
-
-            elseif op == "swap_rows" then
-                local strip = dr + 1  -- 1 or 2
-                local key = (strip == 1) and "row_a" or "row_b"
-                local other_key = (strip == 1) and "row_b" or "row_a"
-                local params = anchor_tile.params
-                local cell_sx, _ = cell_top_left(cx, cy)
-                local rel_x = mx - cell_sx
-                local delta = 0
-                if rel_x < CELL_SIZE / 3 then delta = -1
-                elseif rel_x >= CELL_SIZE * 2 / 3 then delta = 1
-                end
-                if delta ~= 0 then
-                    local new_val = math.max(1, math.min(4, (params[key] or 1) + delta))
-                    if new_val ~= params[other_key] then
-                        params[key] = new_val
-                    end
-                end
-                return
-
-            elseif op == "scale_col" then
-                local band = dc + 1
-                local params = anchor_tile.params
-                if band ~= params.col then
-                    params.col = band
-                else
-                    local cell_sx, _ = cell_top_left(cx, cy)
-                    local rel_x = mx - cell_sx
-                    if rel_x < CELL_SIZE / 3 then
-                        params.scalar = math.max(-9, (params.scalar or 2) - 1)
-                    elseif rel_x >= CELL_SIZE * 2 / 3 then
-                        params.scalar = math.min(9, (params.scalar or 2) + 1)
-                    end
-                end
-                return
-
-            elseif op == "swap_cols" then
-                local strip = dc + 1
-                local key = (strip == 1) and "col_a" or "col_b"
-                local other_key = (strip == 1) and "col_b" or "col_a"
-                local params = anchor_tile.params
-                local cell_sx, _ = cell_top_left(cx, cy)
-                local rel_x = mx - cell_sx
-                local delta = 0
-                if rel_x < CELL_SIZE / 3 then delta = -1
-                elseif rel_x >= CELL_SIZE * 2 / 3 then delta = 1
-                end
-                if delta ~= 0 then
-                    local new_val = math.max(1, math.min(4, (params[key] or 1) + delta))
-                    if new_val ~= params[other_key] then
-                        params[key] = new_val
-                    end
-                end
-                return
-
-            elseif op == "set_col" then
-                if dr == 0 then
-                    local defs = PARAM_DEFS["set_col"]
-                    if defs and defs[1] then
-                        local def = defs[1]
-                        local cell_sx, _ = cell_top_left(cx, cy)
-                        local rel_x = mx - cell_sx
-                        if rel_x < CELL_SIZE / 3 then
-                            anchor_tile.params[def.key] = math.max(def.min, (anchor_tile.params[def.key] or 1) - 1)
-                        elseif rel_x >= CELL_SIZE * 2 / 3 then
-                            anchor_tile.params[def.key] = math.min(def.max, (anchor_tile.params[def.key] or 1) + 1)
-                        end
-                    end
-                else
-                    local cell_sx, _ = cell_top_left(cx, cy)
-                    local rel_x = mx - cell_sx
-                    if not anchor_tile.values then anchor_tile.values = {} end
-                    if not anchor_tile.values[dr] then anchor_tile.values[dr] = {} end
-                    local cur = anchor_tile.values[dr][1] or 0
-                    if rel_x < CELL_SIZE / 3 then
-                        anchor_tile.values[dr][1] = math.max(-9, cur - 1)
-                    elseif rel_x >= CELL_SIZE * 2 / 3 then
-                        anchor_tile.values[dr][1] = math.min(9, cur + 1)
-                    end
-                end
-                return
-
-            elseif is_r then
-                -- Existing param-cell handling for other ops (e.g. scalar_mul)
-                local param_index = dc
-                local defs = PARAM_DEFS[op]
-                if defs and defs[param_index] then
-                    local def = defs[param_index]
-                    local cell_sx, _ = cell_top_left(cx, cy)
-                    local rel_x = mx - cell_sx
-                    local delta = 0
-                    if rel_x < CELL_SIZE / 3 then delta = -1
-                    elseif rel_x >= CELL_SIZE * 2 / 3 then delta = 1
-                    end
-                    if delta ~= 0 then
-                        local cur = anchor_tile.params[def.key] or 0
-                        anchor_tile.params[def.key] = math.max(def.min, math.min(def.max, cur + delta))
-                    end
-                end
+            local cell_sx = cell_top_left(cx, cy)
+            if OpTiles.click(anchor_tile, dc, dr, mx - cell_sx, CELL_SIZE, self._limits) then
                 return
             end
         end

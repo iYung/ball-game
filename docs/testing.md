@@ -203,7 +203,7 @@ Every scene that has clickable things implements `scene:ui_elements()`. The scen
   rect = { x = 1087, y = 666, w = 42, h = 48 }, enabled = true, selected = false }
 ```
 
-- `kind` is `"button"`, `"cell"` or `"slot"`.
+- `kind` is `"button"`, `"cell"`, `"slot"` or `"resize"`. `"resize"` is only for thin resize strips drawn on grid cells; it is the one kind allowed to overlap another element (a `"cell"`, see invariant 3).
 - `enabled` is always a boolean. Include `selected` only when the element has a highlight state.
 - Coordinates are logical 1280x720. Rects are half-open: `x <= px < x+w`, `y <= py < y+h`.
 - Return a **fresh, deterministically ordered** array each call. Build it with `ipairs` over arrays, never with `pairs`. The call must have no side effects.
@@ -239,16 +239,27 @@ UI.overlaps(a, b)             -- positive-area intersection (shared edges do not
 | Matrix | `tl:dec` `tl:inc` | `-` `+` | button | `enabled = not running` |
 | Matrix | `slot:<L>:<s>` | same as id | slot | `<L>` = pusher letter (`A` for pusher 1). `<s>` is the real slot index. Only slots in the visible window are listed. `enabled = not running`. |
 | Recap | `recap:next` `recap:replay` `recap:menu` | `Next puzzle` `Replay` `Menu` | button | always enabled. Clicks outside them do nothing. Enter / R / Esc still work. |
+| Puzzle editor | `resize:<ax>,<ay>:<action>` | `+` / `-` | resize | a resize strip of the tile anchored at `(<ax>, <ay>)`. `<action>` is `grow_col`, `shrink_col`, `grow_row` or `shrink_row`; grow strips are labelled `+`, shrink strips `-`. Listed before the grid cells, so hit-testing finds a strip first. Labels repeat, so select strips by id. |
 
 Matrix order: palette (left to right: [<], the visible items out of P, ops, fixed ops, Mv, [X], then [>]), then commands, then cells (y-major), then `tl:scroll_left`, `tl:scroll_right`, `tl:dec`, `tl:inc`, then slots (by pusher, then by slot). Timeline elements appear only after the HUD has drawn once.
 
 **Ambiguous labels to watch for:** puzzles 4 and 6 are both "Row Swap", so use `{ id = "puzzle:4" }`. Use ids for cells and slots anyway, since their label equals their id.
 
-### Known gap: resize strips are not in the registry
+### Resize strips
 
-The tile resize affordances in `MatrixScene._expand_rects` (`grow_col`, `shrink_col`, `grow_row`, `shrink_row`) are thin strips drawn **on top of** grid cells. Registering them would always break the no-overlap invariant, so they are deliberately left out. They are hit-tested inside the cell-click path (`mouse_pressed`, after the registry resolves a `cell:` element, before tile placement). This is a known exception to process rule 3.
+Resize strips are thin affordances drawn **on top of** grid cells. They have their own element kind, `resize`, which the no-overlap invariant allows to overlap a `cell` and nothing else.
 
-To exercise a resize in a spec today, use the raw `click = {x, y}` at the strip's coordinates (computed from the grid layout constants in `matrix_scene.lua`), then check the result with `assert_tile`. Spec code cannot discover the strip positions from the registry. A future fix could register them as their own kind and exempt that kind from the overlap check against cells.
+**Puzzle editor.** The editor registers each strip as kind `resize` with id `resize:<ax>,<ay>:<action>` (the tile's anchor cell, then `grow_col`, `shrink_col`, `grow_row` or `shrink_row`) and label `+` or `-`. Strips are listed before the grid cells, so `UI.element_at` resolves a click to the strip rather than the cell under it. A grow strip is present only when the cells the tile would newly cover are in bounds and empty, a shrink strip only while the size is above 1, and no strips are present while Erase is selected. Left click resizes the tile; right click erases the tile in the cell underneath. Specs select strips by id, because the labels `+` and `-` repeat:
+
+```lua
+{ click_button = { id = "resize:3,2:grow_col" } },
+```
+
+### Known gap: puzzle scene resize strips are not in the registry
+
+The resize strips in `MatrixScene._expand_rects` (`grow_col`, `shrink_col`, `grow_row`, `shrink_row`) are still not registered. This is a known exception to process rule 3. They are hit-tested inside the cell-click path (`mouse_pressed`, after the registry resolves a `cell:` element, before tile placement).
+
+To exercise a puzzle scene resize in a spec today, use the raw `click = {x, y}` at the strip's coordinates (computed from the grid layout constants in `matrix_scene.lua`), then check the result with `assert_tile`. Spec code cannot discover these strip positions from the registry. A future fix could register them as kind `resize`, as the editor does.
 
 ---
 
@@ -256,9 +267,9 @@ To exercise a resize in a spec today, use the raw `click = {x, y}` at the strip'
 
 `UIRunner.check_invariants(elements)` runs these checks in order and reports the first violation:
 
-1. **Well-formed:** a non-empty string `id` and `label`, `kind` in `button`/`cell`/`slot`, a numeric `rect` with `w > 0` and `h > 0`, and unique ids.
+1. **Well-formed:** a non-empty string `id` and `label`, `kind` in `button`/`cell`/`slot`/`resize`, a numeric `rect` with `w > 0` and `h > 0`, and unique ids.
 2. **On screen:** `0 <= x`, `x + w <= 1280`, `0 <= y`, `y + h <= 720`.
-3. **No overlap:** no two rects intersect with positive area, whether enabled or disabled. Shared edges are fine.
+3. **No overlap:** no two rects intersect with positive area, whether enabled or disabled. Shared edges are fine. The only exception is a pair where one element is kind `resize` and the other is kind `cell`, in either list order. Every other overlap fails, including `resize`/`resize`, `resize`/`button` and `resize`/`slot`. Invariants 1 and 2 apply to `resize` elements like any other.
 
 Messages (the runner appends ` at frame <n>`):
 

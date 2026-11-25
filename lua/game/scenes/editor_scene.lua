@@ -1,7 +1,7 @@
-local Scene      = require("lua/core/scene")
-local Grid       = require("lua/game/grid")
-local UI         = require("lua/core/ui")
-local ParamPopup = require("lua/game/param_popup")
+local Scene   = require("lua/core/scene")
+local Grid    = require("lua/game/grid")
+local UI      = require("lua/core/ui")
+local OpTiles = require("lua/game/op_tiles")
 
 -- Layout constants (matching MatrixScene)
 local GRID_X    = 95
@@ -12,18 +12,20 @@ local HUD_X     = 820
 local W         = 1280
 local H         = 720
 
-local PALETTE_REGION_W = HUD_X - 10  -- 810
-
-local PAL_BTN_W = 42
-local PAL_BTN_H = 48
-local PAL_STEP  = PAL_BTN_W + 6      -- 48
-local PAL_LEFT  = 10
-local PAL_SEP   = 12
-local BAR_BTN_Y = PALETTE_Y + 6
+-- One row of 23 buttons, ending at x = 802 (the command buttons start at HUD_X).
+local PAL_BTN_W   = 30
+local PAL_ERASE_W = 48
+local PAL_BTN_H   = 48
+local PAL_GAP     = 3
+local PAL_LEFT    = 10
+local PAL_SEP     = 6      -- extra space at each separator
+local BAR_BTN_Y   = PALETTE_Y + 6
 
 local CMD_BTN_W    = 56
 local CMD_BTN_H    = 48
 local CMD_BTN_STEP = 62
+
+local MAX_PUSHERS = 8   -- ids 1..8, drawn as letters A-H
 
 -- HUD layout constants
 local HUD_PAD  = 12
@@ -33,27 +35,6 @@ local SPIN_H   = 20
 local OPS_W    = 36
 local OPS_H    = 22
 local OPS_GAP  = 4
-
-local OP_SYMBOLS = {
-    transpose  = "T",
-    scale_row  = "xRn",
-    swap_rows  = "<>R",
-    negate     = "-I",
-    scalar_mul = "xk",
-    add_matrix = "+M",
-    sub_matrix = "-M",
-    mul_matrix = "xM",
-    set_row    = "=R",
-    add_rows   = "+R",
-    scale_col  = "xCn",
-    swap_cols  = "<>C",
-    add_cols   = "+C",
-    set_col    = "=C",
-    rotate_90  = "R90",
-    flip_h     = "FLh",
-    flip_v     = "FLv",
-    abs        = "|x|",
-}
 
 local OP_NAMES = {
     "transpose","scale_row","swap_rows","negate","scalar_mul",
@@ -67,38 +48,6 @@ local OP_LABELS = {
     set_row="=R",    add_rows="+R",   scale_col="xC",  swap_cols="<>C",
     add_cols="+C",   set_col="=C",    rotate_90="R90", flip_h="FLh",
     flip_v="FLv",    abs="|x|",
-}
-
-local OP_SIZES = {
-    transpose  = {1, 1},
-    negate     = {1, 1},
-    scalar_mul = {2, 1},
-    scale_row  = {1, 4},
-    swap_rows  = {1, 2},
-    add_matrix = {1, 1},
-    sub_matrix = {1, 1},
-    mul_matrix = {1, 1},
-    set_row    = {2, 1},
-    add_rows   = {4, 1},
-    scale_col  = {4, 1},
-    swap_cols  = {2, 1},
-    add_cols   = {4, 1},
-    set_col    = {1, 2},
-    rotate_90  = {1, 1},
-    flip_h     = {1, 1},
-    flip_v     = {1, 1},
-    abs        = {1, 1},
-}
-
-local DEFAULT_PARAMS = {
-    scale_row  = {row=1,   scalar=2},
-    swap_rows  = {row_a=1, row_b=2},
-    scalar_mul = {scalar=2},
-    set_row    = {row=1},
-    add_rows   = {src=1,   dst=2, scalar=1},
-    scale_col  = {col=1,   scalar=2},
-    swap_cols  = {col_a=1, col_b=2},
-    add_cols   = {src=1,   dst=2, scalar=1},
 }
 
 local EDITOR_PALETTE = {
@@ -127,7 +76,7 @@ local EDITOR_PALETTE = {
     { id="editor:pal:flip_v",     kind="op", op="flip_v",     label="FLv"  },
     { id="editor:pal:abs",        kind="op", op="abs",        label="|x|"  },
     { sep=true },
-    { id="editor:pal:erase",  kind="erase", label="[X]" },
+    { id="editor:pal:erase",  kind="erase", label="Erase", w=PAL_ERASE_W },
 }
 
 local CMD_BUTTONS = {
@@ -137,11 +86,47 @@ local CMD_BUTTONS = {
     { id="editor:paste", label="Paste" },
 }
 
+-- Op tiles whose cells do not show the op symbol get a small one on the anchor cell, as
+-- {dy, align}: top-left, except scale_col, whose band label is there (bottom centre,
+-- between the -/+ marks).
+local SYMBOL_SPOTS = {
+    scale_row = {2, "left"},
+    scale_col = {CELL_SIZE - 18, "center"},
+    swap_rows = {2, "left"},
+    swap_cols = {2, "left"},
+    set_row   = {2, "left"},
+    set_col   = {2, "left"},
+}
+
 -- ── Helpers ────────────────────────────────────────────────────────────────
 
 local function cell_top_left(cx, cy)
     return GRID_X + (cx - 1) * CELL_SIZE,
            GRID_Y + (cy - 1) * CELL_SIZE
+end
+
+-- Grid coordinates of the cell containing the point (x, y).
+local function cell_at(x, y)
+    return math.floor((x - GRID_X) / CELL_SIZE) + 1,
+           math.floor((y - GRID_Y) / CELL_SIZE) + 1
+end
+
+-- Rect of a resize strip. Grow strips lie on the free cells next to the tile, shrink strips
+-- inside it; none overlaps another or covers a value cell's -/centre/+ click points.
+local function strip_rect(tile, ax, ay, action)
+    local left, top = cell_top_left(ax, ay)
+    local w, h  = tile.width, tile.height
+    local cs    = CELL_SIZE
+    local third = cs / 3
+    local q     = math.floor(cs / 4)
+    if action == "grow_col" then
+        return { x = left + w*cs, y = top, w = third, h = h*cs }
+    elseif action == "grow_row" then
+        return { x = left + third, y = top + h*cs, w = w*cs - third, h = third }
+    elseif action == "shrink_col" then
+        return { x = left + (w-1)*cs + cs*2/3, y = top, w = third, h = q }
+    end
+    return { x = left + third, y = top + h*cs - q, w = third, h = q }   -- shrink_row
 end
 
 local function fmt_values(values)
@@ -154,18 +139,31 @@ local function fmt_values(values)
     return "{ " .. table.concat(rows, ", ") .. " }"
 end
 
-local function deep_copy_params(src)
-    if not src then return {} end
-    local t = {}
-    for k, v in pairs(src) do t[k] = v end
-    return t
-end
-
 local function deep_copy(src)
     if type(src) ~= "table" then return src end
     local t = {}
     for k, v in pairs(src) do t[k] = deep_copy(v) end
     return t
+end
+
+-- One `locked` entry of a def as a Lua table constructor, with a fixed key order.
+local ENTRY_NUMBER_KEYS = { "x", "y", "id", "width", "height", "tile_rows", "tile_cols" }
+local function fmt_entry(entry)
+    local parts = { string.format('kind="%s"', entry.kind) }
+    if entry.op then parts[#parts+1] = string.format('op="%s"', entry.op) end
+    for _, k in ipairs(ENTRY_NUMBER_KEYS) do
+        if entry[k] then parts[#parts+1] = k .. "=" .. tostring(entry[k]) end
+    end
+    if entry.params then
+        local keys = {}
+        for k in pairs(entry.params) do keys[#keys+1] = k end
+        table.sort(keys)
+        local params = {}
+        for _, k in ipairs(keys) do params[#params+1] = k .. "=" .. tostring(entry.params[k]) end
+        parts[#parts+1] = "params={" .. table.concat(params, ", ") .. "}"
+    end
+    if entry.values then parts[#parts+1] = "values=" .. fmt_values(entry.values) end
+    return "{ " .. table.concat(parts, ", ") .. " }"
 end
 
 local function ensure_matrix_values(mat)
@@ -177,6 +175,41 @@ local function ensure_matrix_values(mat)
         for c = mat.cols + 1, #mat.values[r] do mat.values[r][c] = nil end
     end
     for r = mat.rows + 1, #mat.values do mat.values[r] = nil end
+end
+
+local function is_pusher_id(id)
+    return type(id) == "number" and id >= 1 and id <= MAX_PUSHERS and id == math.floor(id)
+end
+
+-- Lowest pusher id not in the `used` set, or nil when all are taken.
+local function free_pusher_id(used)
+    for id = 1, MAX_PUSHERS do
+        if not used[id] then return id end
+    end
+    return nil
+end
+
+-- Maps each in-bounds pusher entry of an imported def to its id. Valid explicit ids are
+-- reserved first (first occurrence wins); the other pushers take the lowest free ids.
+-- Entries left without a free id are absent from the result.
+local function assign_pusher_ids(entries, grid)
+    local pushers = {}
+    for _, t in ipairs(entries) do
+        if t.kind == "pusher" and grid:in_bounds(t.x, t.y) then pushers[#pushers+1] = t end
+    end
+    local ids, used = {}, {}
+    for _, t in ipairs(pushers) do
+        if is_pusher_id(t.id) and not used[t.id] then
+            ids[t], used[t.id] = t.id, true
+        end
+    end
+    for _, t in ipairs(pushers) do
+        if not ids[t] then
+            local id = free_pusher_id(used)
+            if id then ids[t], used[id] = id, true end
+        end
+    end
+    return ids
 end
 
 -- ── EditorScene ────────────────────────────────────────────────────────────
@@ -200,7 +233,6 @@ function EditorScene.new(scene_manager)
     self._allowed_ops    = {}
     self._source         = nil
     self._sink           = nil
-    self._pusher_count   = 0
     self._pal_rects      = {}
     self._hud_els        = {}
     -- stored y positions for section labels (set by _rebuild_hud)
@@ -209,7 +241,6 @@ function EditorScene.new(scene_manager)
     self._hud_ops_lbl_y  = 390
     self._hud_inp_cell_y = 118
     self._hud_tgt_cell_y = 278
-    self._param_popup    = ParamPopup.new()
     return self
 end
 
@@ -226,17 +257,14 @@ end
 function EditorScene:_layout_palette()
     local rects = {}
     local x = PAL_LEFT
-    local pending_sep = false
 
     for _, btn in ipairs(EDITOR_PALETTE) do
         if btn.sep then
-            pending_sep = true
+            x = x + PAL_SEP
         else
-            if pending_sep then x = x + PAL_SEP; pending_sep = false end
-            if x + PAL_BTN_W <= PALETTE_REGION_W then
-                rects[#rects+1] = { id=btn.id, btn=btn, x=x, y=BAR_BTN_Y, w=PAL_BTN_W, h=PAL_BTN_H }
-            end
-            x = x + PAL_STEP
+            local w = btn.w or PAL_BTN_W
+            rects[#rects+1] = { id=btn.id, btn=btn, x=x, y=BAR_BTN_Y, w=w, h=PAL_BTN_H }
+            x = x + w + PAL_GAP
         end
     end
 
@@ -349,8 +377,54 @@ function EditorScene:_sel_matches(btn)
     return self._sel.kind == btn.kind
 end
 
+-- True when the tile anchored at (ax, ay) has room for a resize action.
+function EditorScene:_can_resize(tile, ax, ay, action)
+    local w, h = tile.width, tile.height
+    if action == "grow_col" and not self:_area_free(ax + w, ay, 1, h) then return false end
+    if action == "grow_row" and not self:_area_free(ax, ay + h, w, 1) then return false end
+
+    -- An imported width/height may differ from the footprint a resize gives the tile, so
+    -- check every cell the resized tile would newly cover, whatever the action.
+    local resized = deep_copy(tile)
+    OpTiles.resize(resized, action)
+    for dy = 0, resized.height - 1 do
+        for dx = 0, resized.width - 1 do
+            if (dx >= w or dy >= h) and not self:_area_free(ax + dx, ay + dy, 1, 1) then
+                return false
+            end
+        end
+    end
+    return true
+end
+
+-- Appends the resize strips of every op tile (none while Erase is selected).
+function EditorScene:_add_resize_strips(els)
+    if self._sel and self._sel.kind == "erase" then return end
+    for cy = 1, 10 do
+        for cx = 1, 10 do
+            local tile = self._grid.cells[cy][cx]
+            if tile and tile.kind == "op" then
+                for _, action in ipairs(OpTiles.resize_actions(tile)) do
+                    if self:_can_resize(tile, cx, cy, action) then
+                        els[#els+1] = {
+                            id      = "resize:" .. cx .. "," .. cy .. ":" .. action,
+                            label   = action:find("^grow") and "+" or "-",
+                            kind    = "resize",
+                            rect    = strip_rect(tile, cx, cy, action),
+                            enabled = true,
+                        }
+                    end
+                end
+            end
+        end
+    end
+end
+
 function EditorScene:ui_elements()
     local els = {}
+
+    -- Listed before the grid cells so hit-testing finds a strip first.
+    self:_add_resize_strips(els)
 
     -- Grid cells (10×10), registered so click_cell / assert_tile work in specs.
     for cy = 1, 10 do
@@ -393,6 +467,18 @@ end
 
 -- ── Grid mutation ──────────────────────────────────────────────────────────
 
+-- Set of pusher ids currently on the grid.
+function EditorScene:_used_pusher_ids()
+    local used = {}
+    for cy = 1, 10 do
+        for cx = 1, 10 do
+            local tile = self._grid.cells[cy][cx]
+            if tile and tile.kind == "pusher" then used[tile.id] = true end
+        end
+    end
+    return used
+end
+
 function EditorScene:_erase_at(cx, cy)
     if not self._grid:in_bounds(cx, cy) then return end
     local raw = self._grid.cells[cy][cx]
@@ -419,12 +505,48 @@ function EditorScene:_erase_at(cx, cy)
     end
 end
 
-function EditorScene:_place_at(cx, cy)
-    if not self._sel then return end
-    if not self._grid:in_bounds(cx, cy) then return end
-    local sel = self._sel
+-- Applies a resize strip's action and re-places the tile with its new footprint.
+function EditorScene:_resize_at(ax, ay, action)
+    local tile = self._grid:get(ax, ay)
+    self:_erase_at(ax, ay)
+    OpTiles.resize(tile, action)
+    self._grid:set_multi_2d(ax, ay, tile, tile.width, tile.height)
+end
 
-    if sel.kind == "erase" then self:_erase_at(cx, cy); return end
+-- Left click on a grid cell (rel_x pixels from its left edge). Erase removes the tile
+-- under the cursor. Otherwise a placed tile is never replaced (an op's param or value cell
+-- is edited, whatever `locked` says) and an empty cell takes the selected tool.
+function EditorScene:_click_cell(cx, cy, rel_x)
+    if self._sel and self._sel.kind == "erase" then self:_erase_at(cx, cy); return end
+
+    if self._grid.cells[cy][cx] == nil then
+        if self._sel then self:_place_at(cx, cy) end
+        return
+    end
+
+    local ax, ay = self._grid:get_anchor(cx, cy)
+    local tile   = self._grid:get(ax, ay)
+    if tile.kind == "op" then
+        local rows = self._input.rows
+        OpTiles.click(tile, cx - ax, cy - ay, rel_x, CELL_SIZE,
+            { rows = rows, cols = self._input.cols, set_row = rows })
+    end
+end
+
+-- True when the w x h area anchored at (x, y) is in bounds and empty.
+function EditorScene:_area_free(x, y, w, h)
+    if not self._grid:in_bounds_multi_2d(x, y, w, h) then return false end
+    for dy = 0, h-1 do
+        for dx = 0, w-1 do
+            if self._grid.cells[y+dy][x+dx] then return false end
+        end
+    end
+    return true
+end
+
+-- Places the selected tool on the empty cell (cx, cy).
+function EditorScene:_place_at(cx, cy)
+    local sel = self._sel
 
     if sel.kind == "source" then
         if self._source then self:_erase_at(self._source.x, self._source.y) end
@@ -448,31 +570,21 @@ function EditorScene:_place_at(cx, cy)
     end
 
     if sel.kind == "gap" then
-        if self._grid.cells[cy][cx] == nil then
-            self._grid:set(cx, cy, {kind="gap", locked=true})
-        end; return
+        self._grid:set(cx, cy, {kind="gap", locked=true}); return
     end
 
     if sel.kind == "op" then
-        local sz = OP_SIZES[sel.op] or {1,1}
-        local tw, th = sz[1], sz[2]
-        if not self._grid:in_bounds_multi_2d(cx, cy, tw, th) then return end
-        for dy = 0, th-1 do
-            for dx = 0, tw-1 do
-                if self._grid.cells[cy+dy] and self._grid.cells[cy+dy][cx+dx] then return end
-            end
-        end
-        local tile = {kind="op", op=sel.op, locked=true,
-                      params=deep_copy_params(DEFAULT_PARAMS[sel.op]), width=tw, height=th}
-        if tw > 1 or th > 1 then self._grid:set_multi_2d(cx, cy, tile, tw, th)
-        else                      self._grid:set(cx, cy, tile) end
+        local tile   = OpTiles.new_tile(sel.op, self._input.rows)
+        local tw, th = tile.width, tile.height
+        if not self:_area_free(cx, cy, tw, th) then return end
+        self._grid:set_multi_2d(cx, cy, tile, tw, th)
         return
     end
 
     if sel.kind == "pusher" then
-        if self._grid.cells[cy][cx] ~= nil then return end
-        self._pusher_count = self._pusher_count + 1
-        self._grid:set(cx, cy, {kind="pusher", locked=true, id=self._pusher_count})
+        local id = free_pusher_id(self:_used_pusher_ids())
+        if not id then return end
+        self._grid:set(cx, cy, {kind="pusher", locked=true, id=id})
     end
 end
 
@@ -511,10 +623,6 @@ end
 -- ── Input ──────────────────────────────────────────────────────────────────
 
 function EditorScene:key_pressed(key)
-    if self._param_popup:is_open() then
-        self._param_popup:key_pressed(key)
-        return
-    end
     if self._name_focus then
         if key == "backspace" then
             self._name = self._name:sub(1, -2)
@@ -530,10 +638,6 @@ function EditorScene:key_pressed(key)
 end
 
 function EditorScene:text_input(ch)
-    if self._param_popup:is_open() then
-        self._param_popup:text_input(ch)
-        return
-    end
     if self._name_focus then
         self._name = self._name .. ch
     end
@@ -542,20 +646,23 @@ end
 function EditorScene:mouse_pressed(mx, my, btn)
     local e = UI.element_at(self:ui_elements(), mx, my)
     if e then
+        -- Resize strips: left click resizes; right click erases what lies underneath.
+        if e.kind == "resize" then
+            if btn == 1 then
+                local ax, ay, action = e.id:match("^resize:(%d+),(%d+):(.+)$")
+                self:_resize_at(tonumber(ax), tonumber(ay), action)
+            elseif btn == 2 then
+                self:_erase_at(cell_at(mx, my))
+            end
+            return
+        end
+
         -- Grid cell elements: route to place/erase.
         local cell_x, cell_y = e.id:match("^cell:(%d+),(%d+)$")
         if cell_x then
             local cx, cy = tonumber(cell_x), tonumber(cell_y)
             if btn == 1 then
-                local ax, ay = self._grid:get_anchor(cx, cy)
-                local tile   = self._grid:get(ax, ay)
-                if tile and tile.kind == "op" and DEFAULT_PARAMS[tile.op] then
-                    self._param_popup:open(tile.op, tile.params, function(new_params)
-                        for k, v in pairs(new_params) do tile.params[k] = v end
-                    end, nil)
-                else
-                    self:_place_at(cx, cy)
-                end
+                self:_click_cell(cx, cy, mx - e.rect.x)
             elseif btn == 2 then
                 self:_erase_at(cx, cy)
             end
@@ -674,11 +781,13 @@ function EditorScene:_build_def()
                    and tile.kind ~= "source" and tile.kind ~= "sink" and tile.kind ~= "gap" then
                     local entry = { kind=tile.kind, x=cx, y=cy }
                     if tile.op     then entry.op      = tile.op end
+                    if tile.kind == "pusher" then entry.id = tile.id end
                     if tile.params and next(tile.params) then
                         entry.params = deep_copy(tile.params)
                     end
                     if tile.tile_rows then entry.tile_rows = tile.tile_rows end
                     if tile.tile_cols then entry.tile_cols = tile.tile_cols end
+                    if tile.values then entry.values = deep_copy(tile.values) end
                     if tile.width  and tile.width  > 1 then entry.width  = tile.width  end
                     if tile.height and tile.height > 1 then entry.height = tile.height end
                     locked[#locked+1] = entry
@@ -714,7 +823,6 @@ function EditorScene:_load_def(def)
     self._grid        = Grid.new(10, 10)
     self._source      = nil
     self._sink        = nil
-    self._pusher_count = 0
     self._allowed_ops = {}
     self._copy_flash  = 0
     self._paste_error = nil
@@ -728,11 +836,40 @@ function EditorScene:_load_def(def)
     ensure_matrix_values(self._input)
     ensure_matrix_values(self._target)
 
+    -- No tile is placed over another (or off the grid). Locked tiles go first: without a
+    -- placed source or sink the def carries a default position that a tile may occupy.
+
+    -- Locked tiles
+    local pusher_ids = assign_pusher_ids(def.locked or {}, self._grid)
+    for _, t in ipairs(def.locked or {}) do
+        local tile
+        if t.kind == "op" then
+            tile = OpTiles.tile_from_def(t)
+        else
+            tile = {
+                kind      = t.kind,
+                op        = t.op,
+                id        = pusher_ids[t],
+                locked    = true,
+                params    = deep_copy(t.params or {}),
+                width     = t.width  or 1,
+                height    = t.height or 1,
+                tile_rows = t.tile_rows,
+                tile_cols = t.tile_cols,
+            }
+        end
+        local tw, th = tile.width, tile.height
+        if self:_area_free(t.x, t.y, tw, th)
+           and (t.kind ~= "pusher" or pusher_ids[t]) then
+            self._grid:set_multi_2d(t.x, t.y, tile, tw, th)
+        end
+    end
+
     -- Source
     if def.source then
         local sx, sy = def.source.x, def.source.y
         local sc, sr = def.input.cols, def.input.rows
-        if self._grid:in_bounds_multi_2d(sx, sy, sc, sr) then
+        if self:_area_free(sx, sy, sc, sr) then
             self._grid:set_multi_2d(sx, sy, {kind="source", locked=true, width=sc, height=sr}, sc, sr)
             self._source = {x=sx, y=sy}
         end
@@ -741,7 +878,7 @@ function EditorScene:_load_def(def)
     -- Sink
     if def.sink then
         local sx, sy = def.sink.x, def.sink.y
-        if self._grid:in_bounds(sx, sy) then
+        if self:_area_free(sx, sy, 1, 1) then
             self._grid:set(sx, sy, {kind="sink", locked=true})
             self._sink = {x=sx, y=sy}
         end
@@ -749,31 +886,8 @@ function EditorScene:_load_def(def)
 
     -- Gaps
     for _, g in ipairs(def.gaps or {}) do
-        if self._grid:in_bounds(g.x, g.y) and self._grid.cells[g.y][g.x] == nil then
+        if self:_area_free(g.x, g.y, 1, 1) then
             self._grid:set(g.x, g.y, {kind="gap", locked=true})
-        end
-    end
-
-    -- Locked tiles
-    for _, t in ipairs(def.locked or {}) do
-        local tw = t.width  or (OP_SIZES[t.op or ""] or {1,1})[1]
-        local th = t.height or (OP_SIZES[t.op or ""] or {1,1})[2]
-        if self._grid:in_bounds_multi_2d(t.x, t.y, tw, th) then
-            local tile = {
-                kind      = t.kind,
-                op        = t.op,
-                locked    = true,
-                params    = deep_copy(t.params or {}),
-                width     = tw,
-                height    = th,
-                tile_rows = t.tile_rows,
-                tile_cols = t.tile_cols,
-            }
-            if tw > 1 or th > 1 then
-                self._grid:set_multi_2d(t.x, t.y, tile, tw, th)
-            else
-                self._grid:set(t.x, t.y, tile)
-            end
         end
     end
 
@@ -785,99 +899,70 @@ end
 
 -- ── Serialization ─────────────────────────────────────────────────────────
 
+-- The clipboard text of the table that Test plays: _build_def() is the only source.
 function EditorScene:_serialize()
+    local def = self:_build_def()
     local lines = {"return {"}
 
-    -- name
-    local name = self._name ~= "" and self._name or "Untitled"
-    lines[#lines+1] = string.format('    name   = %q,', name)
+    lines[#lines+1] = string.format('    name   = %q,', def.name)
+    lines[#lines+1] = string.format("    grid_w = %d, grid_h = %d,", def.grid_w, def.grid_h)
+    lines[#lines+1] = string.format("    source = { x=%d, y=%d },", def.source.x, def.source.y)
+    lines[#lines+1] = string.format("    sink   = { x=%d, y=%d },", def.sink.x, def.sink.y)
 
-    -- grid size
-    lines[#lines+1] = "    grid_w = 10, grid_h = 10,"
-
-    -- source / sink
-    local src = self._source or {x=1, y=1}
-    local snk = self._sink   or {x=1, y=1}
-    lines[#lines+1] = string.format("    source = { x=%d, y=%d },", src.x, src.y)
-    lines[#lines+1] = string.format("    sink   = { x=%d, y=%d },", snk.x, snk.y)
-
-    -- ops (only when a subset is selected — omit if none or all are on)
-    local enabled_ops = {}
-    for _, op in ipairs(OP_NAMES) do
-        if self._allowed_ops[op] then enabled_ops[#enabled_ops+1] = op end
-    end
-    if #enabled_ops > 0 and #enabled_ops < #OP_NAMES then
+    -- ops (present only when a subset is selected)
+    if def.ops then
         local parts = {}
-        for _, op in ipairs(enabled_ops) do parts[#parts+1] = '"' .. op .. '"' end
+        for _, op in ipairs(def.ops) do parts[#parts+1] = '"' .. op .. '"' end
         lines[#lines+1] = "    ops    = { " .. table.concat(parts, ", ") .. " },"
     end
 
-    -- locked tiles (non-source/sink/gap anchors with locked=true)
-    local locked_entries = {}
-    for cy = 1, 10 do
-        for cx = 1, 10 do
-            if not self._grid:is_ref(cx, cy) then
-                local tile = self._grid.cells[cy][cx]
-                if tile and tile.locked
-                   and tile.kind ~= "source" and tile.kind ~= "sink" and tile.kind ~= "gap" then
-                    locked_entries[#locked_entries+1] = {x=cx, y=cy, tile=tile}
-                end
-            end
-        end
-    end
-    if #locked_entries > 0 then
+    if def.locked then
         lines[#lines+1] = "    locked = {"
-        for _, lt in ipairs(locked_entries) do
-            local t  = lt.tile
-            local pp = {}
-            pp[#pp+1] = string.format('kind="%s"', t.kind)
-            if t.op  then pp[#pp+1] = string.format('op="%s"', t.op) end
-            pp[#pp+1] = string.format("x=%d", lt.x)
-            pp[#pp+1] = string.format("y=%d", lt.y)
-            if t.params and next(t.params) then
-                local kk = {}
-                for k in pairs(t.params) do kk[#kk+1] = k end
-                table.sort(kk)
-                local kp = {}
-                for _, k in ipairs(kk) do kp[#kp+1] = k .. "=" .. tostring(t.params[k]) end
-                pp[#pp+1] = "params={" .. table.concat(kp, ", ") .. "}"
-            end
-            if t.tile_rows then pp[#pp+1] = "tile_rows=" .. t.tile_rows end
-            if t.tile_cols then pp[#pp+1] = "tile_cols=" .. t.tile_cols end
-            lines[#lines+1] = "        { " .. table.concat(pp, ", ") .. " },"
+        for _, entry in ipairs(def.locked) do
+            lines[#lines+1] = "        " .. fmt_entry(entry) .. ","
         end
         lines[#lines+1] = "    },"
     end
 
-    -- gaps
-    local gap_entries = {}
-    for cy = 1, 10 do
-        for cx = 1, 10 do
-            local tile = self._grid.cells[cy][cx]
-            if tile and tile.kind == "gap" then
-                gap_entries[#gap_entries+1] = string.format("{x=%d,y=%d}", cx, cy)
-            end
-        end
-    end
-    if #gap_entries > 0 then
+    if def.gaps then
+        local parts = {}
+        for _, g in ipairs(def.gaps) do parts[#parts+1] = string.format("{x=%d,y=%d}", g.x, g.y) end
         lines[#lines+1] = "    gaps   = {"
-        lines[#lines+1] = "        " .. table.concat(gap_entries, ",") .. ","
+        lines[#lines+1] = "        " .. table.concat(parts, ",") .. ","
         lines[#lines+1] = "    },"
     end
 
     -- input / target
-    lines[#lines+1] = string.format(
-        "    input  = { rows=%d, cols=%d, values={ %s } },",
-        self._input.rows, self._input.cols, fmt_values(self._input.values))
-    lines[#lines+1] = string.format(
-        "    target = { rows=%d, cols=%d, values={ %s } },",
-        self._target.rows, self._target.cols, fmt_values(self._target.values))
+    for _, key in ipairs({"input", "target"}) do
+        local mat = def[key]
+        lines[#lines+1] = string.format("    %-6s = { rows=%d, cols=%d, values=%s },",
+            key, mat.rows, mat.cols, fmt_values(mat.values))
+    end
 
     lines[#lines+1] = "}"
     return table.concat(lines, "\n")
 end
 
 -- ── Draw helpers ───────────────────────────────────────────────────────────
+
+local function draw_op_content(tile, sx, sy, fonts)
+    for dy = 0, (tile.height or 1) - 1 do
+        for dx = 0, (tile.width or 1) - 1 do
+            OpTiles.draw_cell(tile, dx, dy, sx + dx * CELL_SIZE, sy + dy * CELL_SIZE,
+                CELL_SIZE, fonts, true)
+        end
+    end
+    OpTiles.draw_overlay(tile, sx, sy, CELL_SIZE, fonts)
+
+    local spot = SYMBOL_SPOTS[tile.op]
+    if spot then
+        local dy, align = spot[1], spot[2]
+        love.graphics.setColor(0.56, 0.44, 0.21, 1)
+        love.graphics.setFont(fonts.ui)
+        love.graphics.printf(OpTiles.SYMBOLS[tile.op],
+            align == "left" and sx + 2 or sx, sy + dy, CELL_SIZE, align)
+    end
+end
 
 local function draw_tile(tile, cx, cy, font_cell, font_ui)
     if not tile then return end
@@ -911,13 +996,7 @@ local function draw_tile(tile, cx, cy, font_cell, font_ui)
         love.graphics.setLineWidth(2)
         love.graphics.rectangle("line", sx+1, sy+1, span_w-2, span_h-2)
         love.graphics.setLineWidth(1)
-        love.graphics.setFont(font_cell)
-        love.graphics.printf(OP_SYMBOLS[tile.op] or "?", sx, sy+span_h/2-8, span_w, "center")
-        if tile.locked then
-            love.graphics.setColor(0.7, 0.7, 0.7, 0.8)
-            love.graphics.circle("fill", sx+span_w-8, sy+7, 3)
-            love.graphics.rectangle("fill", sx+span_w-10, sy+7, 4, 5)
-        end
+        draw_op_content(tile, sx, sy, { cell = font_cell, ui = font_ui })
     elseif tile.kind == "pusher" then
         love.graphics.setColor(0.30, 0.18, 0.45, 0.95)
         love.graphics.rectangle("fill", sx+4, sy+4, cs-8, cs-8, 6, 6)
@@ -933,6 +1012,16 @@ local function draw_tile(tile, cx, cy, font_cell, font_ui)
             love.graphics.rectangle("fill", sx+cs-10, sy+7, 4, 5)
         end
     end
+end
+
+-- A resize strip: green "+" to grow, red "-" to shrink, as in the puzzle scene.
+local function draw_strip(e)
+    local r    = e.rect
+    local grow = e.label == "+"
+    love.graphics.setColor(grow and {0.23,0.44,0.23,1} or {0.44,0.15,0.15,1})
+    love.graphics.rectangle("fill", r.x, r.y, r.w, r.h)
+    love.graphics.setColor(grow and {0.5,1.0,0.5,1} or {1.0,0.4,0.4,1})
+    love.graphics.printf(e.label, r.x, r.y + r.h/2 - 7, r.w, "center")
 end
 
 function EditorScene:_draw_hud()
@@ -1050,6 +1139,12 @@ function EditorScene:draw()
         end
     end
 
+    -- Resize strips, over the tiles
+    love.graphics.setFont(self._font_ui)
+    for _, e in ipairs(self:ui_elements()) do
+        if e.kind == "resize" then draw_strip(e) end
+    end
+
     -- HUD background
     love.graphics.setColor(0.07, 0.07, 0.12, 1)
     love.graphics.rectangle("fill", HUD_X, 0, W-HUD_X, PALETTE_Y)
@@ -1094,7 +1189,6 @@ function EditorScene:draw()
     end
 
     love.graphics.setColor(1, 1, 1, 1)
-    self._param_popup:draw()
 end
 
 return EditorScene

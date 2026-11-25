@@ -259,6 +259,63 @@ do
     print("PASS: ui_runner: check_invariants")
 end
 
+-- check_invariants: kind "resize" ------------------------------------------
+do
+    local ci = UIRunner.check_invariants
+    local function el(kind, id, x, y, w, h)
+        local e = btn(id, "+", x, y, w, h)
+        e.kind = kind
+        return e
+    end
+    local function cell(id, x, y)  return el("cell", id, x, y, 60, 60) end
+    local function strip(id, x, y) return el("resize", id, x, y, 20, 60) end
+    local function overlap(a, b) return "invariant: '" .. a .. "' overlaps '" .. b .. "'" end
+
+    assert(ci({ strip("r", 0, 0) }) == nil, "resize is a valid kind")
+
+    -- Allowed: resize over cell, in either list order, also over two cells.
+    assert(ci({ strip("r", 10, 0), cell("c", 0, 0) }) == nil, "resize before cell")
+    assert(ci({ cell("c", 0, 0), strip("r", 10, 0) }) == nil, "cell before resize")
+    assert(ci({ cell("c", 0, 0), strip("r", 0, 0) }) == nil, "same left edge")
+    assert(ci({ strip("r", 50, 0), cell("c", 0, 0), cell("d", 60, 0) }) == nil,
+           "resize across two cells")
+
+    -- Every other overlap still fails.
+    assert(ci({ strip("r", 0, 0), strip("s", 10, 0) }) == overlap("r", "s"), "resize/resize")
+    for _, kind in ipairs({ "button", "slot" }) do
+        local o = el(kind, "o", 10, 0, 60, 60)
+        assert(ci({ strip("r", 0, 0), o }) == overlap("r", "o"), "resize/" .. kind)
+        assert(ci({ o, strip("r", 0, 0) }) == overlap("o", "r"), kind .. "/resize")
+    end
+    assert(ci({ cell("c", 0, 0), cell("d", 10, 0) }) == overlap("c", "d"), "cell/cell")
+
+    -- An allowed pair does not hide a disallowed one found later in the sweep,
+    -- and the reported pair is still smallest i, then smallest j.
+    assert(ci({ cell("c", 0, 0), strip("r", 10, 0), strip("s", 20, 0) }) == overlap("r", "s"),
+           "disallowed pair after an allowed one")
+    assert(ci({ strip("r", 10, 0), cell("c", 0, 0), btn("b", "B", 25, 0, 10, 10) })
+           == overlap("r", "b"), "allowed (1,2) skipped, (1,3) reported before (2,3)")
+    assert(ci({ cell("c", 0, 0), strip("r", 0, 0), btn("a", "A", 200, 0, 20, 20),
+                btn("b", "B", 210, 0, 20, 20) }) == overlap("a", "b"),
+           "disallowed pair further along x")
+
+    -- The other checks apply to resize unchanged.
+    local bad = ci({ strip("r", 0, 0), el("resize", "z", 100, 100, 0, 10) })
+    assert(bad and bad:find("invariant: malformed element 2: non-positive size", 1, true),
+           "malformed resize: " .. tostring(bad))
+    assert(ci({ strip("r", 0, 0), strip("r", 100, 0) }) == "invariant: duplicate id 'r'",
+           "duplicate resize id")
+    assert(ci({ cell("c", 1220, 0), strip("r", 1270, 0) }) == "invariant: 'r' off screen",
+           "resize off screen")
+
+    -- A resize strip listed before its cell is what a spec click reaches.
+    local s = fake_scene({ strip("resize:1,1:grow_col", 40, 0), cell("cell:1,1", 0, 0) })
+    local ok, err = run(s, { { click_button = { id = "resize:1,1:grow_col" } } })
+    assert(ok, tostring(err))
+    assert(s.presses[1][1] == 50 and s.presses[1][2] == 30, "click at the strip centre")
+    print("PASS: ui_runner: resize kind overlaps cells only")
+end
+
 -- serialise ----------------------------------------------------------------
 do
     local s = UIRunner.serialise({ click_slot = { pusher = 1, slots = { 1, 2 }, times = 2 } })

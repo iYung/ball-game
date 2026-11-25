@@ -4,6 +4,7 @@ local UI         = require("lua/core/ui")
 local Ops        = require("lua/game/ops")
 local Sim        = require("lua/game/pusher_sim")
 local OpTile     = require("lua/game/op_tile")
+local DefParser  = require("lua/game/def_parser")
 
 -- Layout constants (matching MatrixScene)
 local GRID_X    = 95
@@ -19,6 +20,7 @@ local PAL_BTN_H = 48
 local PAL_STEP  = PAL_BTN_W + 6      -- 48
 local PAL_LEFT  = 10
 local PAL_SEP   = 12
+local PAL_ERASE_W = 52
 local BAR_BTN_Y = PALETTE_Y + 6
 
 local CMD_BTN_W    = 56
@@ -33,6 +35,7 @@ local SPIN_H   = 20
 local OPS_W    = 36
 local OPS_H    = 22
 local OPS_GAP  = 4
+local OPS_LBL_H = 14
 
 local EDITOR_PALETTE = {
     { id="editor:pal:source",   kind="source",  label="SRC"  },
@@ -47,7 +50,7 @@ for _, op in ipairs(Ops.ORDER) do
         { id="editor:pal:"..op, kind="op", op=op, label=Ops.label(op) }
 end
 EDITOR_PALETTE[#EDITOR_PALETTE+1] = { sep=true }
-EDITOR_PALETTE[#EDITOR_PALETTE+1] = { id="editor:pal:erase", kind="erase", label="[X]" }
+EDITOR_PALETTE[#EDITOR_PALETTE+1] = { id="editor:pal:erase", kind="erase", label="Erase", w=PAL_ERASE_W }
 
 local CMD_BUTTONS = {
     { id="editor:back",  label="Back"  },
@@ -168,7 +171,7 @@ function EditorScene:_layout_palette()
             pending_sep = true
         else
             if pending_sep then x = x + PAL_SEP; pending_sep = false end
-            rects[#rects+1] = { id=btn.id, btn=btn, x=x, y=BAR_BTN_Y, w=PAL_BTN_W, h=PAL_BTN_H }
+            rects[#rects+1] = { id=btn.id, btn=btn, x=x, y=BAR_BTN_Y, w=btn.w or PAL_BTN_W, h=PAL_BTN_H }
             x = x + PAL_STEP
         end
     end
@@ -244,6 +247,7 @@ function EditorScene:_rebuild_hud()
 
     -- Op allowlist
     self._hud_ops_lbl_y = cy
+    cy = cy + OPS_LBL_H   -- buttons start below the label
     local ops_per_row = 8
     for i, op in ipairs(Ops.ORDER) do
         local row = math.floor((i - 1) / ops_per_row)
@@ -388,6 +392,7 @@ function EditorScene:_place_at(cx, cy)
     end
 
     if sel.kind == "sink" then
+        if self._grid.cells[cy][cx] ~= nil then return end
         if self._sink then self._grid.cells[self._sink.y][self._sink.x] = nil end
         self._grid:set(cx, cy, {kind="sink", locked=true})
         self._sink = {x=cx, y=cy}; return
@@ -449,10 +454,9 @@ end
 
 -- Loads the clipboard definition; on bad input shows why and changes nothing.
 function EditorScene:_paste()
-    local text = love.system.getClipboardText()
-    local ok, def = pcall(function() return load(text or "")() end)
+    local def = DefParser.parse(love.system.getClipboardText())
     local valid, msg = false, "Parse error"
-    if ok and type(def) == "table" and def.input and def.target then
+    if def and def.input and def.target then
         valid, msg = validate_ops(def)
     end
     if valid then
@@ -587,6 +591,11 @@ function EditorScene:update(dt)
     end
 end
 
+-- True when the cell is on the grid and holds nothing.
+function EditorScene:_is_free(cx, cy)
+    return self._grid:in_bounds(cx, cy) and self._grid.cells[cy][cx] == nil
+end
+
 -- ── Build / Load def ──────────────────────────────────────────────────────
 
 function EditorScene:_build_def()
@@ -657,11 +666,30 @@ function EditorScene:_load_def(def)
     ensure_matrix_values(self._input)
     ensure_matrix_values(self._target)
 
+    -- No tile is placed over another. Locked tiles (always one cell) go first:
+    -- without a placed source or sink the def carries a default position that a
+    -- tile may occupy.
+    local locked = def.locked or {}
+    local pusher_ids = Sim.assign_pusher_ids(locked)
+    for _, t in ipairs(locked) do
+        if self:_is_free(t.x, t.y) and (t.kind ~= "pusher" or pusher_ids[t]) then
+            local tile = { kind=t.kind, op=t.op, id=pusher_ids[t], locked=true }
+            if t.kind == "op" then tile.params = Ops.params(t.op, t.params) end
+            self._grid:set(t.x, t.y, tile)
+        end
+    end
+
     -- Source
     if def.source then
         local sx, sy = def.source.x, def.source.y
         local sc, sr = def.input.cols, def.input.rows
-        if self._grid:in_bounds_multi_2d(sx, sy, sc, sr) then
+        local free = true
+        for dy = 0, sr-1 do
+            for dx = 0, sc-1 do
+                free = free and self:_is_free(sx+dx, sy+dy)
+            end
+        end
+        if free then
             self._grid:set_multi_2d(sx, sy, {kind="source", locked=true, width=sc, height=sr}, sc, sr)
             self._source = {x=sx, y=sy}
         end
@@ -670,7 +698,7 @@ function EditorScene:_load_def(def)
     -- Sink
     if def.sink then
         local sx, sy = def.sink.x, def.sink.y
-        if self._grid:in_bounds(sx, sy) then
+        if self:_is_free(sx, sy) then
             self._grid:set(sx, sy, {kind="sink", locked=true})
             self._sink = {x=sx, y=sy}
         end
@@ -678,19 +706,8 @@ function EditorScene:_load_def(def)
 
     -- Gaps
     for _, g in ipairs(def.gaps or {}) do
-        if self._grid:in_bounds(g.x, g.y) and self._grid.cells[g.y][g.x] == nil then
+        if self:_is_free(g.x, g.y) then
             self._grid:set(g.x, g.y, {kind="gap", locked=true})
-        end
-    end
-
-    -- Locked tiles (always one cell)
-    local locked = def.locked or {}
-    local pusher_ids = Sim.assign_pusher_ids(locked)
-    for _, t in ipairs(locked) do
-        if self._grid:in_bounds(t.x, t.y) and (t.kind ~= "pusher" or pusher_ids[t]) then
-            local tile = { kind=t.kind, op=t.op, id=pusher_ids[t], locked=true }
-            if t.kind == "op" then tile.params = Ops.params(t.op, t.params) end
-            self._grid:set(t.x, t.y, tile)
         end
     end
 
@@ -714,7 +731,7 @@ function EditorScene:_serialize()
 
     -- source / sink
     local src = self._source or {x=1, y=1}
-    local snk = self._sink   or {x=1, y=1}
+    local snk = self._sink   or {x=10, y=10}
     lines[#lines+1] = string.format("    source = { x=%d, y=%d },", src.x, src.y)
     lines[#lines+1] = string.format("    sink   = { x=%d, y=%d },", snk.x, snk.y)
 

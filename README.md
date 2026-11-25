@@ -79,7 +79,7 @@ Saved progress from the earlier 23-puzzle numbering is converted to the new numb
 
 A built-in puzzle editor is accessible from the title screen — press **E** or click **(E) Editor**.
 
-The editor has the same 10×10 grid as the game and a bottom palette with **SRC** (Source), **SNK** (Sink), **GAP**, the pusher **P**, all ten op tiles and the eraser **[X]**. Up to 8 pushers can be placed; each gets the lowest free letter (A–H), which is saved with the puzzle. Every tile you place is exported as locked, but stays editable inside the editor: click the thirds of an op tile to change *k* or turn its edge, as in the game. Erase with **[X]** or a right-click. The right-hand HUD lets you:
+The editor has the same 10×10 grid as the game and a bottom palette with **SRC** (Source), **SNK** (Sink), **GAP**, the pusher **P**, all ten op tiles and **Erase**. Every tile you place is exported as locked, but stays editable inside the editor: click the thirds of an op tile to change *k* or turn its edge, as in the game. Select **Erase** and click a tile to remove it (any cell of the source works), or right-click it. Placing a tool, including the Sink, never replaces an occupied cell. Up to 8 pushers can be placed; each gets the lowest free letter (A–H), which is saved with the puzzle. The right-hand HUD lets you:
 
 - Set the **puzzle name** (click the name field to type)
 - Edit the **INPUT** and **TARGET** matrices (rows/cols spinners and click-to-edit value cells)
@@ -87,7 +87,7 @@ The editor has the same 10×10 grid as the game and a bottom palette with **SRC*
 
 The editor does not support fixed palette ops (`fixed_ops`).
 
-**Copy** serialises the current puzzle to a Lua string and copies it to the clipboard in the same format as `data/puzzles/*.lua`. **Paste** reads from the clipboard and loads a previously copied puzzle back into the editor. A definition that names an unsupported op or has an invalid *k* or edge is rejected with a message, and unreadable text shows `Parse error`; the editor is left unchanged. **Test** opens the puzzle directly in the game for play-testing; pressing Menu there returns to the editor. **Back** returns to the title screen.
+**Copy** serialises the current puzzle to a Lua string and copies it to the clipboard in the same format as `data/puzzles/*.lua`. **Paste** reads from the clipboard and loads a previously copied puzzle back into the editor. The text is read as data and never run: only plain table literals (strings, numbers, booleans, nested tables, comments) are accepted. A definition that names an unsupported op or has an invalid *k* or edge is rejected with a message, and unreadable text shows `Parse error`; the editor is left unchanged. **Test** opens the puzzle directly in the game for play-testing; pressing Menu there returns to the editor. **Back** returns to the title screen.
 
 To add a custom puzzle to the game, copy the Lua source into a new file under `data/puzzles/` and register it in `lua/game/puzzle_loader.lua`.
 

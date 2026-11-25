@@ -13,23 +13,21 @@ local PUZZLES = {
     "data/puzzles/12_negate_swap.lua",
     "data/puzzles/13_flip_scale.lua",
     "data/puzzles/14_elimination.lua",
-    "data/puzzles/15_scale_swap.lua",
-    "data/puzzles/16_triple.lua",
-    "data/puzzles/17_add_rows.lua",
-    "data/puzzles/18_col_ops.lua",
-    "data/puzzles/19_flips.lua",
-    "data/puzzles/20_abs_rotate.lua",
-    "data/puzzles/21_fixed_player.lua",
-    "data/puzzles/22_fixed_puzzle.lua",
-    "data/puzzles/23_locked_scale.lua",
+    "data/puzzles/15_triple.lua",
+    "data/puzzles/16_col_ops.lua",
+    "data/puzzles/17_flips.lua",
+    "data/puzzles/18_double_negative.lua",
+    "data/puzzles/19_fixed_player.lua",
+    "data/puzzles/20_fixed_puzzle.lua",
+    "data/puzzles/21_locked_scale.lua",
 }
 
 local WORLDS = {
     { name = "Basics",       puzzles = { 1,  2,  3,  4,  5 } },
     { name = "Combos",       puzzles = { 6,  7,  8,  9, 10, 11 } },
-    { name = "Advanced",     puzzles = { 12, 13, 14, 15, 16 } },
-    { name = "Transforms",   puzzles = { 17, 18, 19, 20 } },
-    { name = "Fixed Pieces", puzzles = { 21, 22, 23 } },
+    { name = "Advanced",     puzzles = { 12, 13, 14, 15 } },
+    { name = "Transforms",   puzzles = { 16, 17, 18 } },
+    { name = "Fixed Pieces", puzzles = { 19, 20, 21 } },
 }
 
 local PuzzleLoader = {}

@@ -1,13 +1,14 @@
 -- "Staircase": two-step staircase route, source top-left, sink bottom-right.
 -- Wall-A (y=3, x=1–3): matrix must reach anchor x≥4 to descend past y=2.
 -- Wall-B (y=6, x=1–6): matrix must reach anchor x≥7 to descend past y=5.
--- Op ordering matters: scale_row(r=2,s=2) first, then add_rows(src=2,dst=1,scalar=-1).
+-- Op ordering matters: x4 on the bottom edge first, then -8 on the right edge.
+-- Chain: {{1,2},{0,4}} → x4 bottom → {{1,2},{0,16}} → -8 right → {{1,-6},{0,8}}
 return {
     name   = "Staircase",
     grid_w = 10, grid_h = 10,
     source = { x=2, y=2 },
     sink   = { x=9, y=8 },
-    ops    = { "scale_row", "add_rows" },
+    ops    = { "edge_scale", "edge_sub" },
     input  = { rows=2, cols=2, values={ {1,2},{0,4} } },
     target = { rows=2, cols=2, values={ {1,-6},{0,8} } },
     gaps = {

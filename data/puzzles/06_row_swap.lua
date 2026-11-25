@@ -1,4 +1,5 @@
--- Z-Bend: negate + swap_rows, Z-route with two half-walls
+-- Z-Bend: scale by -1 + vertical flip, Z-route with two half-walls
+-- Chain: {{1,2},{3,4}} → x-1 → {{-1,-2},{-3,-4}} → FLv → {{-3,-4},{-1,-2}}
 -- Wall-A: y=4, x=1–5 (forces matrix right to ax≥6 before descending)
 -- Wall-B: y=8, x=6–9 (forces matrix left to ax≤4 before descending past y=7)
 -- Sink (9,10): 2×2 at anchor (8,9) covers (8–9, 9–10) → (9,10) ✓
@@ -10,7 +11,7 @@ return {
     grid_w = 10, grid_h = 10,
     source = { x=2, y=2 },
     sink   = { x=9, y=10 },
-    ops    = { "negate", "swap_rows" },
+    ops    = { "scalar_mul", "flip_v" },
     input  = { rows=2, cols=2, values={ {1,2}, {3,4} } },
     target = { rows=2, cols=2, values={ {-3,-4}, {-1,-2} } },
     gaps   = {

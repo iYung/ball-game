@@ -1,7 +1,8 @@
 local Scene      = require("lua/core/scene")
 local Grid       = require("lua/game/grid")
 local UI         = require("lua/core/ui")
-local ParamPopup = require("lua/game/param_popup")
+local Ops        = require("lua/game/ops")
+local OpTile     = require("lua/game/op_tile")
 
 -- Layout constants (matching MatrixScene)
 local GRID_X    = 95
@@ -11,8 +12,6 @@ local PALETTE_Y = 660
 local HUD_X     = 820
 local W         = 1280
 local H         = 720
-
-local PALETTE_REGION_W = HUD_X - 10  -- 810
 
 local PAL_BTN_W = 42
 local PAL_BTN_H = 48
@@ -34,73 +33,6 @@ local OPS_W    = 36
 local OPS_H    = 22
 local OPS_GAP  = 4
 
-local OP_SYMBOLS = {
-    transpose  = "T",
-    scale_row  = "xRn",
-    swap_rows  = "<>R",
-    negate     = "-I",
-    scalar_mul = "xk",
-    add_matrix = "+M",
-    sub_matrix = "-M",
-    mul_matrix = "xM",
-    set_row    = "=R",
-    add_rows   = "+R",
-    scale_col  = "xCn",
-    swap_cols  = "<>C",
-    add_cols   = "+C",
-    set_col    = "=C",
-    rotate_90  = "R90",
-    flip_h     = "FLh",
-    flip_v     = "FLv",
-    abs        = "|x|",
-}
-
-local OP_NAMES = {
-    "transpose","scale_row","swap_rows","negate","scalar_mul",
-    "add_matrix","sub_matrix","mul_matrix","set_row","add_rows",
-    "scale_col","swap_cols","add_cols","set_col",
-    "rotate_90","flip_h","flip_v","abs",
-}
-local OP_LABELS = {
-    transpose="T",   scale_row="xR",  swap_rows="<>R", negate="-I",
-    scalar_mul="xk", add_matrix="+M", sub_matrix="-M", mul_matrix="xM",
-    set_row="=R",    add_rows="+R",   scale_col="xC",  swap_cols="<>C",
-    add_cols="+C",   set_col="=C",    rotate_90="R90", flip_h="FLh",
-    flip_v="FLv",    abs="|x|",
-}
-
-local OP_SIZES = {
-    transpose  = {1, 1},
-    negate     = {1, 1},
-    scalar_mul = {2, 1},
-    scale_row  = {1, 4},
-    swap_rows  = {1, 2},
-    add_matrix = {1, 1},
-    sub_matrix = {1, 1},
-    mul_matrix = {1, 1},
-    set_row    = {2, 1},
-    add_rows   = {4, 1},
-    scale_col  = {4, 1},
-    swap_cols  = {2, 1},
-    add_cols   = {4, 1},
-    set_col    = {1, 2},
-    rotate_90  = {1, 1},
-    flip_h     = {1, 1},
-    flip_v     = {1, 1},
-    abs        = {1, 1},
-}
-
-local DEFAULT_PARAMS = {
-    scale_row  = {row=1,   scalar=2},
-    swap_rows  = {row_a=1, row_b=2},
-    scalar_mul = {scalar=2},
-    set_row    = {row=1},
-    add_rows   = {src=1,   dst=2, scalar=1},
-    scale_col  = {col=1,   scalar=2},
-    swap_cols  = {col_a=1, col_b=2},
-    add_cols   = {src=1,   dst=2, scalar=1},
-}
-
 local EDITOR_PALETTE = {
     { id="editor:pal:source",   kind="source",  label="SRC"  },
     { id="editor:pal:sink",     kind="sink",    label="SNK"  },
@@ -108,27 +40,13 @@ local EDITOR_PALETTE = {
     { sep=true },
     { id="editor:pal:pusher",   kind="pusher",  label="P"    },
     { sep=true },
-    { id="editor:pal:transpose",  kind="op", op="transpose",  label="T"    },
-    { id="editor:pal:scale_row",  kind="op", op="scale_row",  label="xR"   },
-    { id="editor:pal:swap_rows",  kind="op", op="swap_rows",  label="<>R"  },
-    { id="editor:pal:negate",     kind="op", op="negate",     label="-I"   },
-    { id="editor:pal:scalar_mul", kind="op", op="scalar_mul", label="xk"   },
-    { id="editor:pal:add_matrix", kind="op", op="add_matrix", label="+M"   },
-    { id="editor:pal:sub_matrix", kind="op", op="sub_matrix", label="-M"   },
-    { id="editor:pal:mul_matrix", kind="op", op="mul_matrix", label="xM"   },
-    { id="editor:pal:set_row",    kind="op", op="set_row",    label="=R"   },
-    { id="editor:pal:add_rows",   kind="op", op="add_rows",   label="+R"   },
-    { id="editor:pal:scale_col",  kind="op", op="scale_col",  label="xC"   },
-    { id="editor:pal:swap_cols",  kind="op", op="swap_cols",  label="<>C"  },
-    { id="editor:pal:add_cols",   kind="op", op="add_cols",   label="+C"   },
-    { id="editor:pal:set_col",    kind="op", op="set_col",    label="=C"   },
-    { id="editor:pal:rotate_90",  kind="op", op="rotate_90",  label="R90"  },
-    { id="editor:pal:flip_h",     kind="op", op="flip_h",     label="FLh"  },
-    { id="editor:pal:flip_v",     kind="op", op="flip_v",     label="FLv"  },
-    { id="editor:pal:abs",        kind="op", op="abs",        label="|x|"  },
-    { sep=true },
-    { id="editor:pal:erase",  kind="erase", label="[X]" },
 }
+for _, op in ipairs(Ops.ORDER) do
+    EDITOR_PALETTE[#EDITOR_PALETTE+1] =
+        { id="editor:pal:"..op, kind="op", op=op, label=Ops.label(op) }
+end
+EDITOR_PALETTE[#EDITOR_PALETTE+1] = { sep=true }
+EDITOR_PALETTE[#EDITOR_PALETTE+1] = { id="editor:pal:erase", kind="erase", label="[X]" }
 
 local CMD_BUTTONS = {
     { id="editor:back",  label="Back"  },
@@ -154,18 +72,36 @@ local function fmt_values(values)
     return "{ " .. table.concat(rows, ", ") .. " }"
 end
 
-local function deep_copy_params(src)
-    if not src then return {} end
-    local t = {}
-    for k, v in pairs(src) do t[k] = v end
-    return t
-end
-
 local function deep_copy(src)
     if type(src) ~= "table" then return src end
     local t = {}
     for k, v in pairs(src) do t[k] = deep_copy(v) end
     return t
+end
+
+-- The allowed ops in palette order, or nil unless they are a proper non-empty subset.
+local function ops_subset(allowed)
+    local enabled = {}
+    for _, op in ipairs(Ops.ORDER) do
+        if allowed[op] then enabled[#enabled+1] = op end
+    end
+    if #enabled > 0 and #enabled < #Ops.ORDER then return enabled end
+    return nil
+end
+
+-- true, or false plus a message naming the first unsupported op or invalid param.
+local function validate_ops(def)
+    for _, op in ipairs(def.ops or {}) do
+        local ok, msg = Ops.validate(op)
+        if not ok then return false, msg end
+    end
+    for _, t in ipairs(def.locked or {}) do
+        if t.kind == "op" then
+            local ok, msg = Ops.validate(t.op, t.params)
+            if not ok then return false, msg end
+        end
+    end
+    return true
 end
 
 local function ensure_matrix_values(mat)
@@ -209,7 +145,6 @@ function EditorScene.new(scene_manager)
     self._hud_ops_lbl_y  = 390
     self._hud_inp_cell_y = 118
     self._hud_tgt_cell_y = 278
-    self._param_popup    = ParamPopup.new()
     return self
 end
 
@@ -233,9 +168,7 @@ function EditorScene:_layout_palette()
             pending_sep = true
         else
             if pending_sep then x = x + PAL_SEP; pending_sep = false end
-            if x + PAL_BTN_W <= PALETTE_REGION_W then
-                rects[#rects+1] = { id=btn.id, btn=btn, x=x, y=BAR_BTN_Y, w=PAL_BTN_W, h=PAL_BTN_H }
-            end
+            rects[#rects+1] = { id=btn.id, btn=btn, x=x, y=BAR_BTN_Y, w=PAL_BTN_W, h=PAL_BTN_H }
             x = x + PAL_STEP
         end
     end
@@ -312,7 +245,7 @@ function EditorScene:_rebuild_hud()
     -- Op allowlist
     self._hud_ops_lbl_y = cy
     local ops_per_row = 8
-    for i, op in ipairs(OP_NAMES) do
+    for i, op in ipairs(Ops.ORDER) do
         local row = math.floor((i - 1) / ops_per_row)
         local col = (i - 1) % ops_per_row
         local ox  = hx + col * (OPS_W + OPS_GAP)
@@ -320,7 +253,7 @@ function EditorScene:_rebuild_hud()
         if oy + OPS_H <= PALETTE_Y - 4 then
             out[#out+1] = {
                 id      = "editor:allow:"..op,
-                label   = OP_LABELS[op] or op,
+                label   = Ops.label(op),
                 kind    = "button",
                 rect    = {x=ox, y=oy, w=OPS_W, h=OPS_H},
                 enabled = true,
@@ -339,7 +272,9 @@ function EditorScene:ui_tile(x, y)
     if not self._grid:in_bounds(x, y) then return nil end
     local tile = self._grid:get(x, y)
     if tile == nil then return nil end
-    return { kind = tile.kind, op = tile.op }
+    local params = tile.params or {}
+    return { kind = tile.kind, op = tile.op, dir = tile.dir,
+             edge = params.edge, scalar = params.scalar }
 end
 
 function EditorScene:_sel_matches(btn)
@@ -454,18 +389,9 @@ function EditorScene:_place_at(cx, cy)
     end
 
     if sel.kind == "op" then
-        local sz = OP_SIZES[sel.op] or {1,1}
-        local tw, th = sz[1], sz[2]
-        if not self._grid:in_bounds_multi_2d(cx, cy, tw, th) then return end
-        for dy = 0, th-1 do
-            for dx = 0, tw-1 do
-                if self._grid.cells[cy+dy] and self._grid.cells[cy+dy][cx+dx] then return end
-            end
+        if self._grid.cells[cy][cx] == nil then
+            self._grid:set(cx, cy, {kind="op", op=sel.op, locked=true, params=Ops.params(sel.op)})
         end
-        local tile = {kind="op", op=sel.op, locked=true,
-                      params=deep_copy_params(DEFAULT_PARAMS[sel.op]), width=tw, height=th}
-        if tw > 1 or th > 1 then self._grid:set_multi_2d(cx, cy, tile, tw, th)
-        else                      self._grid:set(cx, cy, tile) end
         return
     end
 
@@ -508,13 +434,27 @@ function EditorScene:_cell_click(mat, r, c, mx, rect_x)
     mat.values[r][c] = math.max(-9, math.min(9, v))
 end
 
+-- ── Clipboard ──────────────────────────────────────────────────────────────
+
+-- Loads the clipboard definition; on bad input shows why and changes nothing.
+function EditorScene:_paste()
+    local text = love.system.getClipboardText()
+    local ok, def = pcall(function() return load(text or "")() end)
+    local valid, msg = false, "Parse error"
+    if ok and type(def) == "table" and def.input and def.target then
+        valid, msg = validate_ops(def)
+    end
+    if valid then
+        self:_load_def(def)
+    else
+        self._paste_error   = msg
+        self._paste_error_t = 2.0
+    end
+end
+
 -- ── Input ──────────────────────────────────────────────────────────────────
 
 function EditorScene:key_pressed(key)
-    if self._param_popup:is_open() then
-        self._param_popup:key_pressed(key)
-        return
-    end
     if self._name_focus then
         if key == "backspace" then
             self._name = self._name:sub(1, -2)
@@ -530,10 +470,6 @@ function EditorScene:key_pressed(key)
 end
 
 function EditorScene:text_input(ch)
-    if self._param_popup:is_open() then
-        self._param_popup:text_input(ch)
-        return
-    end
     if self._name_focus then
         self._name = self._name .. ch
     end
@@ -547,12 +483,10 @@ function EditorScene:mouse_pressed(mx, my, btn)
         if cell_x then
             local cx, cy = tonumber(cell_x), tonumber(cell_y)
             if btn == 1 then
-                local ax, ay = self._grid:get_anchor(cx, cy)
-                local tile   = self._grid:get(ax, ay)
-                if tile and tile.kind == "op" and DEFAULT_PARAMS[tile.op] then
-                    self._param_popup:open(tile.op, tile.params, function(new_params)
-                        for k, v in pairs(new_params) do tile.params[k] = v end
-                    end, nil)
+                local tile    = self._grid:get(cx, cy)
+                local erasing = self._sel and self._sel.kind == "erase"
+                if not erasing and tile and tile.kind == "op" and Ops.has_scalar(tile.op) then
+                    Ops.click(tile.op, tile.params, Ops.part(mx - e.rect.x, CELL_SIZE))
                 else
                     self:_place_at(cx, cy)
                 end
@@ -572,18 +506,11 @@ function EditorScene:mouse_pressed(mx, my, btn)
                 love.system.setClipboardText(self:_serialize())
                 self._copy_flash = 2.0
             elseif e.id == "editor:paste" then
-                        local text = love.system.getClipboardText()
-                        local ok, def = pcall(function() return load(text or "")() end)
-                        if ok and type(def) == "table" and def.input and def.target then
-                            self:_load_def(def)
-                        else
-                            self._paste_error   = "Parse error"
-                            self._paste_error_t = 2.0
-                        end
-                    elseif e.id == "editor:test" then
-                        local def = self:_build_def()
-                        local ms  = require("lua/game/scenes/matrix_scene")
-                        self._scene_manager:switch(ms.new_from_def(def, self._scene_manager, self))
+                self:_paste()
+            elseif e.id == "editor:test" then
+                local def = self:_build_def()
+                local ms  = require("lua/game/scenes/matrix_scene")
+                self._scene_manager:switch(ms.new_from_def(def, self._scene_manager, self))
             elseif e.id == "editor:input_rows_dec" then
                 self:_adjust_matrix(self._input, self._input.rows-1, self._input.cols)
                 self:_refit_source()
@@ -677,19 +604,10 @@ function EditorScene:_build_def()
                     if tile.params and next(tile.params) then
                         entry.params = deep_copy(tile.params)
                     end
-                    if tile.tile_rows then entry.tile_rows = tile.tile_rows end
-                    if tile.tile_cols then entry.tile_cols = tile.tile_cols end
-                    if tile.width  and tile.width  > 1 then entry.width  = tile.width  end
-                    if tile.height and tile.height > 1 then entry.height = tile.height end
                     locked[#locked+1] = entry
                 end
             end
         end
-    end
-
-    local enabled_ops = {}
-    for _, op in ipairs(OP_NAMES) do
-        if self._allowed_ops[op] then enabled_ops[#enabled_ops+1] = op end
     end
 
     local def = {
@@ -704,7 +622,7 @@ function EditorScene:_build_def()
     }
     if #gaps   > 0 then def.gaps   = gaps   end
     if #locked > 0 then def.locked = locked end
-    if #enabled_ops > 0 and #enabled_ops < #OP_NAMES then def.ops = enabled_ops end
+    def.ops = ops_subset(self._allowed_ops)
     return def
 end
 
@@ -754,26 +672,12 @@ function EditorScene:_load_def(def)
         end
     end
 
-    -- Locked tiles
+    -- Locked tiles (always one cell)
     for _, t in ipairs(def.locked or {}) do
-        local tw = t.width  or (OP_SIZES[t.op or ""] or {1,1})[1]
-        local th = t.height or (OP_SIZES[t.op or ""] or {1,1})[2]
-        if self._grid:in_bounds_multi_2d(t.x, t.y, tw, th) then
-            local tile = {
-                kind      = t.kind,
-                op        = t.op,
-                locked    = true,
-                params    = deep_copy(t.params or {}),
-                width     = tw,
-                height    = th,
-                tile_rows = t.tile_rows,
-                tile_cols = t.tile_cols,
-            }
-            if tw > 1 or th > 1 then
-                self._grid:set_multi_2d(t.x, t.y, tile, tw, th)
-            else
-                self._grid:set(t.x, t.y, tile)
-            end
+        if self._grid:in_bounds(t.x, t.y) then
+            local tile = { kind=t.kind, op=t.op, locked=true }
+            if t.kind == "op" then tile.params = Ops.params(t.op, t.params) end
+            self._grid:set(t.x, t.y, tile)
         end
     end
 
@@ -802,11 +706,8 @@ function EditorScene:_serialize()
     lines[#lines+1] = string.format("    sink   = { x=%d, y=%d },", snk.x, snk.y)
 
     -- ops (only when a subset is selected — omit if none or all are on)
-    local enabled_ops = {}
-    for _, op in ipairs(OP_NAMES) do
-        if self._allowed_ops[op] then enabled_ops[#enabled_ops+1] = op end
-    end
-    if #enabled_ops > 0 and #enabled_ops < #OP_NAMES then
+    local enabled_ops = ops_subset(self._allowed_ops)
+    if enabled_ops then
         local parts = {}
         for _, op in ipairs(enabled_ops) do parts[#parts+1] = '"' .. op .. '"' end
         lines[#lines+1] = "    ops    = { " .. table.concat(parts, ", ") .. " },"
@@ -839,11 +740,13 @@ function EditorScene:_serialize()
                 for k in pairs(t.params) do kk[#kk+1] = k end
                 table.sort(kk)
                 local kp = {}
-                for _, k in ipairs(kk) do kp[#kp+1] = k .. "=" .. tostring(t.params[k]) end
+                for _, k in ipairs(kk) do
+                    local v = t.params[k]
+                    local text = type(v) == "string" and string.format("%q", v) or tostring(v)
+                    kp[#kp+1] = k .. "=" .. text
+                end
                 pp[#pp+1] = "params={" .. table.concat(kp, ", ") .. "}"
             end
-            if t.tile_rows then pp[#pp+1] = "tile_rows=" .. t.tile_rows end
-            if t.tile_cols then pp[#pp+1] = "tile_cols=" .. t.tile_cols end
             lines[#lines+1] = "        { " .. table.concat(pp, ", ") .. " },"
         end
         lines[#lines+1] = "    },"
@@ -867,10 +770,10 @@ function EditorScene:_serialize()
 
     -- input / target
     lines[#lines+1] = string.format(
-        "    input  = { rows=%d, cols=%d, values={ %s } },",
+        "    input  = { rows=%d, cols=%d, values=%s },",
         self._input.rows, self._input.cols, fmt_values(self._input.values))
     lines[#lines+1] = string.format(
-        "    target = { rows=%d, cols=%d, values={ %s } },",
+        "    target = { rows=%d, cols=%d, values=%s },",
         self._target.rows, self._target.cols, fmt_values(self._target.values))
 
     lines[#lines+1] = "}"
@@ -905,18 +808,11 @@ local function draw_tile(tile, cx, cy, font_cell, font_ui)
         love.graphics.setFont(font_cell)
         love.graphics.printf("×", sx, sy + cs/2 - 8, cs, "center")
     elseif tile.kind == "op" then
-        love.graphics.setColor(0.21, 0.14, 0.04, 1)
-        love.graphics.rectangle("fill", sx, sy, span_w, span_h)
-        love.graphics.setColor(0.9, 0.7, 0.3, 1)
-        love.graphics.setLineWidth(2)
-        love.graphics.rectangle("line", sx+1, sy+1, span_w-2, span_h-2)
-        love.graphics.setLineWidth(1)
-        love.graphics.setFont(font_cell)
-        love.graphics.printf(OP_SYMBOLS[tile.op] or "?", sx, sy+span_h/2-8, span_w, "center")
+        OpTile.draw(tile, sx, sy, cs, {cell=font_cell, ui=font_ui}, {marks=true, immutable=false})
         if tile.locked then
             love.graphics.setColor(0.50, 0.50, 0.50, 1)
-            love.graphics.circle("fill", sx+span_w-8, sy+7, 3)
-            love.graphics.rectangle("fill", sx+span_w-10, sy+7, 4, 5)
+            love.graphics.circle("fill", sx+cs-8, sy+7, 3)
+            love.graphics.rectangle("fill", sx+cs-10, sy+7, 4, 5)
         end
     elseif tile.kind == "pusher" then
         love.graphics.setColor(0.30, 0.18, 0.45, 1)
@@ -1094,7 +990,6 @@ function EditorScene:draw()
     end
 
     love.graphics.setColor(1, 1, 1, 1)
-    self._param_popup:draw()
 end
 
 return EditorScene

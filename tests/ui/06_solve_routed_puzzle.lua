@@ -1,12 +1,12 @@
 -- End-to-end: solve puzzle 3 ("Sharp Left") which requires a right-then-down
--- turn. Source (2,2), wall at y=6 x=1–6, sink (9,8), op: negate.
+-- turn. Source (2,2), wall at y=6 x=1–6, sink (9,8), op: scalar_mul.
 --
 -- Solution:
 --   Pusher R at (1,2) pushes the matrix right for 6 slots (ax 2→8).
 --   Pusher D at (9,1) is adjacent once matrix reaches ax=8; it pushes
 --   the matrix down for 5 slots (ay 2→7, covering sink at (9,8)).
---   Negate op placed at (5,2) fires when the matrix passes through it
---   during the rightward run (anchor (4,2) or (5,2) covers (5,2)).
+--   A scalar_mul tile set to x-1 at (5,2) fires when the matrix passes through
+--   it during the rightward run (anchor (4,2) or (5,2) covers (5,2)).
 --
 -- Commands persist: A gets 'right' at tick 1 and 'stop' at tick 7, B gets
 -- 'down' at tick 7 (held until the end of the run).
@@ -40,9 +40,15 @@ return {
         { click_button = { id = "psel:A" } },
         { drag = { from = { id = "chip:stop" }, to = { slot = { 1, 7 } } } },
 
-        -- Select negate op and place it at (5,2) on the rightward path.
-        { click_button = "-I" },
+        -- Place a scalar_mul tile at (5,2) on the rightward path and lower k from
+        -- 2 to -1 with three clicks on its left third.
+        { click_button = { id = "palette:scalar_mul" } },
         { click_cell = { 5, 2 } },
+        { click_cell = { 5, 2, part = "left" } },
+        { click_cell = { 5, 2, part = "left" } },
+        { click_cell = { 5, 2, part = "left" } },
+        { assert_tile = { x = 5, y = 2, kind = "op", op = "scalar_mul", scalar = -1 } },
+        { assert_text = "x-1" },
 
         -- Run and wait for win.
         { assert_button = { id = "cmd:run", enabled = true } },

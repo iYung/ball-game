@@ -2,6 +2,18 @@ local PuzzleLoader = require("lua/game/puzzle_loader")
 
 local SAVE_FILE = "progress.lua"
 
+-- Saved indices are only meaningful for one puzzle numbering. Saves without a
+-- version marker use the old 23-puzzle numbering and are remapped on load.
+local SAVE_VERSION = 2
+
+-- Old index -> new index. Old puzzles 15 and 17 were deleted, so they (and any
+-- index not listed) are dropped.
+local V1_TO_V2 = {
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+    [16] = 15, [18] = 16, [19] = 17, [20] = 18,
+    [21] = 19, [22] = 20, [23] = 21,
+}
+
 local _solved         = {}  -- set: _solved[n] = true if puzzle n is solved
 local _seen_cutscene  = {}  -- set: _seen_cutscene[w] = true if world w cutscene has been seen
 
@@ -25,7 +37,8 @@ local function _persist()
     for _, w in ipairs(cutscene_indices) do cutscene_parts[#cutscene_parts + 1] = tostring(w) end
 
     local data = string.format(
-        "return {solved={%s},cutscenes={%s}}\n",
+        "return {version=%d,solved={%s},cutscenes={%s}}\n",
+        SAVE_VERSION,
         table.concat(solved_parts, ","),
         table.concat(cutscene_parts, ",")
     )
@@ -45,19 +58,16 @@ local function _load()
     if not chunk then return end
     local ok2, tbl = pcall(chunk)
     if not ok2 or type(tbl) ~= "table" then return end
-    -- New format: {solved={...}, cutscenes={...}}
-    -- Old format: plain array {1,2,3,...} — treat as solved list
-    if tbl.solved then
-        for _, n in ipairs(tbl.solved) do
-            if type(n) == "number" then _solved[n] = true end
+    -- Table format: {version=2, solved={...}, cutscenes={...}}, where older
+    -- saves have no version. Oldest format: plain array {1,2,3,...} of solved.
+    for _, n in ipairs(tbl.solved or tbl) do
+        if type(n) == "number" then
+            if not tbl.version then n = V1_TO_V2[n] end
+            if n then _solved[n] = true end
         end
-        for _, w in ipairs(tbl.cutscenes or {}) do
-            if type(w) == "number" then _seen_cutscene[w] = true end
-        end
-    else
-        for _, n in ipairs(tbl) do
-            if type(n) == "number" then _solved[n] = true end
-        end
+    end
+    for _, w in ipairs(tbl.cutscenes or {}) do
+        if type(w) == "number" then _seen_cutscene[w] = true end
     end
 end
 

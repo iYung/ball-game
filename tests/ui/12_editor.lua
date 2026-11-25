@@ -201,37 +201,6 @@ return {
         },
     },
     {
-        name  = "click placed op with params opens popup; confirm updates tile",
-        given = { solved = {} },
-        steps = {
-            { click_button = "Editor" },
-            { click_button = { id = "editor:pal:scalar_mul" } },
-            { click_cell   = { 5, 5 } },
-            { assert_tile  = { x = 5, y = 5, kind = "op", op = "scalar_mul" } },
-            -- clicking the same cell again opens the param popup
-            { click_cell   = { 5, 5 } },
-            { assert_text  = "scalar_mul" },
-            -- type a value and confirm
-            { text_input   = "3" },
-            { press        = "return" },
-            -- popup is closed again
-            { assert_text  = "PUZZLE EDITOR" },
-        },
-    },
-    {
-        name  = "param popup: escape cancels without changing params",
-        given = { solved = {} },
-        steps = {
-            { click_button = "Editor" },
-            { click_button = { id = "editor:pal:scalar_mul" } },
-            { click_cell   = { 3, 3 } },
-            { click_cell   = { 3, 3 } },
-            { assert_text  = "scalar_mul" },
-            { press        = "escape" },
-            { assert_text  = "PUZZLE EDITOR" },
-        },
-    },
-    {
         name  = "paste full puzzle def and round-trip copy + test",
         given = { solved = {} },
         steps = {
@@ -244,20 +213,20 @@ return {
     locked = {
         { kind="op", op="scalar_mul", x=5, y=5, width=2, height=1, tile_rows=2, tile_cols=2, params={scalar=3} },
         { kind="op", op="transpose",  x=1, y=5 },
-        { kind="op", op="scale_row",  x=1, y=1, height=4 },
+        { kind="op", op="edge_scale", x=1, y=1, height=4 },
     },
     gaps   = { {x=7,y=7} },
     ops    = { "transpose" },
     input  = { rows=2, cols=2, values={ {1,2},{3,4} } },
     target = { rows=2, cols=2, values={ {1,2},{3,4} } },
 }]] },
-            -- paste loads _load_def (covers 723-793 including tile_rows/tile_cols)
+            -- paste loads the def; the obsolete size fields on locked ops are ignored
             { click_button  = { id = "editor:paste" } },
             { assert_tile   = { x = 5, y = 5, kind = "op", op = "scalar_mul" } },
-            -- copy re-serializes (covers 820-876 including params/tile_rows/tile_cols/gaps/ops)
+            -- copy re-serializes params, gaps and ops
             { click_button  = { id = "editor:copy" } },
             { assert_text   = "Copied!" },
-            -- test opens MatrixScene (_build_def covers 674, 685-695, 703, 718)
+            -- test opens MatrixScene with the built def
             { click_button  = { id = "editor:test" } },
             { assert_text   = "INPUT" },
             { click_button  = { id = "cmd:menu" } },

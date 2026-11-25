@@ -159,11 +159,6 @@ do
     local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
     assert(Sim.apply_op({ kind = "op", op = "transpose" }, m):equals(Matrix.new(2, 2, { {1, 3}, {2, 4} })), "transpose")
     assert(Sim.apply_op({ kind = "pusher" }, m) == m, "non-op returns matrix unchanged")
-    -- out-of-range rows are clamped, same-row add_rows is a no-op
-    local s = Sim.apply_op({ kind = "op", op = "scale_row", params = { row = 9, scalar = 2 } }, m)
-    assert(s:equals(Matrix.new(2, 2, { {1, 2}, {6, 8} })), "scale_row clamps row")
-    local a = Sim.apply_op({ kind = "op", op = "add_rows", params = { src = 2, dst = 2, scalar = 1 } }, m)
-    assert(a == m, "add_rows same row is a no-op")
     print("PASS: apply_op")
 end
 
@@ -272,48 +267,6 @@ do
     print("PASS: footprint_clear")
 end
 
--- add_rows (was missing from apply_op — now fixed)
-do
-    local inp = Matrix.new(3,3,{{2,0,0},{4,1,0},{0,0,1}})
-    local step1 = Sim.apply_op({kind="op", op="scale_row", params={row=1, scalar=0.5}}, inp)
-    local step2 = Sim.apply_op({kind="op", op="add_rows",  params={src=1, dst=2, scalar=-4}}, step1)
-    assert(step2:equals(Matrix.new(3,3,{{1,0,0},{0,1,0},{0,0,1}})), "add_rows fix: puzzle 14 chain")
-    print("PASS: add_rows fix")
-end
-
--- scale_col
-do
-    local inp = Matrix.new(2,2,{{1,2},{3,4}})
-    local r = Sim.apply_op({kind="op", op="scale_col", params={col=2, scalar=3}}, inp)
-    assert(r:equals(Matrix.new(2,2,{{1,6},{3,12}})), "apply_op scale_col")
-    print("PASS: apply_op scale_col")
-end
-
--- swap_cols
-do
-    local inp = Matrix.new(2,3,{{1,2,3},{4,5,6}})
-    local r = Sim.apply_op({kind="op", op="swap_cols", params={col_a=1, col_b=3}}, inp)
-    assert(r:equals(Matrix.new(2,3,{{3,2,1},{6,5,4}})), "apply_op swap_cols")
-    print("PASS: apply_op swap_cols")
-end
-
--- add_cols
-do
-    local inp = Matrix.new(2,2,{{1,0},{2,0}})
-    local r = Sim.apply_op({kind="op", op="add_cols", params={src=1, dst=2, scalar=3}}, inp)
-    assert(r:equals(Matrix.new(2,2,{{1,3},{2,6}})), "apply_op add_cols")
-    print("PASS: apply_op add_cols")
-end
-
--- set_col
-do
-    local inp = Matrix.new(3,2,{{1,2},{3,4},{5,6}})
-    local r = Sim.apply_op({kind="op", op="set_col", params={col=2},
-        tile_rows=3, values={{9},{8},{7}}}, inp)
-    assert(r:equals(Matrix.new(3,2,{{1,9},{3,8},{5,7}})), "apply_op set_col")
-    print("PASS: apply_op set_col")
-end
-
 -- rotate_90
 do
     local inp = Matrix.new(2,3,{{1,2,3},{4,5,6}})
@@ -338,64 +291,12 @@ do
     print("PASS: apply_op flip_v")
 end
 
--- abs
-do
-    local inp = Matrix.new(2,2,{{-1,2},{-3,-4}})
-    local r = Sim.apply_op({kind="op", op="abs", params={}}, inp)
-    assert(r:equals(Matrix.new(2,2,{{1,2},{3,4}})), "apply_op abs")
-    print("PASS: apply_op abs")
-end
-
--- sub_matrix
-do
-    local m = Matrix.new(2, 2, { {3, 4}, {5, 6} })
-    local r = Sim.apply_op({ kind = "op", op = "sub_matrix",
-        tile_rows = 2, tile_cols = 2, values = { {1, 2}, {3, 4} } }, m)
-    assert(r:equals(Matrix.new(2, 2, { {2, 2}, {2, 2} })), "apply_op sub_matrix")
-    print("PASS: apply_op sub_matrix")
-end
-
--- mul_matrix (element-wise)
-do
-    local m = Matrix.new(2, 2, { {2, 3}, {4, 5} })
-    local r = Sim.apply_op({ kind = "op", op = "mul_matrix",
-        tile_rows = 2, tile_cols = 2, values = { {2, 2}, {2, 2} } }, m)
-    assert(r:equals(Matrix.new(2, 2, { {4, 6}, {8, 10} })), "apply_op mul_matrix")
-    print("PASS: apply_op mul_matrix")
-end
-
--- set_row (row=2)
-do
-    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
-    local r = Sim.apply_op({ kind = "op", op = "set_row",
-        params = { row = 2 }, tile_cols = 2, values = { {10, 20} } }, m)
-    assert(r:equals(Matrix.new(2, 2, { {1, 2}, {10, 20} })), "apply_op set_row row=2")
-    print("PASS: apply_op set_row")
-end
-
--- add_cols src==dst is a no-op
-do
-    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
-    local r = Sim.apply_op({ kind = "op", op = "add_cols",
-        params = { src = 1, dst = 1, scalar = 5 } }, m)
-    assert(r == m, "add_cols same col is a no-op")
-    print("PASS: apply_op add_cols src==dst no-op")
-end
-
 -- apply_op fallback: unknown op returns matrix unchanged (line 173)
 do
     local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
     local result = Sim.apply_op({ kind = "op", op = "unknown_op_xyz" }, m)
     assert(result == m, "apply_op unknown op returns matrix unchanged")
     print("PASS: apply_op unknown op fallback (line 173)")
-end
-
--- swap_rows
-do
-    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
-    local r = Sim.apply_op({ kind = "op", op = "swap_rows", params = { row_a = 1, row_b = 2 } }, m)
-    assert(r:equals(Matrix.new(2, 2, { {3, 4}, {1, 2} })), "apply_op swap_rows")
-    print("PASS: apply_op swap_rows")
 end
 
 -- scalar_mul
@@ -406,13 +307,49 @@ do
     print("PASS: apply_op scalar_mul")
 end
 
--- add_matrix
+-- apply_op: whole-matrix add and subtract
 do
     local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
-    local r = Sim.apply_op({ kind = "op", op = "add_matrix",
-        tile_rows = 2, tile_cols = 2, values = { {10, 20}, {30, 40} } }, m)
-    assert(r:equals(Matrix.new(2, 2, { {11, 22}, {33, 44} })), "apply_op add_matrix")
-    print("PASS: apply_op add_matrix")
+    local a = Sim.apply_op({ kind = "op", op = "scalar_add", params = { scalar = 7 } }, m)
+    assert(a:equals(Matrix.new(2, 2, { {8, 9}, {10, 11} })), "apply_op scalar_add")
+    local s = Sim.apply_op({ kind = "op", op = "scalar_sub", params = { scalar = 3 } }, m)
+    assert(s:equals(Matrix.new(2, 2, { {-2, -1}, {0, 1} })), "apply_op scalar_sub")
+    local z = Sim.apply_op({ kind = "op", op = "scalar_add", params = { scalar = 0 } }, m)
+    assert(z:equals(m), "apply_op scalar_add 0 is not replaced by the default")
+    assert(m:equals(Matrix.new(2, 2, { {1, 2}, {3, 4} })), "source unchanged")
+    print("PASS: apply_op scalar_add/scalar_sub")
+end
+
+-- apply_op: edge ops act on the requested edge
+do
+    local m = Matrix.new(2, 3, { {1, 2, 3}, {4, 5, 6} })
+    local function run(op, edge, k)
+        return Sim.apply_op({ kind = "op", op = op, params = { edge = edge, scalar = k } }, m)
+    end
+    assert(run("edge_scale", "bottom", -1):equals(Matrix.new(2, 3, { {1, 2, 3}, {-4, -5, -6} })), "edge_scale")
+    assert(run("edge_add", "right", 9):equals(Matrix.new(2, 3, { {1, 2, 12}, {4, 5, 15} })), "edge_add")
+    assert(run("edge_sub", "left", 5):equals(Matrix.new(2, 3, { {-4, 2, 3}, {-1, 5, 6} })), "edge_sub")
+    assert(m:equals(Matrix.new(2, 3, { {1, 2, 3}, {4, 5, 6} })), "source unchanged")
+    print("PASS: apply_op edge ops")
+end
+
+-- apply_op: missing params take the op defaults (scale 2, add/sub 1, edge top)
+do
+    local m = Matrix.new(2, 2, { {1, 2}, {3, 4} })
+    local cases = {
+        { "scalar_mul", { {2, 4}, {6, 8} } },
+        { "scalar_add", { {2, 3}, {4, 5} } },
+        { "scalar_sub", { {0, 1}, {2, 3} } },
+        { "edge_scale", { {2, 4}, {3, 4} } },
+        { "edge_add",   { {2, 3}, {3, 4} } },
+        { "edge_sub",   { {0, 1}, {3, 4} } },
+    }
+    for _, c in ipairs(cases) do
+        local expected = Matrix.new(2, 2, c[2])
+        assert(Sim.apply_op({ kind = "op", op = c[1] }, m):equals(expected), c[1] .. " without params")
+        assert(Sim.apply_op({ kind = "op", op = c[1], params = {} }, m):equals(expected), c[1] .. " with empty params")
+    end
+    print("PASS: apply_op default params")
 end
 
 print("ALL TESTS PASSED")

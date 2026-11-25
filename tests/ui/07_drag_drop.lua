@@ -13,8 +13,8 @@
 --   * ghost preview in draw_grid (no frame renders while drag is live)
 --   * _clear_drag via invalid drop or right-click cancel
 --
--- Puzzle 10 "Set Row" (world 2, ops={"set_row"}) is used because its
--- restricted palette fits in the visible window, so "Mv" is always on screen.
+-- Puzzle 10 "Staircase" (world 2) is used because its restricted palette fits
+-- in the visible window, so "Mv" is always on screen.
 
 return {
     {
@@ -23,7 +23,7 @@ return {
         steps = {
             { press        = "return" },
             { press        = "right" },                    -- world 1 → world 2 (no cutscene)
-            { click_button = { id = "puzzle:10" } },       -- Set Row: restricted palette
+            { click_button = { id = "puzzle:10" } },       -- Staircase: restricted palette
             { click_button = "Mv" },
             { assert_button = { id = "palette:drag", selected = true } },
             -- click_cell on empty cell (1,1) in drag mode → mouse_pressed finds no tile → early return
@@ -38,7 +38,7 @@ return {
         steps = {
             { press        = "return" },
             { press        = "right" },                    -- world 1 → world 2 (no cutscene)
-            { click_button = { id = "puzzle:10" } },       -- Set Row: restricted palette
+            { click_button = { id = "puzzle:10" } },       -- Staircase: restricted palette
             -- place a pusher so there is something to drag
             { click_button = "P" },
             { click_cell   = { 1, 5 } },

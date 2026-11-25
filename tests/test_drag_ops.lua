@@ -23,7 +23,7 @@ end
 -- Lifting a tile into drag state clears the grid cell.
 do
     local scene = new_scene()
-    scene:_place_tile_at(3, 3, { kind = "op", op = "negate" })
+    scene:_place_tile_at(3, 3, { kind = "op", op = "scalar_mul", params = { scalar = -1 } })
     assert(scene.grid:get(3, 3) ~= nil, "tile placed")
     select_drag(scene)
     scene:mouse_pressed(scene._btn_rects and 0 or 0, 0, 1)  -- just ensure no crash
@@ -32,7 +32,7 @@ do
     local sy = 10 + (3 - 1) * 52 + 10
     scene:mouse_pressed(sx, sy, 1)
     assert(scene._drag_tile ~= nil, "tile lifted into _drag_tile")
-    assert(scene._drag_tile.op == "negate", "correct tile lifted")
+    assert(scene._drag_tile.op == "scalar_mul", "correct tile lifted")
     assert(scene._drag_origin.x == 3 and scene._drag_origin.y == 3, "origin stored")
     assert(scene.grid.cells[3][3] == nil, "original cell cleared")
     print("PASS: lifting a tile")
@@ -63,7 +63,7 @@ end
 -- Dropping onto an occupied cell cancels — tile snaps back to origin.
 do
     local scene = new_scene()
-    scene:_place_tile_at(3, 3, { kind = "op", op = "negate" })
+    scene:_place_tile_at(3, 3, { kind = "op", op = "scalar_mul", params = { scalar = -1 } })
     scene:_place_tile_at(5, 5, { kind = "op", op = "transpose" })
     select_drag(scene)
     local sx = 130 + (3 - 1) * 52 + 10
@@ -72,8 +72,8 @@ do
     scene:mouse_moved(130 + (5 - 1) * 52 + 10, 10 + (5 - 1) * 52 + 10)
     scene:mouse_released(130 + (5 - 1) * 52 + 10, 10 + (5 - 1) * 52 + 10, 1)
     assert(scene._drag_tile == nil, "drag state cleared after cancel")
-    assert(scene.grid:get(3, 3) ~= nil, "negate snapped back to origin")
-    assert(scene.grid:get(3, 3).op == "negate", "correct tile at origin")
+    assert(scene.grid:get(3, 3) ~= nil, "x-1 snapped back to origin")
+    assert(scene.grid:get(3, 3).op == "scalar_mul", "correct tile at origin")
     assert(scene.grid:get(5, 5).op == "transpose", "obstacle tile untouched")
     print("PASS: drop onto occupied cell cancels")
 end
@@ -109,7 +109,7 @@ end
 -- Drag is blocked while simulation is running.
 do
     local scene = new_scene()
-    scene:_place_tile_at(3, 3, { kind = "op", op = "negate" })
+    scene:_place_tile_at(3, 3, { kind = "op", op = "scalar_mul", params = { scalar = -1 } })
     scene.running = true
     select_drag(scene)
     local sx = 130 + (3 - 1) * 52 + 10
@@ -117,33 +117,6 @@ do
     scene:mouse_pressed(sx, sy, 1)
     assert(scene._drag_tile == nil, "drag blocked while running")
     print("PASS: drag blocked during run")
-end
-
--- Multi-cell op (scale_row, 1×4) lifts and drops as a unit.
--- Puzzle 1: source=(2,5) sink=(10,5), so place at (3,1) covering rows 1-4, col 3.
-do
-    local scene = new_scene()
-    scene:_place_tile_at(3, 1, { kind = "op", op = "scale_row" })
-    local tile = scene.grid:get(3, 1)
-    assert(tile ~= nil and tile.op == "scale_row", "scale_row placed")
-    local h = tile.height or 1
-    assert(h > 1, "scale_row spans multiple rows")
-    select_drag(scene)
-    local sx = 130 + (3 - 1) * 52 + 10
-    local sy = 10 + (1 - 1) * 52 + 10
-    scene:mouse_pressed(sx, sy, 1)
-    assert(scene._drag_tile ~= nil, "multi-cell tile lifted")
-    assert(scene._drag_tile.op == "scale_row", "correct tile")
-    -- All cells in its original footprint should be nil
-    for dy = 0, h - 1 do
-        assert(scene.grid.cells[1 + dy][3] == nil, "row " .. (1 + dy) .. " cleared")
-    end
-    -- Drop at (6, 1)
-    scene:mouse_moved(130 + (6 - 1) * 52 + 10, 10 + (1 - 1) * 52 + 10)
-    scene:mouse_released(130 + (6 - 1) * 52 + 10, 10 + (1 - 1) * 52 + 10, 1)
-    assert(scene.grid:get(6, 1) ~= nil, "tile at new anchor")
-    assert(scene.grid:get(6, 1).op == "scale_row", "correct tile at new location")
-    print("PASS: multi-cell tile drag")
 end
 
 print("ALL TESTS PASSED")

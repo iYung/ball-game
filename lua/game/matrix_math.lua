@@ -3,6 +3,12 @@ Matrix.__index = Matrix
 
 local EPSILON = 1e-9
 
+-- -0 compares equal to 0 but prints as "-0"; store it as plain 0.
+local function unsigned_zero(v)
+    if v == 0 then return 0 end
+    return v
+end
+
 function Matrix.new(rows, cols, values)
     local self = setmetatable({}, Matrix)
     self.rows = rows
@@ -11,7 +17,7 @@ function Matrix.new(rows, cols, values)
     for r = 1, rows do
         self.values[r] = {}
         for c = 1, cols do
-            self.values[r][c] = (values and values[r] and values[r][c]) or 0
+            self.values[r][c] = unsigned_zero((values and values[r] and values[r][c]) or 0)
         end
     end
     return self
@@ -51,115 +57,60 @@ function Matrix:transpose()
     return Matrix.new(self.cols, self.rows, v)
 end
 
-function Matrix:scale_row(r, s)
-    local m = self:copy()
-    for c = 1, m.cols do
-        m.values[r][c] = m.values[r][c] * s
-    end
-    return m
-end
-
-function Matrix:add_rows(src, dst, s)
-    local m = self:copy()
-    for c = 1, m.cols do
-        m.values[dst][c] = m.values[dst][c] + s * m.values[src][c]
-    end
-    return m
-end
-
-function Matrix:swap_rows(a, b)
-    local m = self:copy()
-    m.values[a], m.values[b] = m.values[b], m.values[a]
-    return m
-end
-
-function Matrix:negate()
-    return self:scalar_mul(-1)
-end
-
-function Matrix:scalar_mul(s)
-    local m = self:copy()
-    for r = 1, m.rows do
-        for c = 1, m.cols do
-            m.values[r][c] = m.values[r][c] * s
+-- Copy of m with fn applied once to each element in the given row and column range.
+local function map_range(m, r1, r2, c1, c2, fn)
+    local out = m:copy()
+    for r = r1, r2 do
+        for c = c1, c2 do
+            out.values[r][c] = unsigned_zero(fn(out.values[r][c]))
         end
     end
-    return m
+    return out
 end
 
-function Matrix:add_matrix(other)
-    local m = self:copy()
-    for r = 1, math.min(self.rows, other.rows) do
-        for c = 1, math.min(self.cols, other.cols) do
-            m.values[r][c] = m.values[r][c] + other.values[r][c]
-        end
-    end
-    return m
+local function map_all(m, fn)
+    return map_range(m, 1, m.rows, 1, m.cols, fn)
 end
 
-function Matrix:sub_matrix(other)
-    local m = self:copy()
-    for r = 1, math.min(self.rows, other.rows) do
-        for c = 1, math.min(self.cols, other.cols) do
-            m.values[r][c] = m.values[r][c] - other.values[r][c]
-        end
-    end
-    return m
+-- Each edge as r1, r2, c1, c2: first row, last column, last row, first column.
+local EDGE_RANGES = {
+    top    = function(_, cols)    return 1, 1, 1, cols end,
+    right  = function(rows, cols) return 1, rows, cols, cols end,
+    bottom = function(rows, cols) return rows, rows, 1, cols end,
+    left   = function(rows)       return 1, rows, 1, 1 end,
+}
+
+local function map_edge(m, edge, fn)
+    local r1, r2, c1, c2 = EDGE_RANGES[edge](m.rows, m.cols)
+    return map_range(m, r1, r2, c1, c2, fn)
 end
 
-function Matrix:mul_matrix(other)
-    local m = self:copy()
-    for r = 1, math.min(self.rows, other.rows) do
-        for c = 1, math.min(self.cols, other.cols) do
-            m.values[r][c] = m.values[r][c] * other.values[r][c]
-        end
-    end
-    return m
+local function times(k) return function(v) return v * k end end
+local function plus(k)  return function(v) return v + k end end
+local function minus(k) return function(v) return v - k end end
+
+function Matrix:scalar_mul(k)
+    return map_all(self, times(k))
 end
 
-function Matrix:set_row(r, values)
-    if r < 1 or r > self.rows then return self:copy() end
-    local m = self:copy()
-    for c = 1, math.min(self.cols, #values) do
-        m.values[r][c] = values[c]
-    end
-    return m
+function Matrix:scalar_add(k)
+    return map_all(self, plus(k))
 end
 
-function Matrix:scale_col(c, s)
-    c = math.max(1, math.min(self.cols, c))
-    local m = self:copy()
-    for r = 1, m.rows do
-        m.values[r][c] = m.values[r][c] * s
-    end
-    return m
+function Matrix:scalar_sub(k)
+    return map_all(self, minus(k))
 end
 
-function Matrix:swap_cols(a, b)
-    local m = self:copy()
-    if a == b then return m end
-    for r = 1, m.rows do
-        m.values[r][a], m.values[r][b] = m.values[r][b], m.values[r][a]
-    end
-    return m
+function Matrix:edge_scale(edge, k)
+    return map_edge(self, edge, times(k))
 end
 
-function Matrix:add_cols(src, dst, s)
-    if src == dst then return self end
-    local m = self:copy()
-    for r = 1, m.rows do
-        m.values[r][dst] = m.values[r][dst] + s * m.values[r][src]
-    end
-    return m
+function Matrix:edge_add(edge, k)
+    return map_edge(self, edge, plus(k))
 end
 
-function Matrix:set_col(c, values)
-    c = math.max(1, math.min(self.cols, c))
-    local m = self:copy()
-    for r = 1, math.min(self.rows, #values) do
-        m.values[r][c] = values[r]
-    end
-    return m
+function Matrix:edge_sub(edge, k)
+    return map_edge(self, edge, minus(k))
 end
 
 function Matrix:rotate_90()
@@ -195,16 +146,6 @@ function Matrix:flip_v()
     for r = 1, math.floor(m.rows / 2) do
         local mirror = m.rows - r + 1
         m.values[r], m.values[mirror] = m.values[mirror], m.values[r]
-    end
-    return m
-end
-
-function Matrix:abs()
-    local m = self:copy()
-    for r = 1, m.rows do
-        for c = 1, m.cols do
-            m.values[r][c] = math.abs(m.values[r][c])
-        end
     end
     return m
 end

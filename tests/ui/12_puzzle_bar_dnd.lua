@@ -125,9 +125,6 @@ return {
             { drag = { from = { id = "chip:right" }, to = { slot = { 1, 1 } } } },
             { assert_text = "B>" },
             -- Erase pusher B from the board: selector and its commands go away.
-            { click_button = { id = "palette:scroll_down" } },
-            { click_button = { id = "palette:scroll_down" } },
-            { click_button = { id = "palette:scroll_down" } },
             { click_button = { id = "palette:erase" } },
             { click_cell = { 1, 7 } },
             { assert_tile = { x = 1, y = 7 } },

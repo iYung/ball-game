@@ -52,7 +52,6 @@ local STATUS_LABELS = {
 }
 
 -- Bottom bar (x 0..CMD_BTN_X-10): pusher selector + instruction chips, then 4 lanes x 60 ticks.
-local MAX_PUSHERS = 8
 local CMD_GLYPH   = { up="^", down="v", left="<", right=">", stop=".", clear="CLR" }
 local CHIP_ORDER  = { "up", "down", "left", "right", "stop", "clear" }
 local BAR = {
@@ -197,14 +196,19 @@ function MatrixScene:load_puzzle(n)
     self.grid            = Grid.new(p.grid_w, p.grid_h)
 
     -- Locked puzzle tiles are always one cell; any size fields on an entry are ignored.
-    for _, t in ipairs(p.locked or {}) do
-        self.grid:set(t.x, t.y, {
-            kind   = t.kind,
-            dir    = t.dir,
-            op     = t.op,
-            params = Ops.params(t.op, t.params),
-            locked = true,
-        })
+    local locked = p.locked or {}
+    local pusher_ids = Sim.assign_pusher_ids(locked)
+    for _, t in ipairs(locked) do
+        if t.kind ~= "pusher" or pusher_ids[t] then
+            self.grid:set(t.x, t.y, {
+                kind   = t.kind,
+                dir    = t.dir,
+                op     = t.op,
+                id     = pusher_ids[t],
+                params = Ops.params(t.op, t.params),
+                locked = true,
+            })
+        end
     end
     local src_cols = p.input.cols
     local src_rows = p.input.rows
@@ -221,6 +225,7 @@ function MatrixScene:load_puzzle(n)
     self.occupied_ops = {}
     self._last_fp     = {}
     self:_build_palette()
+    self:_sync_pushers()
 end
 
 -- Ops column (left, two buttons wide, scrolls by rows). Positions are computed here, never in
@@ -1277,9 +1282,7 @@ function MatrixScene:_place_tile_at(cx, cy, spec)
         for _, p in ipairs(self:_pusher_list()) do
             if not (p.x == cx and p.y == cy) then used[p.id] = true end
         end
-        for id = 1, MAX_PUSHERS do
-            if not used[id] then pusher_id = id; break end
-        end
+        pusher_id = Sim.free_pusher_id(used)
         if not pusher_id then return end
     end
 

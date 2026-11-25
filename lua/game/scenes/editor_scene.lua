@@ -2,6 +2,7 @@ local Scene      = require("lua/core/scene")
 local Grid       = require("lua/game/grid")
 local UI         = require("lua/core/ui")
 local Ops        = require("lua/game/ops")
+local Sim        = require("lua/game/pusher_sim")
 local OpTile     = require("lua/game/op_tile")
 
 -- Layout constants (matching MatrixScene)
@@ -136,7 +137,6 @@ function EditorScene.new(scene_manager)
     self._allowed_ops    = {}
     self._source         = nil
     self._sink           = nil
-    self._pusher_count   = 0
     self._pal_rects      = {}
     self._hud_els        = {}
     -- stored y positions for section labels (set by _rebuild_hud)
@@ -354,6 +354,17 @@ function EditorScene:_erase_at(cx, cy)
     end
 end
 
+function EditorScene:_used_pusher_ids()
+    local used = {}
+    for cy = 1, 10 do
+        for cx = 1, 10 do
+            local t = self._grid.cells[cy][cx]
+            if t and t.kind == "pusher" then used[t.id] = true end
+        end
+    end
+    return used
+end
+
 function EditorScene:_place_at(cx, cy)
     if not self._sel then return end
     if not self._grid:in_bounds(cx, cy) then return end
@@ -397,8 +408,8 @@ function EditorScene:_place_at(cx, cy)
 
     if sel.kind == "pusher" then
         if self._grid.cells[cy][cx] ~= nil then return end
-        self._pusher_count = self._pusher_count + 1
-        self._grid:set(cx, cy, {kind="pusher", locked=true, id=self._pusher_count})
+        local id = Sim.free_pusher_id(self:_used_pusher_ids())
+        if id then self._grid:set(cx, cy, {kind="pusher", locked=true, id=id}) end
     end
 end
 
@@ -601,6 +612,7 @@ function EditorScene:_build_def()
                    and tile.kind ~= "source" and tile.kind ~= "sink" and tile.kind ~= "gap" then
                     local entry = { kind=tile.kind, x=cx, y=cy }
                     if tile.op     then entry.op      = tile.op end
+                    if tile.id     then entry.id      = tile.id end
                     if tile.params and next(tile.params) then
                         entry.params = deep_copy(tile.params)
                     end
@@ -632,7 +644,6 @@ function EditorScene:_load_def(def)
     self._grid        = Grid.new(10, 10)
     self._source      = nil
     self._sink        = nil
-    self._pusher_count = 0
     self._allowed_ops = {}
     self._copy_flash  = 0
     self._paste_error = nil
@@ -673,9 +684,11 @@ function EditorScene:_load_def(def)
     end
 
     -- Locked tiles (always one cell)
-    for _, t in ipairs(def.locked or {}) do
-        if self._grid:in_bounds(t.x, t.y) then
-            local tile = { kind=t.kind, op=t.op, locked=true }
+    local locked = def.locked or {}
+    local pusher_ids = Sim.assign_pusher_ids(locked)
+    for _, t in ipairs(locked) do
+        if self._grid:in_bounds(t.x, t.y) and (t.kind ~= "pusher" or pusher_ids[t]) then
+            local tile = { kind=t.kind, op=t.op, id=pusher_ids[t], locked=true }
             if t.kind == "op" then tile.params = Ops.params(t.op, t.params) end
             self._grid:set(t.x, t.y, tile)
         end
@@ -735,6 +748,7 @@ function EditorScene:_serialize()
             if t.op  then pp[#pp+1] = string.format('op="%s"', t.op) end
             pp[#pp+1] = string.format("x=%d", lt.x)
             pp[#pp+1] = string.format("y=%d", lt.y)
+            if t.id  then pp[#pp+1] = string.format("id=%d", t.id) end
             if t.params and next(t.params) then
                 local kk = {}
                 for k in pairs(t.params) do kk[#kk+1] = k end

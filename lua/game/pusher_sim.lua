@@ -13,6 +13,37 @@ local function covers(x, y, rows, cols, cx, cy)
     return cx >= x and cx <= x + cols - 1 and cy >= y and cy <= y + rows - 1
 end
 
+-- Pushers are lettered A.. by id, 1..MAX_PUSHERS.
+Sim.MAX_PUSHERS = 8
+
+-- Lowest id not in the `used` set, or nil when all are taken.
+function Sim.free_pusher_id(used)
+    for id = 1, Sim.MAX_PUSHERS do
+        if not used[id] then return id end
+    end
+end
+
+-- Ids for the pusher entries of a puzzle definition, as a map entry -> id. Valid ids are
+-- kept (first one wins); missing, repeated or invalid ones get the lowest free id in list
+-- order. Entries past MAX_PUSHERS get none.
+function Sim.assign_pusher_ids(entries)
+    local ids, used = {}, {}
+    for _, t in ipairs(entries) do
+        local id = t.id
+        if t.kind == "pusher" and type(id) == "number" and id % 1 == 0
+           and id >= 1 and id <= Sim.MAX_PUSHERS and not used[id] then
+            ids[t], used[id] = id, true
+        end
+    end
+    for _, t in ipairs(entries) do
+        if t.kind == "pusher" and not ids[t] then
+            local id = Sim.free_pusher_id(used)
+            if id then ids[t], used[id] = id, true end
+        end
+    end
+    return ids
+end
+
 local function pusher_at(pushers, cx, cy, skip)
     for _, q in ipairs(pushers) do
         if q ~= skip and q.x == cx and q.y == cy then return q end

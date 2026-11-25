@@ -417,7 +417,7 @@ function handlers.assert_tile(ctx, arg)
         return
     end
     if tile == nil then fail(where .. " is empty") end
-    for _, f in ipairs({ "kind", "op", "dir" }) do
+    for _, f in ipairs({ "kind", "op", "dir", "edge", "scalar" }) do
         if arg[f] ~= nil and tile[f] ~= arg[f] then
             fail(where .. " " .. f .. " is " .. tostring(tile[f]) .. ", expected " .. tostring(arg[f]))
         end

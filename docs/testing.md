@@ -121,9 +121,9 @@ return {
     given = { solved = {} },                              -- fresh progress: only World 1 unlocked
     steps = {
         { press = "return" },                             -- title screen -> level select
-        { hover_button = "Sign Change" },                 -- park the cursor on row 3 (fires mouse_moved)
+        { hover_button = "Sharp Left" },                  -- park the cursor on row 3 (fires mouse_moved)
         { press = "down" },                               -- keyboard moves the highlight to row 4
-        { assert_button = { id = "puzzle:4", selected = true } },  -- by id: puzzles 4 and 6 are both "Row Swap"
+        { assert_button = { id = "puzzle:4", selected = true } },  -- assert by id
         { wait = 30 },                                    -- 30 frames with a stationary cursor...
         { assert_button = { id = "puzzle:4", selected = true } },  -- ...must not steal the highlight back
         { press = "up" },
@@ -135,7 +135,7 @@ return {
 }
 ```
 
-A full play-through looks like this (puzzle 1: a pusher at (1,5) pushing right for all 8 slots solves it):
+A full play-through looks like this (puzzle 1: a pusher at (1,5) given one "right" command at tick 1 solves it):
 
 ```lua
 { click_button = { id = "puzzle:1" } },
@@ -143,12 +143,14 @@ A full play-through looks like this (puzzle 1: a pusher at (1,5) pushing right f
 { click_cell = {1, 5} },                                            -- place it
 { drag = { from = { id = "chip:right" }, to = { slot = {1, 1} } } },    -- "right" chip at tick 1; commands persist
 { click_button = "Run" },
-{ wait_until = { text = "SOLVED!", max_frames = 3000 } },           -- recap scene
+{ wait_until = { text = "WIN!", max_frames = 3000 } },
+{ click_button = "Continue" },                                      -- recap scene
+{ assert_text = "SOLVED!" },
 { click_button = "Next puzzle" },
 { assert_text = "Flip It" },
 ```
 
-See the files in `tests/ui/` for more: `01_solve_puzzle_1.lua`, `02_level_select_keyboard.lua`, `03_world_locking.lua`, `04_sweep_all_puzzles.lua` (generated steps, all 23 puzzles), `05_start_screen.lua`, `06_cutscene.lua` (CutsceneScene end-to-end), `07_drag_drop.lua` (Mv drag tool), and `08_matrix_scene_ops.lua` (all op-tile param cell click paths). `11_anim_timing.lua` checks the matrix shows pre-op values while sliding into an op (`assert_matrix` mid-run).
+See the files in `tests/ui/` for more: `01_solve_puzzle_1.lua`, `02_level_select_keyboard.lua`, `03_world_locking.lua`, `04_sweep_all_puzzles.lua` (generated steps, all 21 puzzles), `05_start_screen.lua`, `06_cutscene.lua` (CutsceneScene end-to-end), `07_drag_drop.lua` (Mv drag tool), and `08_matrix_scene_ops.lua` (op tiles: editing by thirds, fixed and locked tiles, moving and erasing). `13_solve_converted.lua` wins puzzles through real input and `14_editor_ops.lua` covers op tiles in the editor. `11_anim_timing.lua` checks the matrix shows pre-op values while sliding into an op (`assert_matrix` mid-run).
 
 ---
 
@@ -163,7 +165,7 @@ A **selector** is either a label string (`"Run"`) or a table `{ id = "cmd:run" }
 | `press = "<key>"` | `sm:key_pressed(key)`. Uses LÖVE key names: `"return"`, `"escape"`, `"space"`, `"backspace"`, `"up"`, `"down"`, `"left"`, `"right"`, `"r"`, ... |
 | `click = {x, y}` / `right_click = {x, y}` | A raw click at logical coordinates. This is the escape hatch, for example to check that clicking a disabled button does nothing, or to click empty space. |
 | `click_button = sel` / `right_click_button = sel` | Click the centre of the matching element. It fails if the element is missing or disabled. |
-| `click_cell = {x, y [, part = "left" \| "centre" \| "right"]}` / `right_click_cell` | Click grid cell `cell:<x>,<y>`. `part` picks the -1 third (`x + w/6`), the centre (the default) or the +1 third (`x + 5w/6`) of a parameter cell. |
+| `click_cell = {x, y [, part = "left" \| "centre" \| "right"]}` / `right_click_cell` | Click grid cell `cell:<x>,<y>`. `part` picks the -1 third (`x + w/6`), the centre (the default; turns an edge tile) or the +1 third (`x + 5w/6`) of an op tile. |
 | `drag = { from = <selector>, to = <selector> }` | Press at the centre of `from`, move to `to`, release there (frames in between). Selectors may also be `{ cell = {x, y} }` or `{ slot = {lane, tick} }`. Use it to drag ops onto cells and chips onto timeline slots; the runner **never auto-scrolls** the timeline: click `tl:scroll_right` yourself. |
 | `move_mouse = {x, y}` | Move the virtual cursor and fire `sm:mouse_moved`. |
 | `hover_button = sel` | Move to the element's centre. Disabled elements are allowed. |
@@ -172,9 +174,12 @@ A **selector** is either a label string (`"Run"`) or a table `{ id = "cmd:run" }
 | `assert_text = "..."` / `assert_no_text = "..."` | A plain substring match against every string drawn by `print`/`printf` in the most recent frame. |
 | `assert_button = { <selector fields>, visible = bool, enabled = bool, selected = bool }` | `visible = false` asserts that the element is absent from the registry. Fields you leave out are not checked. A nil `selected` counts as false. |
 | `assert_matrix = {{...}}` | The matrix the puzzle scene shows now: the travelling matrix during or after a run, otherwise the input matrix. Rows of numbers, compared exactly. |
-| `assert_tile = { x, y, kind = ..., op = ..., dir = ... }` | The tile at a grid cell. A ref cell of a multi-cell tile reports its anchor tile. Leaving out `kind` asserts that the cell is **empty**. Only the fields you give are compared. |
+| `assert_tile = { x, y, kind = ..., op = ..., dir = ..., edge = ..., scalar = ... }` | The tile at a grid cell. A ref cell of a multi-cell tile reports its anchor tile. Leaving out `kind` asserts that the cell is **empty**. Only the fields you give are compared. |
+| `assert_slot = { lane = n, tick = n, pusher = n, cmd = "..." }` | The command in a timeline slot (`pusher` 1 = A). `empty = true` asserts that the slot is empty. |
+| `set_clipboard = "..."` | Put text on the stubbed clipboard (for the editor's Paste). |
+| `text_input = "..."` | `sm:text_input(ch)`, for typing into a text field. |
 
-`assert_matrix`, `wait_until.matrix` and `assert_tile` need a scene that has `ui_matrix()` / `ui_tile()` (only `MatrixScene`). Otherwise they fail with `scene has no matrix` or `scene has no tiles`.
+`assert_matrix` and `wait_until.matrix` need a scene that has `ui_matrix()` (`MatrixScene`), `assert_slot` needs `ui_slot()` (`MatrixScene`), and `assert_tile` needs `ui_tile()` (`MatrixScene` and `EditorScene`). Otherwise they fail, for example with `scene has no matrix` or `scene has no tiles`.
 
 There are deliberately no assertions on scene names or internal status. Assert what the player can see.
 
@@ -182,12 +187,12 @@ There are deliberately no assertions on scene names or internal status. Assert w
 
 ## Frame loop, settling and input semantics
 
-- **One frame** is `sm:update(1/60)`, then the text log is cleared, then `sm:draw()`, then the invariants are checked on `sm.current:ui_elements()`. Because `draw()` runs every frame, layout state that is set during draw (such as the timeline's `_tl_top`) exists exactly as it does in the real game.
+- **One frame** is `sm:update(1/60)`, then the text log is cleared, then `sm:draw()`, then the invariants are checked on `sm.current:ui_elements()`. Because `draw()` runs every frame, layout state that is set during draw (such as the level select's tab rects) exists exactly as it does in the real game.
 - **Settle.** Before every input step and every assert step (but not `wait` or `wait_until`), the runner runs frames until the `SceneManager` fade is idle, for at most 60 frames. Otherwise the step fails with `fade did not finish`. A player waits out the fade, and so does the runner. Without the settle you would click on the scene being drawn while input already goes to the new scene.
 - **After every input step**, exactly one frame runs so that the result is drawn before the next assert.
 - **A click** at (x, y) with button b (1 = left, 2 = right) is `Stubs.set_mouse(x, y)`, `sm:mouse_moved(x, y)`, `sm:mouse_pressed(x, y, b)`, `sm:mouse_released(x, y, b)`. This is what LÖVE does. A move is `set_mouse` plus `mouse_moved`.
 - Element centres are rounded to whole pixels (`UI.centre`).
-- The runner never calls a scene handler or private method directly. Its only scene calls are the read-only `ui_elements()`, `ui_matrix()` and `ui_tile()`. Everything else goes through `SceneManager`.
+- The runner never calls a scene handler or private method directly. Its only scene calls are the read-only `ui_elements()`, `ui_matrix()`, `ui_tile()` and `ui_slot()`. Everything else goes through `SceneManager`.
 - Headless stubs (`lua/headless/stubs.lua`): `love.graphics.getWidth/getHeight` return 1280/720. `love.mouse.getX/getY/getPosition` return the virtual cursor, and `isDown` returns false. Fonts are stubs that report a width of 120 for any text, so **never use `font:getWidth()` for layout**. Use constants.
 
 ---
@@ -200,7 +205,7 @@ Every scene that has clickable things implements `scene:ui_elements()`. The scen
 
 ```lua
 { id = "cmd:run", label = "Run", kind = "button",
-  rect = { x = 1087, y = 666, w = 42, h = 48 }, enabled = true, selected = false }
+  rect = { x = 1120, y = 624, w = 72, h = 40 }, enabled = true, selected = false }
 ```
 
 - `kind` is `"button"`, `"cell"` or `"slot"`.
@@ -224,31 +229,33 @@ UI.overlaps(a, b)             -- positive-area intersection (shared edges do not
 
 | Scene | id | label | kind | notes |
 |---|---|---|---|---|
-| Start | `start:play` | `Play` | button | rect around the "[Enter] or click to play" prompt. A click anywhere outside Unlock All also plays. |
+| Start | `start:play` | `Play` | button | rect around the "[Enter] or click to play" prompt. A click anywhere outside the other buttons also plays. |
 | Start | `start:unlock_all` | `Unlock All` | button | |
-| Level select | `world:prev` / `world:next` | `<` / `>` | button | always enabled. Present only once the scene has drawn (the arrow rects are computed in `draw`). Listed first. |
+| Start | `start:editor` | `Editor` | button | |
+| Level select | `world:<n>` | world name, or `[?]` when locked | button | one tab per world; locked tabs are disabled. `selected` marks the current world. Rects are computed in `draw`. Listed first. |
 | Level select | `puzzle:<index>` | puzzle name | button | one per row of the current world. `selected` marks the highlighted row. Hover changes the selection only on mouse **movement**. |
 | Matrix | `palette:pusher` | `P` | button | `selected` when this tool is active |
-| Matrix | `palette:<op>` | op label (e.g. `xR`) | button | `<op>` is the op **name**, e.g. `palette:scale_row` |
-| Matrix | `palette:fixed:<op>` | op label + `!` (e.g. `<>R!`) | button | |
-| Matrix | `palette:scroll_left` / `palette:scroll_right` | `<` / `>` | button | only when the palette overflows (puzzle 1). Each click scrolls one slot; `enabled` is false at either end. Only on-screen palette buttons are in the registry. |
+| Matrix | `palette:<op>` | `xk` `xk^` `+k` `+k^` `-k` `-k^` `T` `R90` `FLh` `FLv` | button | `<op>` is the op **name** from `lua/game/ops.lua`, e.g. `palette:edge_add` |
+| Matrix | `palette:fixed:<op>` | preset + `!` (e.g. `x-1!`, `x3>!`, `FLv!`) | button | |
+| Matrix | `palette:scroll_up` / `palette:scroll_down` | `^` / `v` | button | only when the ops column overflows (no shipped puzzle does). Each click scrolls one row; `enabled` is false at either end. Only on-screen palette buttons are in the registry. |
 | Matrix | `palette:drag` / `palette:erase` | `Mv` / `[X]` | button | erase is `selected` when nothing is selected |
-| Matrix | `cmd:run` `cmd:step` `cmd:reset` `cmd:menu` | `Run` `Step` `Reset` `Menu` | button | `enabled` comes from `MatrixScene:_cmd_enabled(id)`, the same function the `r` / `space` / `backspace` keys use |
+| Matrix | `cmd:run` `cmd:reset` `cmd:menu` `cmd:continue` | `Run` `Reset` `Menu` `Continue` | button | `enabled` comes from `MatrixScene:_cmd_enabled(id)`, the same function the `r` / `backspace` / `return` keys use |
 | Matrix | `cell:<x>,<y>` | same as id | cell | every grid cell, `x = 1..grid.w`, `y = 1..grid.h` |
-| Matrix | `tl:scroll_left` `tl:scroll_right` | `<` `>` | button | enabled when it can scroll that way and nothing is running. The palette scroll arrows share the labels `<` / `>`, so click these by id, not label. |
-| Matrix | `tl:dec` `tl:inc` | `-` `+` | button | `enabled = not running` |
-| Matrix | `slot:<L>:<s>` | same as id | slot | `<L>` = pusher letter (`A` for pusher 1). `<s>` is the real slot index. Only slots in the visible window are listed. `enabled = not running`. |
+| Matrix | `psel:<L>` | `A`, `B`, ... | button | one per placed pusher |
+| Matrix | `chip:<cmd>` | `^` `v` `<` `>` `.` `CLR` | button | `cmd` is `up`, `down`, `left`, `right`, `stop` or `clear` |
+| Matrix | `tl:scroll_left` `tl:scroll_right` | `<` `>` | button | enabled when the timeline can scroll that way. The `<` / `>` chips share these labels, so click by id. |
+| Matrix | `slot:<lane>:<tick>` | same as id | slot | lane 1-4, tick is the real tick number. Only slots in the visible window are listed. `enabled = not running`. |
+| Editor | `editor:pal:<tool>` | `SRC` `SNK` `GAP` `P`, op labels, `[X]` | button | `<tool>` is `source`, `sink`, `gap`, `pusher`, an op name or `erase` |
+| Editor | `editor:back` `editor:test` `editor:copy` `editor:paste` | `Back` `Test` `Copy` `Paste` | button | |
+| Editor | `editor:name`, `editor:allow:<op>` | name text / op label | button | |
+| Editor | `editor:input_rows_dec` etc. | `-` `+` | button | also `_rows_inc`, `_cols_dec`, `_cols_inc`, and the same for `target` |
+| Editor | `editor:input_cell:<r>,<c>`, `editor:target_cell:<r>,<c>` | value | cell | |
+| Editor | `cell:<x>,<y>` | same as id | cell | every grid cell |
 | Recap | `recap:next` `recap:replay` `recap:menu` | `Next puzzle` `Replay` `Menu` | button | always enabled. Clicks outside them do nothing. Enter / R / Esc still work. |
 
-Matrix order: palette (left to right: [<], the visible items out of P, ops, fixed ops, Mv, [X], then [>]), then commands, then cells (y-major), then `tl:scroll_left`, `tl:scroll_right`, `tl:dec`, `tl:inc`, then slots (by pusher, then by slot). Timeline elements appear only after the HUD has drawn once.
+Matrix order: palette (`scroll_up`, the visible items out of P, ops, Mv, [X], fixed ops as laid out, then `scroll_down`), then commands, then cells (y-major), then the bottom bar (`psel:`, `chip:`, timeline arrows, slots). An open settings overlay replaces all of these with its own `settings:*` elements.
 
-**Ambiguous labels to watch for:** puzzles 4 and 6 are both "Row Swap", so use `{ id = "puzzle:4" }`. Use ids for cells and slots anyway, since their label equals their id.
-
-### Known gap: resize strips are not in the registry
-
-The tile resize affordances in `MatrixScene._expand_rects` (`grow_col`, `shrink_col`, `grow_row`, `shrink_row`) are thin strips drawn **on top of** grid cells. Registering them would always break the no-overlap invariant, so they are deliberately left out. They are hit-tested inside the cell-click path (`mouse_pressed`, after the registry resolves a `cell:` element, before tile placement). This is a known exception to process rule 3.
-
-To exercise a resize in a spec today, use the raw `click = {x, y}` at the strip's coordinates (computed from the grid layout constants in `matrix_scene.lua`), then check the result with `assert_tile`. Spec code cannot discover the strip positions from the registry. A future fix could register them as their own kind and exempt that kind from the overlap check against cells.
+**Ambiguous labels to watch for:** `<`, `>` and `v` appear on more than one element, so click those by id. Use ids for cells and slots anyway, since their label equals their id.
 
 ---
 

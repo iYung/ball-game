@@ -1,9 +1,8 @@
 -- test_matrix_draw.lua
--- Covers four previously-uncovered draw paths in lua/game/scenes/matrix_scene.lua:
+-- Covers previously-uncovered draw paths in lua/game/scenes/matrix_scene.lua:
 --   1. _draw_status_banner  (lines 1664–1675)
 --   2. Ghost preview in draw_grid  (lines 848–883)
---   3. -col / -row affordance strips in draw_grid  (lines 803–814, 829–840)
---   4. _bar_click psel/chip/tl/slot branches (the bottom bar; replaces the old _timeline_element_click)
+--   3. _bar_click psel/chip/tl/slot branches (the bottom bar; replaces the old _timeline_element_click)
 
 local runner = require("lua/headless/runner")
 
@@ -45,7 +44,7 @@ end
 do
     local scene = new_scene()
     -- Place a tile at (5,1) so the ghost lands on an occupied cell
-    scene:_place_tile_at(5, 1, { kind = "op", op = "add_matrix" })
+    scene:_place_tile_at(5, 1, { kind = "op", op = "scalar_add" })
     scene._drag_tile  = { kind = "pusher", id = 1, width = 1, height = 1 }
     scene._drag_ghost = { cx = 5, cy = 1 }
     local ok, err = pcall(function() scene:draw_grid() end)
@@ -53,30 +52,7 @@ do
     print("PASS: draw_grid ghost preview (invalid / occupied position)")
 end
 
--- ── 3. -col / -row affordance strips ─────────────────────────────────────────
-
-do
-    local scene = new_scene()
-    -- add_matrix starts 1×1; grow_col → 2×1; grow_row → 2×2
-    scene:_place_tile_at(5, 1, { kind = "op", op = "add_matrix" })
-    scene:_resize_tile(5, 1, "grow_col")   -- tile_cols = 2
-    scene:_resize_tile(5, 1, "grow_row")   -- tile_rows = 2
-
-    local ok, err = pcall(function() scene:draw_grid() end)
-    assert(ok, "draw_grid with 2×2 tile threw: " .. tostring(err))
-
-    -- Verify expand_rects contains both shrink_col and shrink_row entries
-    local has_shrink_col, has_shrink_row = false, false
-    for _, r in ipairs(scene._expand_rects or {}) do
-        if r.action == "shrink_col" then has_shrink_col = true end
-        if r.action == "shrink_row" then has_shrink_row = true end
-    end
-    assert(has_shrink_col, "_expand_rects missing shrink_col entry")
-    assert(has_shrink_row, "_expand_rects missing shrink_row entry")
-    print("PASS: draw_grid -col and -row affordance strips (2×2 tile)")
-end
-
--- ── 4. _bar_click ─────────────────────────────────────────────────────────────
+-- ── 3. _bar_click ─────────────────────────────────────────────────────────────
 -- Rewritten: the old test called _timeline_element_click with tl:inc/dec/scroll_up/down and
 -- slot:A:n, which no longer exist (length +/-, per-pusher rows, slot cycling were removed).
 do

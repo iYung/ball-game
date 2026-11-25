@@ -75,12 +75,12 @@ do
     add_pusher(scene, 1, 6, {})
     assert(scene:_count_pieces() == 1, "one pusher = 1 piece")
 
-    scene:_place_tile_at(5, 5, { kind = "op", op = "negate" })
-    assert(scene:_count_pieces() == 2, "pusher + negate = 2 pieces")
+    scene:_place_tile_at(5, 5, { kind = "op", op = "scalar_mul", params = { scalar = -1 } })
+    assert(scene:_count_pieces() == 2, "pusher + scalar_mul = 2 pieces")
 
-    -- A multi-cell op tile (scale_row spans 4 rows) should count as 1 piece.
-    scene:_place_tile_at(7, 1, { kind = "op", op = "scale_row" })
-    assert(scene:_count_pieces() == 3, "multi-cell scale_row counts as 1 piece, not 4")
+    -- An edge op tile counts as 1 piece.
+    scene:_place_tile_at(7, 1, { kind = "op", op = "edge_scale" })
+    assert(scene:_count_pieces() == 3, "edge_scale counts as 1 piece")
 
     print("PASS: _count_pieces")
 end
@@ -141,19 +141,19 @@ end
 -- Frame matrix shows PRE-op values: the frame recorded for the step that moves
 -- the matrix into an op tile must carry the values BEFORE the op fires.
 do
-    -- Use puzzle 1 (source at (2,5)) with a manually placed negate op at (8,5).
+    -- Use puzzle 1 (source at (2,5)) with a manually placed x-1 op at (8,5).
     -- Puzzle 3 was redesigned with a non-horizontal route, so we use puzzle 1's
     -- known simple horizontal layout to verify the frame-timing invariant.
     local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
     local scene = ctx.sm.current
 
     add_pusher(scene, 1, 6, { [1] = "right" })
-    scene:_place_tile_at(8, 5, { kind="op", op="negate" })
+    scene:_place_tile_at(8, 5, { kind="op", op="scalar_mul", params={ scalar=-1 } })
     run_to_end(scene)
     -- Run ends when pushers idle; _run_frames is populated regardless of win/fail.
 
     local frames = scene._run_frames
-    -- Find the frame pair where values[1][1] transitions from 1 (pre-negate) to -1 (post-negate).
+    -- Find the frame pair where values[1][1] transitions from 1 (pre-op) to -1 (post-op).
     local pre_i
     for i = 1, #frames - 1 do
         if frames[i].matrix.values[1][1] == 1 and frames[i+1].matrix.values[1][1] == -1 then
@@ -161,11 +161,11 @@ do
             break
         end
     end
-    assert(pre_i ~= nil, "found negate transition in frames")
+    assert(pre_i ~= nil, "found x-1 transition in frames")
     local v  = frames[pre_i].matrix.values[1][1]
     local v2 = frames[pre_i + 1].matrix.values[1][1]
-    assert(v  ==  1, "frame entering negate op carries pre-op value (1), got "  .. tostring(v))
-    assert(v2 == -1, "frame after negate op carries post-op value (-1), got " .. tostring(v2))
+    assert(v  ==  1, "frame entering x-1 op carries pre-op value (1), got "  .. tostring(v))
+    assert(v2 == -1, "frame after x-1 op carries post-op value (-1), got " .. tostring(v2))
     print("PASS: frame matrix shows pre-op values (not one step early)")
 end
 
@@ -178,7 +178,7 @@ do
     -- Build a 4×4 grid with one gap tile, one op tile, one source, one sink.
     local grid = Grid.new(4, 4)
     grid.cells[1][1] = { kind = "gap" }
-    grid.cells[1][2] = { kind = "op", op = "scale_row", width = 1, height = 1 }
+    grid.cells[1][2] = { kind = "op", op = "edge_scale", params = { edge = "top", scalar = 2 } }
     grid.cells[1][3] = { kind = "source", width = 1, height = 1 }
     grid.cells[1][4] = { kind = "sink" }
     -- Add a pusher so _draw_tile pusher branch runs.
@@ -337,6 +337,47 @@ do
     recap:draw()
 
     print("PASS: SolutionRecapScene draw with float matrix value (fmt_num float branch)")
+end
+
+-- SolutionRecapScene draw: edge tiles show k and direction on all four sides,
+-- without the editing marks.
+do
+    local SolutionRecapScene = require("lua/game/scenes/solution_recap_scene")
+    local Grid   = require("lua/game/grid")
+    local Matrix = require("lua/game/matrix_math")
+    local Stubs  = require("lua/headless/stubs")
+
+    local function count(text)
+        local n = 0
+        for _, s in ipairs(Stubs.drawn_text()) do
+            if s == text then n = n + 1 end
+        end
+        return n
+    end
+
+    local cases = {
+        { op = "edge_scale", edge = "top",    scalar = -3, arrow = "^", text = "x-3", locked = true },
+        { op = "edge_add",   edge = "right",  scalar = 4,  arrow = ">", text = "+4",  fixed = true },
+        { op = "edge_sub",   edge = "bottom", scalar = 5,  arrow = "v", text = "-5" },
+        { op = "edge_scale", edge = "left",   scalar = 6,  arrow = "<", text = "x6" },
+    }
+
+    for _, case in ipairs(cases) do
+        local grid = Grid.new(2, 2)
+        grid.cells[1][1] = { kind = "op", op = case.op, locked = case.locked, fixed = case.fixed,
+                             params = { edge = case.edge, scalar = case.scalar } }
+        local frames = { { from_x=200, from_y=200, to_x=200, to_y=200, matrix=Matrix.new(1,1,{{7}}) } }
+        local stats = { ticks = 1, pieces = 1, puzzle_name = "Edges", puzzle_index = 1 }
+        local recap = SolutionRecapScene.new(stats, { grid = grid }, frames, 0.1, nil)
+        recap:on_enter()
+        Stubs.clear_text()
+        recap:draw()
+        assert(count(case.text) == 1, case.edge .. " edge tile draws value " .. case.text)
+        assert(count(case.arrow) == 1, case.edge .. " edge tile draws arrow " .. case.arrow)
+        assert(count("-") == 0 and count("+") == 0, case.edge .. " edge tile draws no -/+ marks")
+    end
+
+    print("PASS: SolutionRecapScene draws edge tiles on all four sides")
 end
 
 print("ALL TESTS PASSED")

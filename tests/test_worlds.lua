@@ -1,5 +1,5 @@
 -- test_worlds.lua
--- Every puzzle is reachable through exactly one world, puzzle 21 offers no
+-- Every puzzle is reachable through exactly one world, puzzle 19 offers no
 -- editable ops, and worlds 4/5 lock according to the progression rule.
 
 local PuzzleLoader = require("lua/game/puzzle_loader")
@@ -18,12 +18,12 @@ for i = 1, PuzzleLoader.count() do
 end
 print("PASS: every puzzle 1.." .. PuzzleLoader.count() .. " is in exactly one world")
 
--- ── Puzzle 21 has an empty ops list ──────────────────────────────────────────
+-- ── Puzzle 19 has an empty ops list ──────────────────────────────────────────
 
-local p21 = PuzzleLoader.load(21)
-assert(type(p21.ops) == "table", "puzzle 21 ops is a table")
-assert(next(p21.ops) == nil, "puzzle 21 ops is empty")
-print("PASS: puzzle 21 ops is empty")
+local p19 = PuzzleLoader.load(19)
+assert(type(p19.ops) == "table", "puzzle 19 ops is a table")
+assert(next(p19.ops) == nil, "puzzle 19 ops is empty")
+print("PASS: puzzle 19 ops is empty")
 
 -- ── World 4 unlocks after worlds 1-3; world 5 stays locked ──────────────────
 

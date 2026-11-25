@@ -7,9 +7,7 @@
 --   Lines 1284, 1320 (float matrix values in input preview and animated draw)
 --   Lines 1352-1355 (_cmd_activate "menu")
 --   Line 1408       (_palette_select erase)
---   Lines 1744-1745 (mul_matrix placement tile_rows/tile_cols/values init)
 --   Lines 1846-1847 (drag ghost cleared when in grid panel but out of grid bounds)
---   Lines 1976-1984 (set_row value-cell click when dc != 0)
 --   Line 2113       (grid:clear called when palette nil and clicking empty cell)
 
 local runner  = require("lua/headless/runner")
@@ -36,11 +34,11 @@ do
     local scene = new_scene()
     local Sim   = require("lua/game/pusher_sim")
 
-    -- Place a negate op at (5, 5)
-    scene:_place_tile_at(5, 5, { kind = "op", op = "negate" })
+    -- Place an x-1 op at (5, 5)
+    scene:_place_tile_at(5, 5, { kind = "op", op = "scalar_mul", params = { scalar = -1 } })
 
     -- Manually configure sim: matrix at (5,5), pusher also at (5,5).
-    -- After negate fires the matrix is still 2x2 at (5,5); the pusher at (5,5)
+    -- After x-1 fires the matrix is still 2x2 at (5,5); the pusher at (5,5)
     -- overlaps the footprint → footprint_clear returns false → lines 573-576.
     scene.current_matrix = Matrix.new(2, 2, {{1,0},{0,1}})
     scene.running        = true
@@ -100,7 +98,7 @@ end
 -- Line 878 fires when the dragged tile is a non-pusher op tile.
 do
     local scene = new_scene()
-    scene._drag_tile  = { kind = "op", op = "negate", width = 1, height = 1 }
+    scene._drag_tile  = { kind = "op", op = "scalar_mul", params = { scalar = -1 }, width = 1, height = 1 }
     scene._drag_ghost = { cx = 5, cy = 1 }
 
     local ok, err = pcall(function() scene:draw_grid() end)
@@ -113,7 +111,7 @@ do
     local scene = new_scene()
 
     -- Place an op tile then set it fixed
-    scene:_place_tile_at(5, 1, { kind = "op", op = "negate" })
+    scene:_place_tile_at(5, 1, { kind = "op", op = "scalar_mul", params = { scalar = -1 } })
     local tile = scene.grid:get(5, 1)
     tile.fixed = true
 
@@ -184,30 +182,12 @@ do
     print("PASS: _palette_select({erase=true}) clears palette (line 1408)")
 end
 
--- ── 8. mul_matrix placement: tile_rows=1, tile_cols=1, values={{1}} (lines 1744-1745) ──
-do
-    local scene = new_scene()
-
-    local ok, err = pcall(function()
-        scene:_place_tile_at(5, 5, { kind = "op", op = "mul_matrix" })
-    end)
-    assert(ok, "_place_tile_at mul_matrix threw: " .. tostring(err))
-
-    local tile = scene.grid:get(5, 5)
-    assert(tile ~= nil,          "mul_matrix: tile should exist at (5,5)")
-    assert(tile.tile_rows == 1,  "mul_matrix: tile_rows should be 1")
-    assert(tile.tile_cols == 1,  "mul_matrix: tile_cols should be 1")
-    assert(tile.values ~= nil and tile.values[1] ~= nil and tile.values[1][1] == 1,
-        "mul_matrix: values[1][1] should be 1")
-    print("PASS: mul_matrix placement sets tile_rows=1, tile_cols=1, values={{1}} (lines 1744-1745)")
-end
-
 -- ── 9. Drag ghost cleared when in-panel but cell is out of bounds (lines 1846-1847) ──
 -- Requires a grid smaller than the 10×10 panel.  Replace grid.w/h with 5×5 so
 -- any cell >= 6 is out of bounds while still being inside the visual panel.
 do
     local scene = new_scene()
-    scene._drag_tile = { kind = "op", op = "negate", width = 1, height = 1 }
+    scene._drag_tile = { kind = "op", op = "scalar_mul", params = { scalar = -1 }, width = 1, height = 1 }
 
     -- Shrink the logical grid to 5×5; panel is still 10-cell wide (95..724)
     scene.grid = Grid.new(5, 5)
@@ -224,43 +204,6 @@ do
     assert(scene._drag_ghost == nil,
         "drag ghost should be nil when cell is out of grid bounds (lines 1846-1847)")
     print("PASS: drag ghost cleared when in-panel but cell out of bounds (lines 1846-1847)")
-end
-
--- ── 10. set_row value-cell click with dc != 0 (lines 1976-1984) ──────────────
--- Place a set_row tile, grow it one column so there is a ref cell, then click
--- the ref cell so dc = cx - ax = 1 ≠ 0 → lines 1976-1984 fire.
--- Use (5,1) — puzzle 1 source is at (2,5)/(3,5)/(2,6)/(3,6) so (5,1) is free.
-do
-    local scene = new_scene()
-
-    -- Place set_row at (5, 1)
-    scene:_place_tile_at(5, 1, { kind = "op", op = "set_row" })
-    -- Grow by one column → ref cell now lives at (6, 1)
-    scene:_resize_tile(5, 1, "grow_col")
-
-    local tile = scene.grid:get(5, 1)
-    assert(tile ~= nil and tile.op == "set_row", "set_row tile must be at (5,1)")
-    local is_r = scene.grid:is_ref(6, 1)
-    assert(is_r, "ref cell must exist at (6,1) after grow_col")
-
-    -- Select a non-eraser palette item so the eraser branch (line 1933) is skipped
-    scene.palette:select({ kind = "op", op = "negate" })
-
-    -- Click in the left third of the ref cell (6,1) → rel_x < CELL_SIZE/3 → decrement
-    -- cell_top_left(6,1) = (130+5*52, 10+0*52) = (390, 10)
-    -- left-third: mx in [390, 407) → use 391
-    local mx, my = 391, 30
-
-    local ok, err = pcall(function() scene:mouse_pressed(mx, my, 1) end)
-    assert(ok, "mouse_pressed on set_row ref cell threw: " .. tostring(err))
-
-    local values = tile.values
-    assert(values and values[1] and values[1][1] ~= nil,
-        "set_row value cell: values[1][1] should exist after click")
-    -- Initial value is 0, clicking the left third decrements to max(-9, -1) = -1
-    assert(values[1][1] == math.max(-9, -1),
-        "set_row value cell: values[1][1] should be -1 after decrement, got " .. tostring(values[1][1]))
-    print("PASS: set_row value-cell click with dc!=0 (lines 1976-1984)")
 end
 
 -- ── 11. grid:clear on empty cell when palette is nil (line 2113) ─────────────
@@ -300,38 +243,11 @@ end
 do
     local scene = new_scene()
     -- Select something so palette:selected() != nil
-    scene.palette:select({ kind = "op", op = "negate" })
+    scene.palette:select({ kind = "op", op = "scalar_mul", params = { scalar = -1 } })
     -- Pass a button whose kind is not "pusher", "drag", or "op"
     local result = scene:_palette_is_selected({ kind = "unknown_kind" })
     assert(result == false, "_palette_is_selected unknown kind must return false, got: " .. tostring(result))
     print("PASS: _palette_is_selected unknown kind returns false (line 1424)")
-end
-
--- ── 14. set_row value-cell right-third click increments value (lines 2072-2073) ──
--- Same setup as test 10 but click the right third of the ref cell.
-do
-    local scene = new_scene()
-    scene:_place_tile_at(5, 1, { kind = "op", op = "set_row" })
-    scene:_resize_tile(5, 1, "grow_col")
-
-    local tile = scene.grid:get(5, 1)
-    assert(tile ~= nil and tile.op == "set_row", "set_row tile must be at (5,1)")
-    scene.palette:select({ kind = "op", op = "negate" })
-
-    -- Click the right third of ref cell (6,1):
-    -- cell_top_left(6,1) = (130+5*52, 10+0*52) = (390, 10)
-    -- right-third: rel_x >= CELL_SIZE*2/3 = 34.67 → mx >= 390+35 = 425 → use 430
-    local mx, my = 430, 30
-
-    local ok, err = pcall(function() scene:mouse_pressed(mx, my, 1) end)
-    assert(ok, "mouse_pressed right-third of set_row ref cell threw: " .. tostring(err))
-
-    local values = tile.values
-    assert(values and values[1] and values[1][1] ~= nil,
-        "set_row value cell: values[1][1] should exist after right-click")
-    assert(values[1][1] == math.min(9, 1),
-        "set_row value cell: values[1][1] should be 1 after increment, got " .. tostring(values[1][1]))
-    print("PASS: set_row value-cell right-third click increments value (lines 2072-2073)")
 end
 
 -- ── 15. _palette_is_selected: matching kind that is not op/pusher/drag (line 1500) ──

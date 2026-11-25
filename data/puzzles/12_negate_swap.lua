@@ -4,13 +4,13 @@
 -- Route: RIGHT×6 (2,2→8,2), DOWN×6 (8,2→8,8), LEFT×7 (8,8→1,8). Win!
 -- Pushers: R at (1,3) right×6; D at (9,1) down×6; L at (10,8) left×7.
 -- Sink (1,9): 2×2 at anchor (1,8) covers (1–2, 8–9) → (1,9) ✓
--- Ops: negate+swap_rows (either order gives {{-3,-4},{-1,-2}}).
+-- Ops: scalar_mul (x-1) + flip_v (either order gives {{-3,-4},{-1,-2}}).
 return {
     name   = "Deep Arch",
     grid_w = 10, grid_h = 10,
     source = { x=2, y=2 },
     sink   = { x=1, y=9 },
-    ops    = { "negate", "swap_rows" },
+    ops    = { "scalar_mul", "flip_v" },
     input  = { rows=2, cols=2, values={ {1,2}, {3,4} } },
     target = { rows=2, cols=2, values={ {-3,-4}, {-1,-2} } },
     gaps   = {

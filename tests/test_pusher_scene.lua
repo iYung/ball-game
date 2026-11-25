@@ -54,10 +54,10 @@ end
 do
     local scene = new_scene()
     carry(scene)
-    scene:_place_tile_at(5, 5, { kind = "op", op = "negate" })
+    scene:_place_tile_at(5, 5, { kind = "op", op = "scalar_mul", params = { scalar = -1 } })
     run_to_end(scene)
-    assert(scene.status == "fail", "negate makes identity mismatch, got " .. tostring(scene.status))
-    assert(scene.current_matrix.values[1][1] == -1, "negate fired exactly once")
+    assert(scene.status == "fail", "x-1 makes identity mismatch, got " .. tostring(scene.status))
+    assert(scene.current_matrix.values[1][1] == -1, "x-1 fired exactly once")
     print("PASS: op fires once on path")
 end
 
@@ -133,14 +133,14 @@ do
     end
     local scene = new_scene()
     local l = labels(scene)
-    assert(l["P"] and l["[X]"] and l["T"] and l["-I"], "puzzle 1 offers all ops")
+    assert(l["P"] and l["[X]"] and l["T"] and l["xk"], "puzzle 1 offers all ops")
     scene:load_puzzle(2)
     l = labels(scene)
-    assert(l["T"] and not l["xR"] and not l["R+R"], "puzzle 2 offers only transpose")
+    assert(l["T"] and not l["xk"] and not l["+k^"], "puzzle 2 offers only transpose")
     scene.palette:select({ kind = "op", op = "transpose" })
     scene:load_puzzle(4)
     assert(scene.palette:selected() == nil, "selection of a now-hidden op is cleared")
-    assert(labels(scene)["<>R"], "puzzle 4 offers swap rows")
+    assert(labels(scene)["FLv"], "puzzle 4 offers flip vertical")
     print("PASS: per-puzzle palette")
 end
 
@@ -183,39 +183,43 @@ end
 -- Fixed player-placed tile has fixed=true and param edits are blocked.
 do
     local scene = new_scene()
-    -- Place a swap_rows tile with fixed=true directly.
-    scene:_place_tile_at(5, 5, { kind="op", op="swap_rows", fixed=true })
+    -- Place an edge_scale tile with fixed=true directly.
+    scene:_place_tile_at(5, 5, { kind="op", op="edge_scale", fixed=true })
     local tile = scene.grid:get(5, 5)
-    assert(tile ~= nil, "fixed swap_rows placed")
+    assert(tile ~= nil, "fixed edge_scale placed")
     assert(tile.fixed == true, "tile.fixed is true, got " .. tostring(tile.fixed))
-    assert(tile.params.row_a == 1, "default row_a=1, got " .. tostring(tile.params.row_a))
+    assert(tile.params.scalar == 2 and tile.params.edge == "top", "default params")
 
-    -- Simulate clicking the right-third of the first strip (dc=0, would normally increment row_a).
-    -- GRID_X=130, GRID_Y=10, CELL_SIZE=52: sx = 130+(5-1)*52 = 338, sy = 10+(5-1)*52 = 218
-    -- Right-third x: 338 + 35 = 373+, use 380; strip-1 y mid: 218+26 = 244
-    scene:mouse_pressed(380, 244, 1)
-    assert(tile.params.row_a == 1,
-        "fixed tile param unchanged after click, got row_a=" .. tostring(tile.params.row_a))
+    -- A tool other than the eraser: no third of the cell may edit or replace the tile.
+    -- GRID_X=130, GRID_Y=10, CELL_SIZE=52: cell (5,5) starts at (338, 218).
+    scene.palette:select({ kind = "op", op = "transpose" })
+    for _, dx in ipairs({ 5, 26, 47 }) do
+        scene:mouse_pressed(338 + dx, 244, 1)
+        assert(scene.grid:get(5, 5) == tile, "fixed tile not replaced")
+        assert(tile.params.scalar == 2 and tile.params.edge == "top",
+            "fixed tile unchanged after click at " .. dx .. ", got "
+            .. tostring(tile.params.scalar) .. " " .. tostring(tile.params.edge))
+    end
     print("PASS: fixed player-placed tile blocks param edits")
 end
 
--- Puzzle-placed locked op loads correctly (P23 uses tile_rows=1 so the arch gap at y=4 x=5
--- does not block placement; a 4-row tile would be rejected because (5,4) is a gap).
+-- Puzzle-placed locked op loads correctly (P21: the arch gap row at y=4 sits right below it).
 do
-    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(23) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(21) end)
     local scene = ctx.sm.current
 
     -- Anchor at (5,3)
     local anchor = scene.grid:get(5, 3)
-    assert(anchor ~= nil, "locked scale_row anchor present at (5,3)")
+    assert(anchor ~= nil, "locked edge_scale anchor present at (5,3)")
     assert(anchor.kind == "op",    "anchor kind=op, got " .. tostring(anchor.kind))
-    assert(anchor.op   == "scale_row", "anchor op=scale_row, got " .. tostring(anchor.op))
+    assert(anchor.op   == "edge_scale", "anchor op=edge_scale, got " .. tostring(anchor.op))
     assert(anchor.locked == true,  "anchor is locked")
     assert(anchor.params.scalar == 3, "anchor scalar=3, got " .. tostring(anchor.params.scalar))
+    assert(anchor.params.edge == "top", "anchor edge=top, got " .. tostring(anchor.params.edge))
 
-    -- tile_rows=1: only the anchor cell is used, no ref cells below.
+    -- Only the anchor cell is used, no ref cells below.
     local ok4 = scene.grid:is_ref(5, 4)
-    assert(not ok4, "tile_rows=1: (5,4) is not a ref cell")
+    assert(not ok4, "(5,4) is not a ref cell")
 
     -- Row above the tile should also be empty.
     local ok2 = scene.grid:is_ref(5, 2)
@@ -228,17 +232,17 @@ end
 do
     local Sim = require("lua/game/pusher_sim")
     local Matrix = require("lua/game/matrix_math")
-    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(23) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(21) end)
     local scene = ctx.sm.current
 
     local tile = scene.grid:get(5, 3)
     local inp  = Matrix.new(2, 2, {{1,2},{3,4}})
     local out  = Sim.apply_op(tile, inp)
-    -- scale_row(row=1, scalar=3): row 1 → {3,6}; row 2 unchanged
-    assert(out.values[1][1] == 3, "scale_row row1 col1 = 3, got " .. tostring(out.values[1][1]))
-    assert(out.values[1][2] == 6, "scale_row row1 col2 = 6, got " .. tostring(out.values[1][2]))
-    assert(out.values[2][1] == 3, "scale_row row2 col1 unchanged = 3, got " .. tostring(out.values[2][1]))
-    assert(out.values[2][2] == 4, "scale_row row2 col2 unchanged = 4, got " .. tostring(out.values[2][2]))
+    -- edge_scale(edge=top, scalar=3): row 1 → {3,6}; row 2 unchanged
+    assert(out.values[1][1] == 3, "edge_scale row1 col1 = 3, got " .. tostring(out.values[1][1]))
+    assert(out.values[1][2] == 6, "edge_scale row1 col2 = 6, got " .. tostring(out.values[1][2]))
+    assert(out.values[2][1] == 3, "edge_scale row2 col1 unchanged = 3, got " .. tostring(out.values[2][1]))
+    assert(out.values[2][2] == 4, "edge_scale row2 col2 unchanged = 4, got " .. tostring(out.values[2][2]))
     print("PASS: locked op fires with correct params")
 end
 
@@ -278,19 +282,19 @@ end
 -- Puzzle 1, 2×2 matrix at (2,5)–(3,6).
 -- A at (1,5) right (steps into (2,5)) + B at (3,4) down (steps into (3,5)).
 -- Net force = (+1,+1); matrix must move diagonally to (3,6)–(4,7).
--- A negate op at (4,6) (newly entered after the diagonal step) must fire.
+-- An x-1 op at (4,6) (newly entered after the diagonal step) must fire.
 do
     local scene = new_scene()
     add_pusher(scene, 1, 5, { [1]="right" })   -- A
     add_pusher(scene, 3, 4, { [1]="down"  })   -- B
-    scene:_place_tile_at(4, 6, { kind="op", op="negate" })
+    scene:_place_tile_at(4, 6, { kind = "op", op = "scalar_mul", params = { scalar = -1 } })
     scene:start_run()
     scene:do_step()
     assert(scene.sim.x == 3 and scene.sim.y == 6,
         "perpendicular pushers move matrix diagonally, got ("
         .. scene.sim.x .. "," .. scene.sim.y .. ")")
     assert(scene.current_matrix.values[1][1] == -1,
-        "negate at (4,6) fires after diagonal move")
+        "x-1 at (4,6) fires after diagonal move")
     print("PASS: perpendicular pushers combine into diagonal move")
 end
 
@@ -320,6 +324,100 @@ do
     assert(scene.sim.y == 5,
         "pusher below matrix going down must not drag it, got y=" .. scene.sim.y)
     print("PASS: pusher below matrix going down does not drag it")
+end
+
+-- Custom definitions for the fixed-preset and locked-entry checks below.
+local function def_scene(extra)
+    local def = {
+        name = "custom", grid_w = 10, grid_h = 10,
+        source = { x=2, y=5 }, sink = { x=10, y=5 }, gaps = {},
+        input  = { rows=2, cols=2, values={ {1,2}, {3,4} } },
+        target = { rows=2, cols=2, values={ {1,2}, {3,4} } },
+    }
+    for k, v in pairs(extra) do def[k] = v end
+    local ctx = runner.setup(function(_, sm)
+        return require("lua/game/scenes/matrix_scene").new_from_def(def, sm)
+    end)
+    return ctx.sm.current, def
+end
+
+local function click_element(scene, eid)
+    local UI = require("lua/core/ui")
+    local e = UI.find(scene:ui_elements(), eid)
+    assert(e, "element " .. eid .. " present")
+    local x, y = UI.centre(e.rect)
+    scene:mouse_pressed(x, y, 1)
+    scene:mouse_released(x, y, 1)
+    return e
+end
+
+local function drawn(scene)
+    local Stubs = require("lua/headless/stubs")
+    Stubs.clear_text()
+    scene:draw()
+    local out = {}
+    for _, t in ipairs(Stubs.drawn_text()) do out[t] = true end
+    return out
+end
+
+-- A fixed_ops table entry presets every tile placed from its button; the label shows it.
+do
+    local preset = { op = "scalar_mul", params = { scalar = -1 } }
+    local scene = def_scene({ ops = {}, fixed_ops = { preset, "edge_add" } })
+    assert(drawn(scene)["x-1!"], "preset label drawn")
+    assert(click_element(scene, "palette:fixed:scalar_mul").label == "x-1!", "preset label")
+    click_element(scene, "cell:5,2")
+    local tile = scene.grid:get(5, 2)
+    assert(tile.op == "scalar_mul" and tile.fixed == true, "fixed tile placed")
+    assert(tile.params.scalar == -1, "preset applied, got " .. tostring(tile.params.scalar))
+    assert(tile.params ~= preset.params, "placed params are a copy")
+    click_element(scene, "cell:6,2")
+    assert(scene.grid:get(6, 2).params ~= tile.params, "each tile has its own params")
+    -- A string entry takes the defaults.
+    assert(click_element(scene, "palette:fixed:edge_add").label == "+1^!", "default label")
+    click_element(scene, "cell:7,2")
+    local edge = scene.grid:get(7, 2)
+    assert(edge.params.scalar == 1 and edge.params.edge == "top", "defaults for a string entry")
+    print("PASS: fixed op presets")
+end
+
+-- Unsupported fixed_ops entries get no button.
+do
+    local scene = def_scene({ ops = {}, fixed_ops = { "negate", { op = "abs" }, {}, "flip_v" } })
+    local fixed = {}
+    for _, e in ipairs(scene:ui_elements()) do
+        if e.id:sub(1, 14) == "palette:fixed:" then fixed[#fixed + 1] = e.id end
+    end
+    assert(#fixed == 1 and fixed[1] == "palette:fixed:flip_v", "only the supported entry, got " .. table.concat(fixed, ","))
+    print("PASS: unsupported fixed op skipped")
+end
+
+-- Locked op entries are one cell whatever size fields they carry, with their own params.
+do
+    local entry = { kind="op", op="edge_scale", x=5, y=2, width=2, height=2, tile_rows=2, tile_cols=2,
+                    params={ edge="left", scalar=-4 } }
+    local scene, def = def_scene({ locked = { entry } })
+    local tile = scene.grid:get(5, 2)
+    assert(tile.locked and tile.width == nil and tile.height == nil, "locked tile is 1x1")
+    assert(scene.grid:get(6, 2) == nil and scene.grid:get(5, 3) == nil, "no neighbouring cells taken")
+    assert(not scene.grid:is_ref(6, 2) and not scene.grid:is_ref(5, 3), "no ref cells")
+    assert(tile.params ~= def.locked[1].params, "locked params are a copy")
+    local t = scene:ui_tile(5, 2)
+    assert(t.kind == "op" and t.op == "edge_scale" and t.edge == "left" and t.scalar == -4 and t.dir == nil,
+        "ui_tile fields")
+    scene:_place_tile_at(6, 2, { kind="op", op="transpose" })
+    local bare = scene:ui_tile(6, 2)
+    assert(bare.op == "transpose" and bare.edge == nil and bare.scalar == nil, "no params, nil fields")
+    print("PASS: locked entry placed 1x1, ui_tile fields")
+end
+
+-- The board drag ghost shows an op tile's operation and value.
+do
+    local scene = new_scene()
+    scene._drag_tile  = { kind = "op", op = "scalar_sub", params = { scalar = 7 } }
+    scene._drag_ghost = { cx = 5, cy = 1 }
+    assert(drawn(scene)["-7"], "op ghost drawn with its value")
+    print("PASS: op drag ghost text")
 end
 
 print("ALL TESTS PASSED")

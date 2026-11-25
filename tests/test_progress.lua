@@ -2,6 +2,7 @@
 -- Tests for game/progress.lua: mark_solved, is_solved, is_world_unlocked,
 -- unlock_all, reset.
 
+local S = require("tests/support/shipped")
 local Progress     = require("lua/game/progress")
 local PuzzleLoader = require("lua/game/puzzle_loader")
 
@@ -124,11 +125,11 @@ do
     package.loaded["lua/game/progress"] = nil
     local P2 = require("lua/game/progress")
 
-    assert(P2.is_solved(3),          "_load new fmt: puzzle 3 solved")
-    assert(P2.is_solved(4),          "_load new fmt: puzzle 4 solved")
-    assert(not P2.is_solved(1),      "_load new fmt: puzzle 1 not solved")
-    assert(P2.is_cutscene_seen(2),   "_load new fmt: cutscene 2 seen")
-    assert(not P2.is_cutscene_seen(1), "_load new fmt: cutscene 1 not seen")
+    assert(P2.is_solved(S.puzzle("negate")), "_load new fmt: puzzle 3 solved")
+    assert(P2.is_solved(S.puzzle("swap")), "_load new fmt: puzzle 4 solved")
+    assert(not P2.is_solved(S.puzzle("identity")), "_load new fmt: puzzle 1 not solved")
+    assert(P2.is_cutscene_seen(S.world("combos")), "_load new fmt: cutscene 2 seen")
+    assert(not P2.is_cutscene_seen(S.world("basics")), "_load new fmt: cutscene 1 not seen")
 
     love.filesystem.read    = orig_read
     love.filesystem.getInfo = orig_getInfo
@@ -153,10 +154,10 @@ do
     package.loaded["lua/game/progress"] = nil
     local P2 = require("lua/game/progress")
 
-    assert(P2.is_solved(5),          "_load old fmt: puzzle 5 solved")
-    assert(P2.is_solved(6),          "_load old fmt: puzzle 6 solved")
-    assert(not P2.is_solved(1),      "_load old fmt: puzzle 1 not solved")
-    assert(not P2.is_cutscene_seen(1), "_load old fmt: no cutscene data")
+    assert(P2.is_solved(S.puzzle("scale")), "_load old fmt: puzzle 5 solved")
+    assert(P2.is_solved(S.puzzle("row_swap")), "_load old fmt: puzzle 6 solved")
+    assert(not P2.is_solved(S.puzzle("identity")), "_load old fmt: puzzle 1 not solved")
+    assert(not P2.is_cutscene_seen(S.world("basics")), "_load old fmt: no cutscene data")
 
     love.filesystem.read    = orig_read
     love.filesystem.getInfo = orig_getInfo
@@ -206,11 +207,11 @@ do
     package.loaded["lua/game/progress"] = nil
     local P = require("lua/game/progress")
 
-    assert(P.is_solved(1),         "_load new-format: puzzle 1 loaded")
-    assert(not P.is_solved(2),     "_load new-format: puzzle 2 not in save")
-    assert(P.is_solved(3),         "_load new-format: puzzle 3 loaded")
-    assert(P.is_cutscene_seen(2),  "_load new-format: world 2 cutscene loaded")
-    assert(not P.is_cutscene_seen(1), "_load new-format: world 1 cutscene not in save")
+    assert(P.is_solved(S.puzzle("identity")), "_load new-format: puzzle 1 loaded")
+    assert(not P.is_solved(S.puzzle("flip")), "_load new-format: puzzle 2 not in save")
+    assert(P.is_solved(S.puzzle("negate")), "_load new-format: puzzle 3 loaded")
+    assert(P.is_cutscene_seen(S.world("combos")), "_load new-format: world 2 cutscene loaded")
+    assert(not P.is_cutscene_seen(S.world("basics")), "_load new-format: world 1 cutscene not in save")
     print("PASS: _load() new-format save")
 
     -- Restore stubs and re-load a clean module for subsequent tests.
@@ -239,9 +240,9 @@ do
     package.loaded["lua/game/progress"] = nil
     local P = require("lua/game/progress")
 
-    assert(P.is_solved(5),     "_load old-format: puzzle 5 loaded")
-    assert(P.is_solved(7),     "_load old-format: puzzle 7 loaded")
-    assert(not P.is_solved(1), "_load old-format: puzzle 1 not in save")
+    assert(P.is_solved(S.puzzle("scale")), "_load old-format: puzzle 5 loaded")
+    assert(P.is_solved(S.puzzle("double_flip")), "_load old-format: puzzle 7 loaded")
+    assert(not P.is_solved(S.puzzle("identity")), "_load old-format: puzzle 1 not in save")
     print("PASS: _load() old-format save")
 
     love.filesystem.getInfo = orig_getInfo

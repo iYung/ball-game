@@ -1,11 +1,13 @@
 -- The solution recap must draw the board with the same geometry the game scene
 -- recorded its run frames in; otherwise the replayed pusher/matrix are offset
 -- from the grid.
+
+local S = require("tests/support/shipped")
 local runner = require("lua/headless/runner")
 local Timeline = require("lua/game/timeline")
 local Recap = require("lua/game/scenes/solution_recap_scene")
 
-local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
+local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(S.puzzle("identity")) end)
 local scene = ctx.sm.current
 scene:_place_tile_at(1, 6, { kind = "pusher" })
 Timeline.set(scene.timeline, 1, 1, scene.grid:get(1, 6).id, "right")

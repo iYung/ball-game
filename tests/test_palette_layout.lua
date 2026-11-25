@@ -1,6 +1,8 @@
 -- Ops column layout (puzzle scene UI overhaul): palette in a 2-wide column on the left
 -- (x 0..120, y 0..540) scrolling one row at a time with ^ / v arrows; Run/Reset/Menu/Continue
 -- in a 2x2 block in the bottom-right corner of the bottom bar (y >= 540).
+
+local S = require("tests/support/shipped")
 local runner       = require("lua/headless/runner")
 local UI           = require("lua/core/ui")
 local UIRunner     = require("lua/headless/ui_runner")
@@ -79,7 +81,7 @@ end
 
 -- Small palette: two-wide column from x=8, command buttons right-aligned.
 do
-    local scene = new_scene(2)
+    local scene = new_scene(S.puzzle("flip"))
     local els = scene:ui_elements()
     local function rx(id) return UI.find(els, id).rect end
     assert(rx("palette:pusher").x == 8 and rx("palette:pusher").w == 48, "P at the column's left edge")
@@ -100,7 +102,7 @@ end
 
 -- Puzzle 1 (all ten ops) fits: no arrows, last button ends at y=454.
 do
-    local scene = new_scene(1)
+    local scene = new_scene(S.puzzle("identity"))
     local els = scene:ui_elements()
     assert(not UI.find(els, "palette:scroll_up") and not UI.find(els, "palette:scroll_down"), "no scroll arrows")
     assert(#item_ids(scene) == 10 + 3, "all 10 ops plus P, Mv, [X] shown, got " .. #item_ids(scene))
@@ -168,14 +170,14 @@ do
     sel = scene.palette:selected()
     assert(sel and "palette:" .. sel.op == first_op, "selection kept after scrolling")
 
-    scene:load_puzzle(1)
+    scene:load_puzzle(S.puzzle("identity"))
     assert(scene._palette_scroll == 0, "load_puzzle resets the scroll")
     print("PASS: overflow scrolling")
 end
 
 -- Puzzle 19: only fixed ops plus tools.
 do
-    local scene = new_scene(19)
+    local scene = new_scene(S.puzzle("fixed_player"))
     local seen = {}
     for _, id in ipairs(item_ids(scene)) do
         seen[id] = true
@@ -190,12 +192,12 @@ end
 -- The puzzle hint is drawn in the HUD, without "[Esc] Menu".
 do
     local Stubs = require("lua/headless/stubs")
-    local scene = new_scene(3)
+    local scene = new_scene(S.puzzle("negate"))
     Stubs.clear_text()
     scene:draw()
     local found = false
     for _, t in ipairs(Stubs.drawn_text()) do
-        if t == string.format("Puzzle 3/%d", PuzzleLoader.count()) then found = true end
+        if t == string.format("Puzzle %d/%d", S.puzzle("negate"), PuzzleLoader.count()) then found = true end
         assert(not t:find("%[Esc%] Menu"), "old hint text still drawn")
     end
     assert(found, "Puzzle N/M hint drawn")

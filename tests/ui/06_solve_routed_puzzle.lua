@@ -10,13 +10,18 @@
 --
 -- Commands persist: A gets 'right' at tick 1 and 'stop' at tick 7, B gets
 -- 'down' at tick 7 (held until the end of the run).
+
+local S = require("tests/support/shipped")
+
 return {
     name  = "solve puzzle 3 (Sharp Left) end-to-end",
-    given = { solved = {} },
-    steps = {
+    given = { solved = S.before("basics") },
+    steps = S.steps({
         -- Navigate to puzzle 3 from title screen.
         { press = "return" },
         { assert_button = { id = "world:1", selected = true } },
+        S.arrows("basics"),
+        { assert_button = { id = "world:" .. S.world("basics"), selected = true } },
         { click_button = "Sharp Left" },
         { assert_text = "Sharp Left" },
 
@@ -56,5 +61,5 @@ return {
         { wait_until = { text = "WIN!", max_frames = 3000 } },
         { click_button = "Continue" },
         { assert_text = "SOLVED!" },
-    },
+    }),
 }

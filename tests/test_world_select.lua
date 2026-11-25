@@ -41,7 +41,8 @@ print("PASS: out-of-range world raises error")
 -- existing API untouched
 assert(type(PuzzleLoader.count) == "function", "count() still exists")
 assert(type(PuzzleLoader.load)  == "function", "load() still exists")
-assert(PuzzleLoader.count() == 21, "count() still returns 21")
+assert(PuzzleLoader.count() == #all_indices,
+    "count() equals the number of puzzles across all worlds")
 print("PASS: existing API unchanged")
 
 print("ALL WORLD SELECT TESTS PASSED")

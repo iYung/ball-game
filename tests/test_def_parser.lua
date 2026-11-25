@@ -37,13 +37,9 @@ print("PASS: %q round trip")
 
 -- Every shipped puzzle reads the same as running it.
 local PuzzleLoader = require("lua/game/puzzle_loader")
-local files = love.filesystem.getDirectoryItems("data/puzzles")
 for i = 1, PuzzleLoader.count() do
     local def = PuzzleLoader.load(i)
-    local path
-    for _, f in ipairs(files) do
-        if tonumber(f:match("^(%d+)_")) == i then path = "data/puzzles/" .. f end
-    end
+    local path = PuzzleLoader.path(i)
     local handle = assert(path and io.open(path, "r"), "puzzle file " .. i)
     local text = handle:read("*a")
     handle:close()

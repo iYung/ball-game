@@ -10,6 +10,7 @@
 --   Lines 1846-1847 (drag ghost cleared when in grid panel but out of grid bounds)
 --   Line 2113       (grid:clear called when palette nil and clicking empty cell)
 
+local S = require("tests/support/shipped")
 local runner  = require("lua/headless/runner")
 local Matrix  = require("lua/game/matrix_math")
 local Grid    = require("lua/game/grid")
@@ -18,7 +19,7 @@ local Grid    = require("lua/game/grid")
 local GRID_X, GRID_Y, CELL_SIZE = 130, 10, 52
 
 local function new_scene()
-    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(S.puzzle("identity")) end)
     return ctx.sm.current
 end
 

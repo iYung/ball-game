@@ -1,12 +1,14 @@
 -- MatrixScene UI element registry, single command-enabled function, registry hit-testing.
 -- Uses puzzle 2 (small palette).
+
+local S = require("tests/support/shipped")
 local runner = require("lua/headless/runner")
 local UI     = require("lua/core/ui")
 local UIRunner = require("lua/headless/ui_runner")
 
 local function new_scene(n)
     local ctx = runner.setup(function(_, sm)
-        return require("lua/game/scenes/matrix_scene").new(n or 2, sm)
+        return require("lua/game/scenes/matrix_scene").new(n or S.puzzle("flip"), sm)
     end)
     local scene = ctx.sm.current
     scene:draw()  -- sets _tl_top so timeline elements exist

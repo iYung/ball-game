@@ -3,6 +3,8 @@
 -- timeline slots and Run. Solutions are the replay table in
 -- docs/archive/design/simplified-ops.md, section 7.
 
+local S = require("tests/support/shipped")
+
 local EDGES = { "top", "right", "bottom", "left" }          -- middle-third order
 local DEFAULT_K = { scalar_mul = 2, edge_scale = 2, scalar_add = 1, edge_add = 1,
                     scalar_sub = 1, edge_sub = 1 }
@@ -64,16 +66,15 @@ local function program(steps, pushers, commands)
 end
 
 local function solve(s)
-    local steps = { { press = "return" } }
-    for _ = 2, s.world do add(steps, { press = "right" }) end
-    add(steps, { click_button = { id = "puzzle:" .. s.puzzle } })
+    local steps = S.steps({ { press = "return" }, S.arrows(s.world) })
+    add(steps, { click_button = S.row(s.puzzle) })
     add(steps, { assert_text = s.name })
     program(steps, s.pushers, s.commands)
     for _, t in ipairs(s.tiles) do place_tile(steps, t) end
     add(steps, { click_button = "Run" })
     add(steps, { wait_until = { text = "WIN!", max_frames = 3000 } })
     return {
-        name  = "solve puzzle " .. s.puzzle .. " (" .. s.name .. ")",
+        name  = "solve puzzle " .. S.puzzle(s.puzzle) .. " (" .. s.name .. ")",
         given = { solved = "all" },
         steps = steps,
     }
@@ -114,41 +115,41 @@ local function edge(op, k, side, x, y)
 end
 
 return {
-    spec(3, 1, "Sharp Left", TURN, { neg(5, 2) }),
-    spec(4, 1, "Drop First", {
+    spec("negate", "basics", "Sharp Left", TURN, { neg(5, 2) }),
+    spec("swap", "basics", "Drop First", {
         pushers  = { { 2, 1 }, { 1, 6 } },
         commands = { { "A", "down", 1 }, { "B", "right", 5 } },
     }, { flip_v(3, 6) }),
-    spec(6, 2, "Z-Bend", Z, { neg(5, 2), flip_v(6, 5) }),
-    spec(7, 2, "Ordered Ops", Z, { edge("edge_scale", 2, "top", 5, 2), flip_v(6, 5) }),
-    spec(8, 2, "Corner Scale", {
+    spec("row_swap", "combos", "Z-Bend", Z, { neg(5, 2), flip_v(6, 5) }),
+    spec("double_flip", "combos", "Ordered Ops", Z, { edge("edge_scale", 2, "top", 5, 2), flip_v(6, 5) }),
+    spec("combo", "combos", "Corner Scale", {
         pushers  = { { 1, 2 }, { 7, 1 } },
         commands = { { "A", "right", 1 }, { "B", "down", 5 } },
     }, { edge("edge_scale", -1, "top", 6, 2) }),
-    spec(9, 2, "Arch", DEEP, { neg(5, 2), flip_v(9, 5) }),
-    spec(10, 2, "Staircase", TURN,
+    spec("uturn", "combos", "Arch", DEEP, { neg(5, 2), flip_v(9, 5) }),
+    spec("set_row", "combos", "Staircase", TURN,
         { edge("edge_scale", 4, "bottom", 5, 2), edge("edge_sub", 8, "right", 7, 2) }),
-    spec(12, 3, "Deep Arch", DEEP, { neg(5, 2), flip_v(9, 5) }),
-    spec(13, 3, "Flip Scale Arch", {
+    spec("negate_swap", "advanced", "Deep Arch", DEEP, { neg(5, 2), flip_v(9, 5) }),
+    spec("flip_scale", "advanced", "Flip Scale Arch", {
         pushers  = { { 1, 3 }, { 7, 1 }, { 8, 8 } },
         commands = { { "A", "right", 1 }, { "B", "down", 5 }, { "C", "left", 11 } },
     }, { T(7, 5) }),
-    spec(14, 3, "Three-Step Elimination", TURN,
+    spec("elimination", "advanced", "Three-Step Elimination", TURN,
         { edge("edge_scale", 4, "top", 5, 2), edge("edge_sub", 4, "left", 7, 2) }),
-    spec(15, 3, "Triple Bend", {
+    spec("triple", "advanced", "Triple Bend", {
         pushers  = { { 1, 2 }, { 5, 1 }, { 6, 5 }, { 2, 9 } },
         commands = { { "A", "right", 1 }, { "B", "down", 3 }, { "C", "left", 6 },
                      { "B", "left", 7 }, { "B", "down", 8 }, { "D", "right", 12 } },
     }, { neg(4, 2), edge("edge_scale", 2, "top", 5, 3), T(3, 7) }),
-    spec(16, 4, "Column Work Maze", TURN,
+    spec("col_ops", "transforms", "Column Work Maze", TURN,
         { { cell = { 5, 2 }, op = "flip_h" }, edge("edge_scale", 2, "right", 7, 2) }),
-    spec(18, 4, "Double Negative", ARCH,
+    spec("double_negative", "transforms", "Double Negative", ARCH,
         { edge("edge_scale", -1, "right", 7, 4), edge("edge_scale", -1, "bottom", 7, 6) }),
     -- Fixed tiles come from their own palette buttons and keep the preset k.
-    spec(19, 5, "Fixed Tools, Bent Path", TURN, {
+    spec("fixed_player", "fixed_pieces", "Fixed Tools, Bent Path", TURN, {
         { cell = { 5, 2 }, op = "scalar_mul", k = -1, fixed = true },
         { cell = { 7, 2 }, op = "flip_v", fixed = true },
     }),
-    spec(20, 5, "Mandatory Negate, Arch Path", ARCH, {}),
-    spec(21, 5, "Locked Scale, Full Maze", ARCH, { T(7, 4), neg(7, 6) }),
+    spec("fixed_puzzle", "fixed_pieces", "Mandatory Negate, Arch Path", ARCH, {}),
+    spec("locked_scale", "fixed_pieces", "Locked Scale, Full Maze", ARCH, { T(7, 4), neg(7, 6) }),
 }

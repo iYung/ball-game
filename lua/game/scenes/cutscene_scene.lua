@@ -48,8 +48,8 @@ function CutsceneScene:on_enter()
     self._font_hint    = love.graphics.newFont(13)
     self._font_initial = love.graphics.newFont(48)
 
-    local path = string.format("data/cutscenes/world_%d.lua", self._world_num)
-    local chunk, err = love.filesystem.load(path)
+    local path = require("lua/game/puzzle_loader").cutscene_path(self._world_num)
+    local chunk = path and love.filesystem.load(path)
     if not chunk then
         self._scene_manager:switch(self._next_scene)
         return

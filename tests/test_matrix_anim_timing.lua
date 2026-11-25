@@ -2,6 +2,7 @@
 -- The puzzle scene slides the matrix into an op with its PRE-op values (like the
 -- solution recap) and shows the post-op values only once the slide has finished.
 
+local S = require("tests/support/shipped")
 local runner = require("lua/headless/runner")
 
 local Timeline = require("lua/game/timeline")
@@ -10,7 +11,7 @@ local POST   = { { 1, 3 }, { 2, 4 } }
 
 -- Puzzle 2: 2x2 matrix at (2,5), transpose offered. Op at (5,6) is entered on tick 2.
 local function new_scene()
-    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(2) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(S.puzzle("flip")) end)
     local scene = ctx.sm.current
     scene:_place_tile_at(5, 6, { kind = "op", op = "transpose" })
     scene:_place_tile_at(1, 5, { kind = "pusher" })
@@ -97,7 +98,7 @@ do
     assert(scene._anim_display_matrix == nil, "reset clears the display matrix")
     scene:start_run()
     assert(scene._anim_display_matrix == nil, "start_run clears the display matrix")
-    scene:load_puzzle(2)
+    scene:load_puzzle(S.puzzle("flip"))
     assert(scene._anim_display_matrix == nil, "load_puzzle clears the display matrix")
     print("PASS: display matrix cleared on reset/start/load")
 end

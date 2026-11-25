@@ -1,7 +1,8 @@
+local S = require("tests/support/shipped")
 local runner = require("lua/headless/runner")
 
 local function new_scene()
-    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(S.puzzle("identity")) end)
     return ctx.sm.current
 end
 
@@ -134,11 +135,11 @@ do
     local scene = new_scene()
     local l = labels(scene)
     assert(l["P"] and l["[X]"] and l["T"] and l["xk"], "puzzle 1 offers all ops")
-    scene:load_puzzle(2)
+    scene:load_puzzle(S.puzzle("flip"))
     l = labels(scene)
     assert(l["T"] and not l["xk"] and not l["+k^"], "puzzle 2 offers only transpose")
     scene.palette:select({ kind = "op", op = "transpose" })
-    scene:load_puzzle(4)
+    scene:load_puzzle(S.puzzle("swap"))
     assert(scene.palette:selected() == nil, "selection of a now-hidden op is cleared")
     assert(labels(scene)["FLv"], "puzzle 4 offers flip vertical")
     print("PASS: per-puzzle palette")
@@ -205,7 +206,7 @@ end
 
 -- Puzzle-placed locked op loads correctly (P21: the arch gap row at y=4 sits right below it).
 do
-    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(21) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(S.puzzle("locked_scale")) end)
     local scene = ctx.sm.current
 
     -- Anchor at (5,3)
@@ -232,7 +233,7 @@ end
 do
     local Sim = require("lua/game/pusher_sim")
     local Matrix = require("lua/game/matrix_math")
-    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(21) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(S.puzzle("locked_scale")) end)
     local scene = ctx.sm.current
 
     local tile = scene.grid:get(5, 3)

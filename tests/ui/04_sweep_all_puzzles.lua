@@ -1,6 +1,8 @@
 -- Sweep: open every puzzle through level select so the runner's global
 -- layout invariants run on each puzzle's screen. Also checks reachability:
 -- every puzzle index must belong to some world.
+
+local S = require("tests/support/shipped")
 local PuzzleLoader = require("lua/game/puzzle_loader")
 
 local worlds  = {}
@@ -27,8 +29,8 @@ for w, world in ipairs(worlds) do
         add({ click_button = { id = "puzzle:" .. p.index } })
         add({ wait = 5 })
         add({ assert_text = p.name })
-        if p.index == 1 then
-            -- puzzle 1 has the most ops; the full palette fits without scroll arrows
+        if p.index == S.puzzle("identity") then
+            -- identity has the most ops; the full palette fits without scroll arrows
             add({ assert_button = { id = "palette:scroll_down", visible = false } })
         end
         add({ press = "escape" })

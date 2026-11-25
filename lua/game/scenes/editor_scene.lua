@@ -3,6 +3,7 @@ local Grid       = require("lua/game/grid")
 local UI         = require("lua/core/ui")
 local Ops        = require("lua/game/ops")
 local OpTile     = require("lua/game/op_tile")
+local DefParser  = require("lua/game/def_parser")
 
 -- Layout constants (matching MatrixScene)
 local GRID_X    = 95
@@ -442,10 +443,9 @@ end
 
 -- Loads the clipboard definition; on bad input shows why and changes nothing.
 function EditorScene:_paste()
-    local text = love.system.getClipboardText()
-    local ok, def = pcall(function() return load(text or "")() end)
+    local def = DefParser.parse(love.system.getClipboardText())
     local valid, msg = false, "Parse error"
-    if ok and type(def) == "table" and def.input and def.target then
+    if def and def.input and def.target then
         valid, msg = validate_ops(def)
     end
     if valid then

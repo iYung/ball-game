@@ -157,10 +157,6 @@ end
 function SettingsMenu:draw()
     if not self.is_open then return end
 
-    -- Dark overlay
-    love.graphics.setColor(0, 0, 0, 0.6)
-    love.graphics.rectangle("fill", 0, 0, W, H)
-
     -- Panel background
     love.graphics.setColor(0.15, 0.15, 0.20, 1)
     love.graphics.rectangle("fill", PANEL_X, PANEL_Y, PANEL_W, PANEL_H)

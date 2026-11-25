@@ -161,34 +161,34 @@ function SolutionRecapScene:_draw_tile(tile, cx, cy)
     if tile.kind == "source" then
         local span_w = (tile.width  or 1) * cs
         local span_h = (tile.height or 1) * cs
-        love.graphics.setColor(0.1, 0.5, 0.2, 0.5)
+        love.graphics.setColor(0.09, 0.29, 0.17, 1)
         love.graphics.rectangle("fill", sx, sy, span_w, span_h)
         love.graphics.setColor(0.4, 1.0, 0.5, 1)
         love.graphics.setFont(self._font_cell)
         love.graphics.printf("SRC", sx, sy + span_h / 2 - 7, span_w, "center")
 
     elseif tile.kind == "sink" then
-        love.graphics.setColor(0.1, 0.3, 0.7, 0.5)
+        love.graphics.setColor(0.09, 0.19, 0.42, 1)
         love.graphics.rectangle("fill", sx, sy, cs, cs)
         love.graphics.setColor(0.5, 0.75, 1.0, 1)
         love.graphics.setFont(self._font_cell)
         love.graphics.printf("SINK", sx, mid_y - 7, cs, "center")
 
     elseif tile.kind == "pusher" then
-        love.graphics.setColor(0.30, 0.18, 0.45, 0.6)
+        love.graphics.setColor(0.21, 0.14, 0.32, 1)
         love.graphics.rectangle("fill", sx + 4, sy + 4, cs - 8, cs - 8, 6, 6)
-        love.graphics.setColor(0.80, 0.60, 1.0, 0.8)
+        love.graphics.setColor(0.66, 0.50, 0.83, 1)
         love.graphics.setLineWidth(2)
         love.graphics.rectangle("line", sx + 4, sy + 4, cs - 8, cs - 8, 6, 6)
         love.graphics.setLineWidth(1)
         love.graphics.setFont(self._font_cell)
-        love.graphics.setColor(0.80, 0.60, 1.0, 0.8)
+        love.graphics.setColor(0.66, 0.50, 0.83, 1)
         love.graphics.printf(string.char(64 + (tile.id or 1)), sx, mid_y - 8, cs, "center")
 
     elseif tile.kind == "op" then
         local w = (tile.width  or 1)
         local h = (tile.height or 1)
-        love.graphics.setColor(0.22, 0.14, 0.03, 0.92)
+        love.graphics.setColor(0.21, 0.14, 0.04, 1)
         love.graphics.rectangle("fill", sx, sy, w * cs, h * cs)
         love.graphics.setColor(0.9, 0.7, 0.3, 1)
         love.graphics.setLineWidth(2)
@@ -222,10 +222,10 @@ function SolutionRecapScene:_draw_matrix()
             local cy = py + (r - 1) * CELL_SIZE
             local v  = mat.values[r][c]
 
-            love.graphics.setColor(0.08, 0.08, 0.16, 0.92)
+            love.graphics.setColor(0.08, 0.08, 0.15, 1)
             love.graphics.rectangle("fill", cx, cy, CELL_SIZE, CELL_SIZE)
 
-            love.graphics.setColor(1, 0.80, 0.15, 0.9)
+            love.graphics.setColor(0.91, 0.73, 0.15, 1)
             love.graphics.setLineWidth(2)
             love.graphics.rectangle("line", cx+1, cy+1, CELL_SIZE-2, CELL_SIZE-2)
             love.graphics.setLineWidth(1)
@@ -257,14 +257,14 @@ function SolutionRecapScene:_draw_pushers()
         local sx = pt and lerp(pf.px, pt.px, et) or pf.px
         local sy = pt and lerp(pf.py, pt.py, et) or pf.py
 
-        love.graphics.setColor(0.30, 0.18, 0.45, 0.6)
+        love.graphics.setColor(0.21, 0.14, 0.32, 1)
         love.graphics.rectangle("fill", sx + 4, sy + 4, cs - 8, cs - 8, 6, 6)
-        love.graphics.setColor(0.80, 0.60, 1.0, 0.8)
+        love.graphics.setColor(0.66, 0.50, 0.83, 1)
         love.graphics.setLineWidth(2)
         love.graphics.rectangle("line", sx + 4, sy + 4, cs - 8, cs - 8, 6, 6)
         love.graphics.setLineWidth(1)
         love.graphics.setFont(self._font_cell)
-        love.graphics.setColor(0.80, 0.60, 1.0, 0.8)
+        love.graphics.setColor(0.66, 0.50, 0.83, 1)
         love.graphics.printf(string.char(64 + (pf.id or 1)), sx, sy + cs / 2 - 8, cs, "center")
     end
 

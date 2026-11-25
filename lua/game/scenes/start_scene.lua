@@ -108,15 +108,14 @@ function StartScene:draw()
     love.graphics.setColor(0.65, 0.60, 0.80, 1)
     love.graphics.printf("a matrix transformation puzzle", 0, 320, W, "center")
 
-    -- Prompt (pulse)
-    local alpha = 0.5 + 0.5 * math.sin(self._time * 3)
+    -- Prompt
     love.graphics.setFont(self._font_prompt)
-    love.graphics.setColor(0.60, 0.60, 0.70, alpha)
+    love.graphics.setColor(0.60, 0.60, 0.70, 1)
     love.graphics.printf("[Enter] or click to play", 0, 580, W, "center")
 
     -- Debug: unlock all
     love.graphics.setFont(self._font_debug)
-    love.graphics.setColor(0.35, 0.32, 0.42, 0.7)
+    love.graphics.setColor(0.35, 0.32, 0.42, 1)
     love.graphics.printf("(D) Unlock All", 0, 630, W, "center")
 
     -- Editor link

@@ -866,7 +866,7 @@ function MatrixScene:draw_grid()
                         local sx2, sy2 = cell_top_left(ax2 + tc, ay2)
                         local sh = (tr or 1) * CELL_SIZE
                         local sw = CELL_SIZE / 3
-                        love.graphics.setColor(0.3, 0.6, 0.3, 0.7)
+                        love.graphics.setColor(0.23, 0.44, 0.23, 1)
                         love.graphics.rectangle("fill", sx2, sy2, sw, sh)
                         love.graphics.setColor(0.5, 1.0, 0.5, 1)
                         love.graphics.setFont(self.font_ui)
@@ -880,7 +880,7 @@ function MatrixScene:draw_grid()
                         local sw = CELL_SIZE / 4
                         local sh = (tr or 1) * CELL_SIZE
                         local rx = sx2 + CELL_SIZE - sw
-                        love.graphics.setColor(0.6, 0.2, 0.2, 0.6)
+                        love.graphics.setColor(0.44, 0.15, 0.15, 1)
                         love.graphics.rectangle("fill", rx, sy2, sw, sh)
                         love.graphics.setColor(1.0, 0.4, 0.4, 1)
                         love.graphics.setFont(self.font_ui)
@@ -894,7 +894,7 @@ function MatrixScene:draw_grid()
                             local sx2, sy2 = cell_top_left(ax2, ay2 + tr)
                             local sw = tc * CELL_SIZE
                             local sh = CELL_SIZE / 3
-                            love.graphics.setColor(0.3, 0.6, 0.3, 0.7)
+                            love.graphics.setColor(0.23, 0.44, 0.23, 1)
                             love.graphics.rectangle("fill", sx2, sy2, sw, sh)
                             love.graphics.setColor(0.5, 1.0, 0.5, 1)
                             love.graphics.setFont(self.font_ui)
@@ -906,7 +906,7 @@ function MatrixScene:draw_grid()
                             local sh = CELL_SIZE / 4
                             local ry = sy2 + CELL_SIZE - sh
                             local sw = tc * CELL_SIZE
-                            love.graphics.setColor(0.6, 0.2, 0.2, 0.6)
+                            love.graphics.setColor(0.44, 0.15, 0.15, 1)
                             love.graphics.rectangle("fill", sx2, ry, sw, sh)
                             love.graphics.setColor(1.0, 0.4, 0.4, 1)
                             love.graphics.setFont(self.font_ui)
@@ -937,12 +937,12 @@ function MatrixScene:draw_grid()
         end
         local sx, sy = cell_top_left(gx, gy)
         if valid then
-            love.graphics.setColor(0.2, 0.7, 0.2, 0.45)
+            love.graphics.setColor(0.14, 0.35, 0.14, 1)
         else
-            love.graphics.setColor(0.7, 0.2, 0.2, 0.45)
+            love.graphics.setColor(0.35, 0.14, 0.14, 1)
         end
         love.graphics.rectangle("fill", sx, sy, w * CELL_SIZE, h * CELL_SIZE)
-        love.graphics.setColor(valid and 0.4 or 0.9, valid and 0.9 or 0.3, valid and 0.4 or 0.3, 0.8)
+        love.graphics.setColor(valid and 0.34 or 0.74, valid and 0.74 or 0.26, valid and 0.34 or 0.26, 1)
         love.graphics.setLineWidth(2)
         love.graphics.rectangle("line", sx + 1, sy + 1, w * CELL_SIZE - 2, h * CELL_SIZE - 2)
         love.graphics.setLineWidth(1)
@@ -952,7 +952,7 @@ function MatrixScene:draw_grid()
         else
             label = OP_SYMBOLS[tile.op] or "?"
         end
-        love.graphics.setColor(1, 1, 1, 0.8)
+        love.graphics.setColor(0.82, 0.82, 0.82, 1)
         love.graphics.setFont(self.font_cell)
         love.graphics.printf(label, sx, sy + h * CELL_SIZE / 2 - 8, w * CELL_SIZE, "center")
     end
@@ -961,10 +961,10 @@ function MatrixScene:draw_grid()
 end
 
 function MatrixScene:draw_pusher(id, sx, sy, ghost, dir)
-    local cs, a = CELL_SIZE, ghost and 0.25 or 0.95
+    local cs, a = CELL_SIZE, ghost and 0.20 or 1
     love.graphics.setColor(0.30, 0.18, 0.45, a)
     love.graphics.rectangle("fill", sx + 4, sy + 4, cs - 8, cs - 8, 6, 6)
-    love.graphics.setColor(0.80, 0.60, 1.0, ghost and 0.4 or 1)
+    love.graphics.setColor(0.80, 0.60, 1.0, ghost and 0.35 or 1)
     love.graphics.setLineWidth(2)
     love.graphics.rectangle("line", sx + 4, sy + 4, cs - 8, cs - 8, 6, 6)
     love.graphics.setLineWidth(1)
@@ -992,7 +992,7 @@ end
 function MatrixScene:draw_ref_cell(tile, dc, dr, cx, cy)
     if tile and tile.kind == "source" then
         local sx, sy = cell_top_left(cx, cy)
-        love.graphics.setColor(0.1, 0.5, 0.2, 0.5)
+        love.graphics.setColor(0.09, 0.29, 0.17, 1)
         love.graphics.rectangle("fill", sx, sy, CELL_SIZE, CELL_SIZE)
         return
     end
@@ -1026,14 +1026,14 @@ function MatrixScene:draw_tile(tile, cx, cy)
     if tile.kind == "source" then
         local span_w = (tile.width  or 1) * cs
         local span_h = (tile.height or 1) * cs
-        love.graphics.setColor(0.1, 0.5, 0.2, 0.5)
+        love.graphics.setColor(0.09, 0.29, 0.17, 1)
         love.graphics.rectangle("fill", sx, sy, span_w, span_h)
         love.graphics.setColor(0.4, 1.0, 0.5, 1)
         love.graphics.setFont(self.font_cell)
         love.graphics.printf("SRC", sx, sy + span_h / 2 - 7, span_w, "center")
 
     elseif tile.kind == "sink" then
-        love.graphics.setColor(0.1, 0.3, 0.7, 0.5)
+        love.graphics.setColor(0.09, 0.19, 0.42, 1)
         love.graphics.rectangle("fill", sx, sy, cs, cs)
         love.graphics.setColor(0.5, 0.75, 1.0, 1)
         love.graphics.setFont(self.font_cell)
@@ -1055,7 +1055,7 @@ function MatrixScene:draw_tile(tile, cx, cy)
         local span_h = h * cs
 
         -- Spanning background
-        love.graphics.setColor(0.22, 0.14, 0.03, 0.92)
+        love.graphics.setColor(0.21, 0.14, 0.04, 1)
         love.graphics.rectangle("fill", sx, sy, span_w, span_h)
         love.graphics.setColor(0.9, 0.7, 0.3, 1)
         love.graphics.setLineWidth(2)
@@ -1065,7 +1065,7 @@ function MatrixScene:draw_tile(tile, cx, cy)
         local op = tile.op
         if op == "add_matrix" or op == "sub_matrix" or op == "mul_matrix" then
             -- Small op symbol top-left; anchor cell value
-            love.graphics.setColor(0.9, 0.7, 0.3, 0.6)
+            love.graphics.setColor(0.56, 0.44, 0.21, 1)
             love.graphics.setFont(self.font_ui)
             love.graphics.print(OP_SYMBOLS[op] or "?", sx + 2, sy + 2)
             self:draw_matrix_value_cell(tile, 1, 1, cx, cy)
@@ -1109,12 +1109,12 @@ function MatrixScene:draw_tile(tile, cx, cy)
     end
 
     if tile.locked and tile.kind ~= "gap" then
-        love.graphics.setColor(0.7, 0.7, 0.7, 0.7)
+        love.graphics.setColor(0.50, 0.50, 0.50, 1)
         love.graphics.circle("fill", sx + cs - 8, sy + 7, 3)
         love.graphics.rectangle("fill", sx + cs - 10, sy + 7, 4, 5)
     end
     if tile.fixed then
-        love.graphics.setColor(0.5, 0.75, 1.0, 0.8)
+        love.graphics.setColor(0.42, 0.62, 0.83, 1)
         love.graphics.setFont(self.font_ui)
         love.graphics.printf("=", sx + (tile.width or 1)*CELL_SIZE - 14, sy + 4, 12, "right")
     end
@@ -1144,7 +1144,7 @@ function MatrixScene:draw_param_cell(tile, param_index, cx, cy)
 
     -- [-] / [+] affordances (omitted for fixed/locked tiles)
     if not immutable then
-        love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
+        love.graphics.setColor(0.50, 0.38, 0.14, 1)
         love.graphics.setFont(self.font_ui)
         love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
         love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
@@ -1171,7 +1171,7 @@ function MatrixScene:draw_matrix_value_cell(tile, col_1, row_1, cx, cy)
     love.graphics.printf(val, sx, sy + cs / 2 - 10, cs, "center")
 
     if not immutable then
-        love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
+        love.graphics.setColor(0.50, 0.38, 0.14, 1)
         love.graphics.setFont(self.font_ui)
         love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
         love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
@@ -1195,7 +1195,7 @@ function MatrixScene:draw_scale_band(tile, band, cx, cy)
         love.graphics.setFont(self.font_cell)
         love.graphics.printf("×" .. scalar, sx, sy + cs / 2 - 9, cs, "right")
         if not immutable then
-            love.graphics.setColor(0.7, 0.55, 0.2, 0.9)
+            love.graphics.setColor(0.63, 0.50, 0.19, 1)
             love.graphics.setFont(self.font_ui)
             love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
             love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
@@ -1220,7 +1220,7 @@ function MatrixScene:draw_swap_strip(tile, strip, cx, cy)
     love.graphics.printf("R" .. row_n, sx, sy + cs / 2 - 9, cs, "center")
 
     if not immutable then
-        love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
+        love.graphics.setColor(0.50, 0.38, 0.14, 1)
         love.graphics.setFont(self.font_ui)
         love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
         love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
@@ -1246,7 +1246,7 @@ function MatrixScene:draw_set_row_value_cell(tile, dc, cx, cy)
     love.graphics.printf(tostring(v), sx, sy + cs / 2 - 10, cs, "center")
 
     if not immutable then
-        love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
+        love.graphics.setColor(0.50, 0.38, 0.14, 1)
         love.graphics.setFont(self.font_ui)
         love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
         love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
@@ -1270,7 +1270,7 @@ function MatrixScene:draw_scale_col_band(tile, band, cx, cy)
         love.graphics.setFont(self.font_cell)
         love.graphics.printf("×" .. scalar, sx, sy + cs / 2 - 9, cs, "center")
         if not immutable then
-            love.graphics.setColor(0.7, 0.55, 0.2, 0.9)
+            love.graphics.setColor(0.63, 0.50, 0.19, 1)
             love.graphics.setFont(self.font_ui)
             love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
             love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
@@ -1295,7 +1295,7 @@ function MatrixScene:draw_swap_col_strip(tile, strip, cx, cy)
     love.graphics.printf("C" .. col_n, sx, sy + cs / 2 - 9, cs, "center")
 
     if not immutable then
-        love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
+        love.graphics.setColor(0.50, 0.38, 0.14, 1)
         love.graphics.setFont(self.font_ui)
         love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
         love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
@@ -1321,7 +1321,7 @@ function MatrixScene:draw_set_col_value_cell(tile, dr, cx, cy)
     love.graphics.printf(tostring(v), sx, sy + cs / 2 - 10, cs, "center")
 
     if not immutable then
-        love.graphics.setColor(0.55, 0.42, 0.15, 0.9)
+        love.graphics.setColor(0.50, 0.38, 0.14, 1)
         love.graphics.setFont(self.font_ui)
         love.graphics.printf("-", sx, sy + cs - 18, cs / 3, "center")
         love.graphics.printf("+", sx + cs * 2 / 3, sy + cs - 18, cs / 3, "center")
@@ -1347,16 +1347,16 @@ function MatrixScene:draw_travelling_matrix()
                     local cx = px + (c - 1) * CELL_SIZE
                     local cy = py + (r - 1) * CELL_SIZE
                     local v  = preview.values[r][c]
-                    love.graphics.setColor(0.08, 0.08, 0.16, 0.45)
+                    love.graphics.setColor(0.11, 0.11, 0.17, 1)
                     love.graphics.rectangle("fill", cx, cy, CELL_SIZE, CELL_SIZE)
-                    love.graphics.setColor(1, 0.80, 0.15, 0.45)
+                    love.graphics.setColor(0.47, 0.37, 0.07, 1)
                     love.graphics.setLineWidth(2)
                     love.graphics.rectangle("line", cx+1, cy+1, CELL_SIZE-2, CELL_SIZE-2)
                     love.graphics.setLineWidth(1)
                     local s
                     if v == math.floor(v) then s = tostring(math.floor(v))
                     else s = string.format("%.1f", v) end
-                    love.graphics.setColor(0.95, 0.95, 1.0, 0.45)
+                    love.graphics.setColor(0.50, 0.50, 0.53, 1)
                     love.graphics.setFont(self.font_cell)
                     love.graphics.printf(s, cx, cy + CELL_SIZE / 2 - 9, CELL_SIZE, "center")
                 end
@@ -1381,10 +1381,10 @@ function MatrixScene:draw_travelling_matrix()
             local cy = by + (r - 1) * CELL_SIZE
             local v  = mat.values[r][c]
 
-            love.graphics.setColor(0.08, 0.08, 0.16, 0.92)
+            love.graphics.setColor(0.08, 0.08, 0.15, 1)
             love.graphics.rectangle("fill", cx, cy, CELL_SIZE, CELL_SIZE)
 
-            love.graphics.setColor(1, 0.80, 0.15, 0.9)
+            love.graphics.setColor(0.91, 0.73, 0.15, 1)
             love.graphics.setLineWidth(2)
             love.graphics.rectangle("line", cx+1, cy+1, CELL_SIZE-2, CELL_SIZE-2)
             love.graphics.setLineWidth(1)
@@ -1472,7 +1472,7 @@ function MatrixScene:_draw_cmd_buttons()
         if enabled then
             love.graphics.setColor(cb[1], cb[2], cb[3], 1)
         else
-            love.graphics.setColor(0.2, 0.2, 0.3, 0.35)
+            love.graphics.setColor(0.14, 0.14, 0.21, 1)
         end
         love.graphics.setLineWidth(1)
         love.graphics.rectangle("line", r.x, r.y, r.w, r.h, 4, 4)
@@ -1527,10 +1527,10 @@ function MatrixScene:draw_palette()
         local is_sel  = self:_palette_is_selected(btn)
         local enabled = rect.enabled ~= false
 
-        love.graphics.setColor(0.12, 0.12, 0.20, enabled and 1 or 0.5)
+        love.graphics.setColor(enabled and 0.12 or 0.08, enabled and 0.12 or 0.08, enabled and 0.20 or 0.14, 1)
         love.graphics.rectangle("fill", rect.x, rect.y, rect.w, rect.h, 4, 4)
         if not enabled then
-            love.graphics.setColor(0.2, 0.2, 0.3, 0.35)
+            love.graphics.setColor(0.14, 0.14, 0.21, 1)
         else
             love.graphics.setColor(is_sel and {0.8,0.9,1.0,1} or {0.3,0.3,0.45,1})
         end
@@ -1767,7 +1767,7 @@ function MatrixScene:_draw_status_banner()
     if not col then return end
     local bh = 40
     local by = BAR_Y - bh
-    love.graphics.setColor(col[1], col[2], col[3], 0.9)
+    love.graphics.setColor(col[1], col[2], col[3], 1)
     love.graphics.rectangle("fill", OPS_W, by, HUD_X - OPS_W, bh)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setFont(self.font_ui)
@@ -2030,9 +2030,9 @@ function MatrixScene:_draw_dnd_ghost()
     local d = self._dnd
     if not d or not d.x or not d.moved then return end
     love.graphics.setFont(self.font_ui)
-    love.graphics.setColor(0.2, 0.25, 0.4, 0.75)
+    love.graphics.setColor(0.17, 0.21, 0.33, 1)
     love.graphics.rectangle("fill", d.x - 22, d.y - 16, 44, 32, 4, 4)
-    love.graphics.setColor(1, 1, 1, 0.9)
+    love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf(d.label or "", d.x - 22, d.y - 6, 44, "center")
     love.graphics.setColor(1, 1, 1, 1)
 end

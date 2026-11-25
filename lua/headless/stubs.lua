@@ -104,6 +104,11 @@ love.window = love.window or {}
 love.window.getFullscreen = function() return false end
 love.window.setFullscreen = function() end
 
+love.system = love.system or {}
+local _clipboard = ""
+love.system.setClipboardText = function(text) _clipboard = text or "" end
+love.system.getClipboardText = function() return _clipboard end
+
 love.filesystem = love.filesystem or {}
 love.filesystem.getInfo = function(path)
     -- Return a minimal file-info table for files that actually exist on disk

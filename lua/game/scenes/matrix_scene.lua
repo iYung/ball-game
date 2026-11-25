@@ -126,11 +126,11 @@ local OP_SIZES = {
 
 -- Bottom bar (x 0..CMD_BTN_X-10): pusher selector + instruction chips, then 4 lanes x 60 ticks.
 local MAX_PUSHERS = 8
-local CMD_GLYPH   = { up="^", down="v", left="<", right=">", stop="." }
-local CHIP_ORDER  = { "up", "down", "left", "right", "stop" }
+local CMD_GLYPH   = { up="^", down="v", left="<", right=">", stop=".", clear="CLR" }
+local CHIP_ORDER  = { "up", "down", "left", "right", "stop", "clear" }
 local BAR = {
     PANEL_X = 8,  PSEL_Y = BAR_Y + 10, PSEL_W = 28, PSEL_H = 28, PSEL_STEP = 30,
-    CHIP_Y  = BAR_Y + 60, CHIP_W = 44, CHIP_H = 44, CHIP_STEP = 48,
+    CHIP_Y  = BAR_Y + 60, CHIP_W = 38, CHIP_H = 38, CHIP_STEP = 42,
     TL_X    = 260, TL_RIGHT = CMD_BTN_X - 10,
     ARROW_W = 16,
     HEAD_Y  = BAR_Y + 6,  HEAD_H = 16,
@@ -208,12 +208,24 @@ local function lerp(a, b, t) return a + (b - a) * t end
 
 -- ── Constructor ────────────────────────────────────────────────────────────
 
-function MatrixScene.new(puzzle_index, scene_manager, settings_state)
+function MatrixScene.new(puzzle_index, scene_manager, settings_state, back_scene)
     local base = Scene.new(1280, 720)
     local self  = setmetatable(base, MatrixScene)
     self._start_puzzle    = puzzle_index or 1
     self._scene_manager   = scene_manager
     self._settings_state  = settings_state
+    self._back_scene      = back_scene
+    return self
+end
+
+function MatrixScene.new_from_def(puzzle_def, scene_manager, back_scene)
+    local base = Scene.new(1280, 720)
+    local self  = setmetatable(base, MatrixScene)
+    self._start_puzzle    = nil
+    self._custom_puzzle   = puzzle_def
+    self._scene_manager   = scene_manager
+    self._settings_state  = nil
+    self._back_scene      = back_scene
     return self
 end
 
@@ -261,8 +273,13 @@ end
 -- ── Puzzle management ──────────────────────────────────────────────────────
 
 function MatrixScene:load_puzzle(n)
-    self.puzzle_index   = math.max(1, math.min(n, PuzzleLoader.count()))
-    self.puzzle         = PuzzleLoader.load(self.puzzle_index)
+    if self._custom_puzzle then
+        self.puzzle_index = 0
+        self.puzzle       = self._custom_puzzle
+    else
+        self.puzzle_index = math.max(1, math.min(n, PuzzleLoader.count()))
+        self.puzzle       = PuzzleLoader.load(self.puzzle_index)
+    end
     local p             = self.puzzle
     self.input_matrix   = Matrix.new(p.input.rows,  p.input.cols,  p.input.values)
     self.target_matrix  = Matrix.new(p.target.rows, p.target.cols, p.target.values)
@@ -1428,8 +1445,12 @@ function MatrixScene:_cmd_activate(id)
         self:do_reset()
     elseif id == "menu" then
         if self._scene_manager then
-            local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-            self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
+            if self._back_scene then
+                self._scene_manager:switch(self._back_scene)
+            else
+                local LevelSelectScene = require("lua/game/scenes/level_select_scene")
+                self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
+            end
         end
     end
 end
@@ -1634,6 +1655,8 @@ function MatrixScene:_bar_click(e, btn)
         local lane, tick = tonumber(a), tonumber(b)
         if btn == 2 then
             Timeline.clear(self.timeline, lane, tick)
+        elseif btn == 1 and self.armed_chip == "clear" then
+            Timeline.clear(self.timeline, lane, tick)
         elseif btn == 1 and self.armed_chip and self.sel_pusher then
             Timeline.set(self.timeline, lane, tick, self.sel_pusher, self.armed_chip)
         end
@@ -1724,6 +1747,11 @@ function MatrixScene:ui_matrix()
         for c = 1, m.cols do rows[r][c] = m.values[r][c] end
     end
     return rows
+end
+
+-- C6 query: timeline slot content at (lane, tick), or nil when empty.
+function MatrixScene:ui_slot(lane, tick)
+    return Timeline.get(self.timeline, lane, tick)
 end
 
 -- C6 query: tile at a grid cell (ref cells resolve to their anchor tile), or nil.

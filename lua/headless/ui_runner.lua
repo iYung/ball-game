@@ -20,7 +20,8 @@ local STEP_KEYS = {
     "press", "click", "right_click", "click_button", "right_click_button",
     "click_cell", "right_click_cell",
     "drag", "wheel", "move_mouse", "hover_button", "wait", "wait_until", "assert_text",
-    "assert_no_text", "assert_button", "assert_matrix", "assert_tile",
+    "assert_no_text", "assert_button", "assert_matrix", "assert_tile", "assert_slot",
+    "text_input", "set_clipboard",
 }
 local STEP_KEY_SET = {}
 for _, k in ipairs(STEP_KEYS) do STEP_KEY_SET[k] = true end
@@ -253,6 +254,17 @@ function handlers.press(ctx, key)
     run_frame(ctx)
 end
 
+function handlers.text_input(ctx, ch)
+    settle(ctx)
+    ctx.sm:text_input(ch)
+    run_frame(ctx)
+end
+
+function handlers.set_clipboard(ctx, text)
+    love.system.setClipboardText(text)
+    run_frame(ctx)
+end
+
 local function raw_click(b)
     return function(ctx, arg)
         settle(ctx)
@@ -408,6 +420,27 @@ function handlers.assert_tile(ctx, arg)
     for _, f in ipairs({ "kind", "op", "dir" }) do
         if arg[f] ~= nil and tile[f] ~= arg[f] then
             fail(where .. " " .. f .. " is " .. tostring(tile[f]) .. ", expected " .. tostring(arg[f]))
+        end
+    end
+end
+
+function handlers.assert_slot(ctx, arg)
+    settle(ctx)
+    local scene = ctx.sm.current
+    if not (scene and scene.ui_slot) then fail("scene has no ui_slot") end
+    local lane, tick = arg.lane, arg.tick
+    local c = scene:ui_slot(lane, tick)
+    if arg.empty then
+        if c ~= nil then
+            fail("slot " .. lane .. ":" .. tick .. " expected empty, got " .. serialise(c))
+        end
+    else
+        if c == nil then fail("slot " .. lane .. ":" .. tick .. " expected filled, is empty") end
+        if arg.pusher ~= nil and c.pusher ~= arg.pusher then
+            fail("slot pusher is " .. tostring(c.pusher) .. ", expected " .. tostring(arg.pusher))
+        end
+        if arg.cmd ~= nil and c.cmd ~= arg.cmd then
+            fail("slot cmd is " .. tostring(c.cmd) .. ", expected " .. tostring(arg.cmd))
         end
     end
 end

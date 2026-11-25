@@ -73,7 +73,7 @@ Same rule applies to up vs down.
 | Landing | What happens |
 |---|---|
 | Op tile | `_process_footprint` detects the newly entered cell and fires the op. Run continues. |
-| A pusher | Pass 2 checks non-contact pushers against the new footprint before moving. Overlap → **blocked → puzzle fails**. |
+| A pusher | Checked on **final** positions at the end of the tick. A pusher that steps out of the way in the same tick is fine; one left inside the new footprint → **blocked → puzzle fails**. |
 | Off grid | `Sim.blocked` rejects any position where the footprint extends past the grid boundary. **Blocked → puzzle fails.** |
 | Gap cell | `Sim.blocked` checks every cell the footprint would cover. Any overlap with a gap → **blocked → puzzle fails.** |
 
@@ -97,3 +97,9 @@ P→ M  M    →   P  P            P  P  ?
 ```
 
 A gap, wall, or out-of-bounds cell at either corner → **blocked → puzzle fails**. This applies to all four diagonal directions.
+
+---
+
+## Blocked pushes roll back
+
+If the matrix push succeeds but the tick is then blocked (for example a non-contact pusher steps into the cell the matrix lands on), the matrix and every contact pusher return to their start-of-tick positions. No pusher is ever left inside the matrix.

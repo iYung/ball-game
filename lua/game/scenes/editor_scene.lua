@@ -93,6 +93,56 @@ local function ops_subset(allowed)
     return nil
 end
 
+-- A fixed_ops entry is an op id, or { op=, params= } presetting the placed tiles.
+-- Copies a validated list, keeping only supported params; nil when it is empty.
+local function copy_fixed_ops(list)
+    local out = {}
+    for _, entry in ipairs(list or {}) do
+        if type(entry) == "table" then
+            local copy = { op = entry.op }
+            if entry.params then
+                local params = Ops.params(entry.op, entry.params)
+                if next(params) then copy.params = params end
+            end
+            out[#out+1] = copy
+        else
+            out[#out+1] = entry
+        end
+    end
+    if #out > 0 then return out end
+    return nil
+end
+
+-- k<eq>v for each param, sorted by key and comma separated.
+local function fmt_params(params, eq)
+    local keys = {}
+    for k in pairs(params) do keys[#keys+1] = k end
+    table.sort(keys)
+    local out = {}
+    for _, k in ipairs(keys) do
+        local v = params[k]
+        local text = type(v) == "string" and string.format("%q", v) or tostring(v)
+        out[#out+1] = k .. eq .. text
+    end
+    return table.concat(out, ", ")
+end
+
+local function fmt_fixed_ops(list)
+    local out = {}
+    for _, entry in ipairs(list) do
+        if type(entry) == "string" then
+            out[#out+1] = string.format("%q", entry)
+        else
+            local text = string.format("op = %q", entry.op)
+            if entry.params then
+                text = text .. ", params = { " .. fmt_params(entry.params, " = ") .. " }"
+            end
+            out[#out+1] = "{ " .. text .. " }"
+        end
+    end
+    return "{ " .. table.concat(out, ", ") .. " }"
+end
+
 -- true, or false plus a message naming the first unsupported op or invalid param.
 local function validate_ops(def)
     for _, op in ipairs(def.ops or {}) do
@@ -104,6 +154,15 @@ local function validate_ops(def)
             local ok, msg = Ops.validate(t.op, t.params)
             if not ok then return false, msg end
         end
+    end
+    if def.fixed_ops ~= nil and type(def.fixed_ops) ~= "table" then
+        return false, "Invalid fixed_ops"
+    end
+    for _, entry in ipairs(def.fixed_ops or {}) do
+        local op, params = entry, nil
+        if type(entry) == "table" then op, params = entry.op, entry.params end
+        local ok, msg = Ops.validate(op, params)
+        if not ok then return false, msg end
     end
     return true
 end
@@ -138,6 +197,8 @@ function EditorScene.new(scene_manager)
     self._paste_error    = nil
     self._paste_error_t  = 0
     self._allowed_ops    = {}
+    self._no_ops         = false  -- loaded with an empty ops list: no editable ops
+    self._fixed_ops      = nil
     self._source         = nil
     self._sink           = nil
     self._pal_rects      = {}
@@ -561,6 +622,7 @@ function EditorScene:mouse_pressed(mx, my, btn)
                 if op then
                     if self._allowed_ops[op] then self._allowed_ops[op] = nil
                     else                          self._allowed_ops[op] = true end
+                    self._no_ops = false
                     return
                 end
                 for _, pal_btn in ipairs(EDITOR_PALETTE) do
@@ -597,6 +659,12 @@ function EditorScene:_is_free(cx, cy)
 end
 
 -- ── Build / Load def ──────────────────────────────────────────────────────
+
+-- The def's ops list: the allowed subset, {} to keep "no editable ops", or nil for all.
+function EditorScene:_def_ops()
+    if self._no_ops and not next(self._allowed_ops) then return {} end
+    return ops_subset(self._allowed_ops)
+end
 
 function EditorScene:_build_def()
     local src = self._source or {x=1, y=1}
@@ -643,7 +711,8 @@ function EditorScene:_build_def()
     }
     if #gaps   > 0 then def.gaps   = gaps   end
     if #locked > 0 then def.locked = locked end
-    def.ops = ops_subset(self._allowed_ops)
+    def.ops = self:_def_ops()
+    if self._fixed_ops then def.fixed_ops = deep_copy(self._fixed_ops) end
     return def
 end
 
@@ -711,10 +780,12 @@ function EditorScene:_load_def(def)
         end
     end
 
-    -- Op allowlist
+    -- Op allowlist and fixed ops
     for _, op in ipairs(def.ops or {}) do
         self._allowed_ops[op] = true
     end
+    self._no_ops    = type(def.ops) == "table" and next(def.ops) == nil
+    self._fixed_ops = copy_fixed_ops(def.fixed_ops)
 end
 
 -- ── Serialization ─────────────────────────────────────────────────────────
@@ -735,12 +806,18 @@ function EditorScene:_serialize()
     lines[#lines+1] = string.format("    source = { x=%d, y=%d },", src.x, src.y)
     lines[#lines+1] = string.format("    sink   = { x=%d, y=%d },", snk.x, snk.y)
 
-    -- ops (only when a subset is selected — omit if none or all are on)
-    local enabled_ops = ops_subset(self._allowed_ops)
-    if enabled_ops then
+    -- ops (omitted when all ops are offered: none or all toggled on)
+    local enabled_ops = self:_def_ops()
+    if enabled_ops and #enabled_ops == 0 then
+        lines[#lines+1] = "    ops    = {},"
+    elseif enabled_ops then
         local parts = {}
         for _, op in ipairs(enabled_ops) do parts[#parts+1] = '"' .. op .. '"' end
         lines[#lines+1] = "    ops    = { " .. table.concat(parts, ", ") .. " },"
+    end
+
+    if self._fixed_ops then
+        lines[#lines+1] = "    fixed_ops = " .. fmt_fixed_ops(self._fixed_ops) .. ","
     end
 
     -- locked tiles (non-source/sink/gap anchors with locked=true)
@@ -767,16 +844,7 @@ function EditorScene:_serialize()
             pp[#pp+1] = string.format("y=%d", lt.y)
             if t.id  then pp[#pp+1] = string.format("id=%d", t.id) end
             if t.params and next(t.params) then
-                local kk = {}
-                for k in pairs(t.params) do kk[#kk+1] = k end
-                table.sort(kk)
-                local kp = {}
-                for _, k in ipairs(kk) do
-                    local v = t.params[k]
-                    local text = type(v) == "string" and string.format("%q", v) or tostring(v)
-                    kp[#kp+1] = k .. "=" .. text
-                end
-                pp[#pp+1] = "params={" .. table.concat(kp, ", ") .. "}"
+                pp[#pp+1] = "params={" .. fmt_params(t.params, "=") .. "}"
             end
             lines[#lines+1] = "        { " .. table.concat(pp, ", ") .. " },"
         end

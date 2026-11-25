@@ -16,29 +16,31 @@
 -- Puzzle 10 "Staircase" (world 2) is used because its restricted palette fits
 -- in the visible window, so "Mv" is always on screen.
 
+local S = require("tests/support/shipped")
+
 return {
     {
         name  = "drag tool: click empty cell is a no-op",
-        given = { solved = { 1, 2, 3, 4, 5 } },
-        steps = {
+        given = { solved = S.before("combos") },
+        steps = S.steps({
             { press        = "return" },
-            { press        = "right" },                    -- world 1 → world 2 (no cutscene)
-            { click_button = { id = "puzzle:10" } },       -- Staircase: restricted palette
+            S.arrows("combos"),                            -- to Combos (no cutscene)
+            { click_button = S.row("set_row") },           -- Staircase: restricted palette
             { click_button = "Mv" },
             { assert_button = { id = "palette:drag", selected = true } },
             -- click_cell on empty cell (1,1) in drag mode → mouse_pressed finds no tile → early return
             { click_cell = { 1, 1 } },
             -- grid unchanged — (1,1) is still empty
             { assert_tile = { x = 1, y = 1 } },
-        },
+        }),
     },
     {
         name  = "drag tool: click on tile picks up and re-drops at same position",
-        given = { solved = { 1, 2, 3, 4, 5 } },
-        steps = {
+        given = { solved = S.before("combos") },
+        steps = S.steps({
             { press        = "return" },
-            { press        = "right" },                    -- world 1 → world 2 (no cutscene)
-            { click_button = { id = "puzzle:10" } },       -- Staircase: restricted palette
+            S.arrows("combos"),                            -- to Combos (no cutscene)
+            { click_button = S.row("set_row") },           -- Staircase: restricted palette
             -- place a pusher so there is something to drag
             { click_button = "P" },
             { click_cell   = { 1, 5 } },
@@ -53,6 +55,6 @@ return {
             -- erase tool still works after switching away from drag
             { right_click_cell = { 1, 5 } },
             { assert_tile = { x = 1, y = 5 } },
-        },
+        }),
     },
 }

@@ -4,10 +4,11 @@
 --   - _count_pieces counts only player-placed (non-locked) anchor tiles
 --   - on win, scene switches to SolutionRecapScene (not LevelSelectScene)
 
+local S = require("tests/support/shipped")
 local runner = require("lua/headless/runner")
 
 local function new_scene()
-    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(S.puzzle("identity")) end)
     return ctx.sm.current
 end
 
@@ -88,7 +89,7 @@ end
 -- After a win, the scene switches to SolutionRecapScene (not LevelSelectScene).
 do
     local MatrixScene = require("lua/game/scenes/matrix_scene")
-    local ctx = runner.setup(function(_, sm) return MatrixScene.new(1, sm) end)
+    local ctx = runner.setup(function(_, sm) return MatrixScene.new(S.puzzle("identity"), sm) end)
     local scene = ctx.sm.current
     add_pusher(scene, 1, 6, { [1] = "right" })
     run_to_end(scene)
@@ -103,7 +104,8 @@ do
     assert(type(new_scene_obj._stats) == "table", "new scene has _stats (SolutionRecapScene)")
     assert(new_scene_obj._stats.ticks > 0, "stats.ticks populated, got " .. tostring(new_scene_obj._stats.ticks))
     assert(new_scene_obj._stats.pieces >= 1, "stats.pieces >= 1, got " .. tostring(new_scene_obj._stats.pieces))
-    assert(new_scene_obj._stats.puzzle_index == 1, "stats.puzzle_index = 1")
+    assert(new_scene_obj._stats.puzzle_index == S.puzzle("identity"),
+        "stats.puzzle_index is the puzzle that was won")
     assert(type(new_scene_obj._frames) == "table" and #new_scene_obj._frames > 0, "frames passed to recap scene")
     print("PASS: win transitions to SolutionRecapScene")
 end
@@ -144,7 +146,7 @@ do
     -- Use puzzle 1 (source at (2,5)) with a manually placed x-1 op at (8,5).
     -- Puzzle 3 was redesigned with a non-horizontal route, so we use puzzle 1's
     -- known simple horizontal layout to verify the frame-timing invariant.
-    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(S.puzzle("identity")) end)
     local scene = ctx.sm.current
 
     add_pusher(scene, 1, 6, { [1] = "right" })

@@ -1,11 +1,13 @@
 -- Unit tests for drag-and-drop in MatrixScene: ops -> grid cells, chips -> slots, slot -> slot / off the bar.
+
+local S = require("tests/support/shipped")
 local runner   = require("lua/headless/runner")
 local UI       = require("lua/core/ui")
 local Timeline = require("lua/game/timeline")
 
 local function new_scene()
     local ctx = runner.setup(function(_, sm)
-        return require("lua/game/scenes/matrix_scene").new(1, sm)
+        return require("lua/game/scenes/matrix_scene").new(S.puzzle("identity"), sm)
     end)
     local scene = ctx.sm.current
     scene:draw()

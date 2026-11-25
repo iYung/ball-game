@@ -1,4 +1,6 @@
 -- Regression: simultaneous pusher moves (docs/design/pusher-simultaneous-moves.md)
+
+local S = require("tests/support/shipped")
 local Sim    = require("lua/game/pusher_sim")
 local runner = require("lua/headless/runner")
 
@@ -49,7 +51,7 @@ end
 
 -- Scene level: after a blocked run no pusher sits inside the matrix footprint.
 do
-    local ctx   = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
+    local ctx   = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(S.puzzle("identity")) end)
     local scene = ctx.sm.current
     local function add(x, y, cmds)
         scene:_place_tile_at(x, y, { kind = "pusher" })

@@ -1,11 +1,16 @@
 -- End-to-end: from the title screen, solve puzzle 1 with real input,
 -- then follow the recap's Next button into puzzle 2.
+
+local S = require("tests/support/shipped")
+
 return {
     name  = "solve puzzle 1 from the title screen",
-    given = { solved = {} },
-    steps = {
+    given = { solved = S.before("basics") },
+    steps = S.steps({
         { press = "return" },
         { assert_button = { id = "world:1", selected = true } },
+        S.arrows("basics"),
+        { assert_button = { id = "world:" .. S.world("basics"), selected = true } },
         { click_button = "Identity Check" },
         { assert_text = "Identity Check" },
         { assert_matrix = { { 1, 0 }, { 0, 1 } } },
@@ -25,7 +30,7 @@ return {
         { assert_button = { label = "Replay", enabled = true } },
         { assert_button = { label = "Next puzzle", enabled = true } },
         { click_button = "Next puzzle" },
-        { assert_text = "Flip It" },
+        { assert_text = S.name_after("identity", 1) },
         { assert_button = { id = "cmd:run", enabled = true } },
-    },
+    }),
 }

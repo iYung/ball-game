@@ -4,10 +4,11 @@
 --   2. Ghost preview in draw_grid  (lines 848–883)
 --   3. _bar_click psel/chip/tl/slot branches (the bottom bar; replaces the old _timeline_element_click)
 
+local S = require("tests/support/shipped")
 local runner = require("lua/headless/runner")
 
 local function new_scene()
-    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(S.puzzle("identity")) end)
     return ctx.sm.current
 end
 

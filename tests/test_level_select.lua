@@ -1,6 +1,7 @@
 -- test_level_select.lua
 -- Level select registry, hover-on-move-only fix, and registry hit-testing.
 
+local S = require("tests/support/shipped")
 local UI               = require("lua/core/ui")
 local UIRunner         = require("lua/headless/ui_runner")
 local Stubs            = require("lua/headless/stubs")
@@ -13,6 +14,16 @@ local function setup()
     Stubs.set_mouse(0, 0)
     local ctx = runner.setup(function(_, sm) return LevelSelectScene.new(sm) end)
     return ctx.sm, ctx.sm.current
+end
+
+-- Level select showing the Basics world, which has the rows hovered below.
+local function setup_basics()
+    local sm, scene = setup()
+    for _, n in ipairs(S.before("basics")) do Progress.mark_solved(n) end
+    for w = 1, S.world("basics") do Progress.mark_cutscene_seen(w) end
+    for _ = 2, S.world("basics") do sm:key_pressed("right") end
+    assert(scene._world == S.world("basics"), "on the Basics world, got " .. scene._world)
+    return sm, scene
 end
 
 local function row_centre(scene, i)
@@ -36,7 +47,7 @@ end
 
 -- A resting cursor never overrides keyboard navigation -----------------------
 do
-    local sm, scene = setup()
+    local sm, scene = setup_basics()
     local x, y = row_centre(scene, 3)
     Stubs.set_mouse(x, y)
     sm:mouse_moved(x, y)
@@ -49,7 +60,7 @@ end
 
 -- mouse_moved onto row 2 selects 2 ------------------------------------------
 do
-    local sm, scene = setup()
+    local sm, scene = setup_basics()
     local x, y = row_centre(scene, 2)
     sm:mouse_moved(x, y)
     assert(scene.selected == 2, "mouse_moved selects row 2")

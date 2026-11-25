@@ -78,9 +78,8 @@ end
 function LevelSelectScene:_switch_world(target)
     self._world = target
 
-    local cs_path = string.format("data/cutscenes/world_%d.lua", self._world)
     if self._world ~= 1
-        and love.filesystem.getInfo(cs_path)
+        and PuzzleLoader.cutscene_path(self._world)
         and not Progress.is_cutscene_seen(self._world)
     then
         Progress.mark_cutscene_seen(self._world)

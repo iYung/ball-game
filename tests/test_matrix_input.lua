@@ -5,6 +5,7 @@
 --   3. Lines 1840-1850  mouse_moved with active _drag_tile
 --   4. Lines  448-461   _clear_drag restore-to-origin path
 
+local S = require("tests/support/shipped")
 local runner = require("lua/headless/runner")
 
 -- Layout constants (must match matrix_scene.lua)
@@ -13,7 +14,7 @@ local GRID_Y    = 10
 local CELL_SIZE = 52
 
 local function new_scene()
-    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(S.puzzle("identity")) end)
     return ctx.sm.current
 end
 

@@ -1,6 +1,7 @@
 -- test_cutscene.lua
 -- Unit tests for CutsceneScene error paths in on_enter() and portrait loading.
 
+local S = require("tests/support/shipped")
 local CutsceneScene = require("lua/game/scenes/cutscene_scene")
 
 local function mock_sm()
@@ -19,7 +20,7 @@ do
 
     local sm   = mock_sm()
     local next = {}  -- dummy next scene
-    local cs   = CutsceneScene.new(2, next, sm)
+    local cs   = CutsceneScene.new(S.world("combos"), next, sm)
     local ok, err = pcall(function() cs:on_enter() end)
 
     love.filesystem.load = orig_load
@@ -40,7 +41,7 @@ do
 
     local sm   = mock_sm()
     local next = {}
-    local cs   = CutsceneScene.new(2, next, sm)
+    local cs   = CutsceneScene.new(S.world("combos"), next, sm)
     local ok, err = pcall(function() cs:on_enter() end)
 
     love.filesystem.load = orig_load
@@ -68,7 +69,7 @@ do
         return { getDimensions = function() return 64, 64 end }
     end
 
-    local cs = CutsceneScene.new(2, {}, mock_sm())
+    local cs = CutsceneScene.new(S.world("combos"), {}, mock_sm())
     -- Directly exercise the portrait cache / load path.
     local img = cs:_get_portrait("TEST_SPEAKER")
 
@@ -93,7 +94,7 @@ do
         return { getDimensions = function() return 64, 64 end }
     end
 
-    local cs = CutsceneScene.new(2, {}, mock_sm())
+    local cs = CutsceneScene.new(S.world("combos"), {}, mock_sm())
     cs._fade_alpha = 1  -- ensure drawing happens
     local ok, err = pcall(function() cs:_draw_portrait("TEST_SPEAKER") end)
 

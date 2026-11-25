@@ -16,7 +16,7 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 | `Esc` | Open settings |
 | Click a row | Play that puzzle |
 
-Puzzles are grouped into five worlds — **Basics** (1–5), **Combos** (6–11), **Advanced** (12–15), **Transforms** (16–18), and **Fixed Pieces** (19–21) — shown as tabs in a top bar. Click a tab or press Left/Right to switch worlds. World 1 is always open; every later world is **locked** until all puzzles in the previous world are solved, and locked worlds are skipped when cycling. Click a puzzle row to play it. Hovering highlights a row only when the mouse actually moves, so a resting cursor never overrides Up/Down navigation. On the start screen, press `D` or click **(D) Unlock All** to mark every puzzle solved (useful for testing or jumping ahead).
+The shipped puzzles are grouped into five worlds (**Basics**, **Combos**, **Advanced**, **Transforms** and **Fixed Pieces**), shown as tabs in a top bar. Click a tab or press Left/Right to switch worlds. A world is open if it is the first one, if every puzzle in all earlier worlds is solved, or if any puzzle in it or in a later world is solved, so a level added to an early world does not lock you out of where you have been. One limit: a world you had opened but solved nothing in (and nothing after it) locks again until the new level is solved. Locked worlds are skipped when cycling. Click a puzzle row to play it. Hovering highlights a row only when the mouse actually moves, so a resting cursor never overrides Up/Down navigation. On the start screen, press `D` or click **(D) Unlock All** to mark every puzzle solved (useful for testing or jumping ahead).
 
 **In-game controls:**
 
@@ -33,7 +33,7 @@ Puzzles are grouped into five worlds — **Basics** (1–5), **Combos** (6–11)
 | Click `A`, `B`, ... above the chips | Choose which placed pusher the chips program |
 | Click `<` / `>` on the timeline | Scroll the visible ticks (the timeline is 60 ticks long, 4 lanes) |
 
-The **left column** holds the op tiles (drag them onto the grid). The **bottom bar** holds the instruction chips and pusher selector on the left, the 4-lane **timeline** in the middle, and **Run**, **Reset**, **Menu** and (after a win) **Continue** on the right. Buttons that aren't applicable in the current state are shown dimmed, and the keyboard shortcuts follow the same rules as the buttons. The current puzzle number (`Puzzle N/21`) is shown at the top-left of the right-hand panel.
+The **left column** holds the op tiles (drag them onto the grid). The **bottom bar** holds the instruction chips and pusher selector on the left, the 4-lane **timeline** in the middle, and **Run**, **Reset**, **Menu** and (after a win) **Continue** on the right. Buttons that aren't applicable in the current state are shown dimmed, and the keyboard shortcuts follow the same rules as the buttons. The current puzzle number (`Puzzle N/total`) is shown at the top-left of the right-hand panel.
 
 **Tile types:**
 
@@ -71,9 +71,9 @@ Each puzzle only offers the op tiles it needs in the palette (the pusher, **[Mv]
 
 **Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. Click the **Continue** button (or press `Enter`) to open the **solution recap screen**, which shows the number of ticks your solution took, the number of pieces you placed, and a looping animated playback of your solution — matrix ball and pushers moving in sync — on the board. Click the **Next puzzle**, **Replay**, or **Menu** button (or press `Enter`, `R`, or `Esc`) to advance to the next puzzle, replay the animation, or return to the level-select screen. Clicks outside the three buttons do nothing. A run in which nothing moves after the last command ends as **STUCK**.
 
-**21 puzzles** — a simple identity check (puzzle 1), then single ops and short routes in **Basics** and **Combos** (several of which chain two ops), two- and three-op chains with edge ops in **Advanced**, column edits, flips and a rotation in **Transforms**, and fixed tools and locked tiles in **Fixed Pieces** (puzzle 19 offers only its fixed `!` ops, no editable ones). Puzzles can use non-square (n×m) matrices.
+**21 puzzles** ship with the game: a simple identity check (puzzle 1), then single ops and short routes in **Basics** and **Combos** (several of which chain two ops), two- and three-op chains with edge ops in **Advanced**, column edits, flips and a rotation in **Transforms**, and fixed tools and locked tiles in **Fixed Pieces** (puzzle 19 offers only its fixed `!` ops, no editable ones). Puzzles can use non-square (n×m) matrices.
 
-Saved progress from the earlier 23-puzzle numbering is converted to the new numbering when it is loaded.
+Progress is saved by puzzle and world id (the file or folder name without its number prefix), so inserting or renumbering levels keeps solved marks. Saves from older versions, including the earlier 23-puzzle numbering, are converted when loaded and rewritten in the new format the next time progress changes. A game version from before this format shows such a save as empty and overwrites it the next time progress changes.
 
 ## Puzzle editor
 
@@ -83,13 +83,39 @@ The editor has the same 10×10 grid as the game and a bottom palette with **SRC*
 
 - Set the **puzzle name** (click the name field to type)
 - Edit the **INPUT** and **TARGET** matrices (rows/cols spinners and click-to-edit value cells)
-- Choose which ops the player can freely use (**op allowlist** toggles; with none or all selected, every op is offered)
+- Choose which ops the player can freely use (**op allowlist** toggles; with none or all selected, every op is offered, except after pasting a puzzle with `ops = {}`, which offers none until a toggle is clicked)
 
-The editor does not support fixed palette ops (`fixed_ops`).
+The editor has no controls for fixed palette ops (`fixed_ops`) and does not display them, but it keeps a pasted list, and an empty `ops = {}`, through **Paste**, **Test** and **Copy**. The list stays until you paste another puzzle or leave the editor for the title screen.
 
-**Copy** serialises the current puzzle to a Lua string and copies it to the clipboard in the same format as `data/puzzles/*.lua`. **Paste** reads from the clipboard and loads a previously copied puzzle back into the editor. The text is read as data and never run: only plain table literals (strings, numbers, booleans, nested tables, comments) are accepted. A definition that names an unsupported op or has an invalid *k* or edge is rejected with a message, and unreadable text shows `Parse error`; the editor is left unchanged. **Test** opens the puzzle directly in the game for play-testing; pressing Menu there returns to the editor. **Back** returns to the title screen.
+**Copy** serialises the current puzzle to a Lua string and copies it to the clipboard in the puzzle file format. **Paste** reads from the clipboard and loads a previously copied puzzle back into the editor. The text is read as data and never run: only plain table literals (strings, numbers, booleans, nested tables, comments) are accepted. A definition that names an unsupported op or has an invalid *k* or edge is rejected with a message, and unreadable text shows `Parse error`; the editor is left unchanged. **Test** opens the puzzle directly in the game for play-testing; pressing Menu there returns to the editor. **Back** returns to the title screen.
 
-To add a custom puzzle to the game, copy the Lua source into a new file under `data/puzzles/` and register it in `lua/game/puzzle_loader.lua`.
+## Adding levels
+
+Worlds and puzzles come from the folder layout. No list needs editing.
+
+```
+data/puzzles/
+  01_basics/
+    01_identity.lua
+    02_flip.lua
+  02_combos/
+    cutscene.lua        optional
+    06_row_swap.lua
+```
+
+1. In the editor, set the puzzle name, build the level, check it with **Test**, then click **Copy**.
+2. Create `data/puzzles/<NN>_<world>/<NN>_<id>.lua` and paste the text into it unchanged.
+3. Restart the game (the web version needs a rebuild).
+
+- Each folder in `data/puzzles/` with at least one puzzle is a world. Its tab name is the folder name without the number, with `_` as a space and each word capitalised (`05_fixed_pieces` is "Fixed Pieces"). A new world is just a new folder.
+- Every `.lua` file in a world folder is a puzzle, except `cutscene.lua`. Other files are ignored. A puzzle placed directly in `data/puzzles/` is not shown, and a test fails on it.
+- The `NN_` prefix sets the order, compared as a number; gaps are allowed. Equal numbers are ordered by name, and entries without a prefix come last, alphabetically. The level number shown in game is the position in the whole list, not the prefix.
+- The id (`<id>` or `<world>`) must be unique among all puzzles or all worlds, even across folders; a duplicate stops the game with an error naming both paths.
+- Moving or renumbering a puzzle keeps its solved mark; renaming its id resets it. Renaming a world folder's id makes its cutscene play again.
+- A world's cutscene is `cutscene.lua` in its folder (same format as the shipped ones). It plays the first time the player switches to that world; the first world's never plays. The game intro is `data/cutscenes/world_0.lua`.
+- A world fits at most **10 puzzles** on the level select screen (a test enforces this). World tabs share the screen width, so long names get tight beyond about 8 worlds.
+
+Run `love . --headless` after adding a level.
 
 ## Structure
 

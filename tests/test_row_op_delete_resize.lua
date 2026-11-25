@@ -3,10 +3,11 @@
 --   1. Erase tool (palette:is_eraser()) removes any placed op tile on left-click.
 --   2. With an op selected, a left-click on a placed op tile edits it instead.
 
+local S = require("tests/support/shipped")
 local runner = require("lua/headless/runner")
 
 local function new_scene()
-    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
+    local ctx = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(S.puzzle("identity")) end)
     return ctx.sm.current
 end
 

@@ -1,33 +1,38 @@
 -- Regression: a cursor resting over a row must not override Up/Down.
+
+local S = require("tests/support/shipped")
+
 return {
     {
         name  = "level select keyboard nav with cursor parked on a row",
-        given = { solved = {} },
-        steps = {
+        given = { solved = S.before("basics") },
+        steps = S.steps({
             { press = "return" },
-            { hover_button = "Sharp Left" },
+            S.arrows("basics"),
+            { hover_button = S.row("negate") },                     -- "Sharp Left"
             { press = "down" },
-            { assert_button = { id = "puzzle:4", selected = true } },
+            { assert_button = { id = "puzzle:" .. (S.puzzle("negate") + 1), selected = true } },
             { wait = 30 },
-            { assert_button = { id = "puzzle:4", selected = true } },
+            { assert_button = { id = "puzzle:" .. (S.puzzle("negate") + 1), selected = true } },
             { press = "up" },
             { press = "up" },
-            { assert_button = { id = "puzzle:2", selected = true } },
+            { assert_button = { id = "puzzle:" .. (S.puzzle("negate") - 1), selected = true } },
             { press = "return" },
-            { assert_text = "Flip It" },
-        },
+            { assert_text = S.name_after("negate", -1) },
+        }),
     },
     {
         name  = "level select left-arrow and u-key",
         given = { solved = "all" },
-        steps = {
+        steps = S.steps({
             { press = "return" },                                   -- title → level select (world 1)
-            { press = "right" },                                    -- world 1 → world 2
-            { press = "left" },                                     -- world 2 → world 1
-            { assert_button = { id = "puzzle:1", visible = true } }, -- world 1 puzzles shown
+            S.arrows("basics"),
+            { press = "right" },                                    -- Basics → next world
+            { press = "left" },                                     -- back to Basics
+            { assert_button = { id = S.row("identity").id, visible = true } }, -- Basics puzzles shown
             { press = "u" },                                        -- debug unlock: unlock_world fires, no crash
-            { assert_button = { id = "puzzle:1", visible = true } }, -- scene still showing world 1
-        },
+            { assert_button = { id = S.row("identity").id, visible = true } }, -- scene still showing Basics
+        }),
     },
     {
         name  = "right-click on level select row does nothing",

@@ -1,12 +1,16 @@
 -- Drag-and-drop and timeline behaviour of the puzzle scene, driven through real
 -- input (`drag`, psel/chip buttons). Puzzle 1 (Identity Check): pusher at (1,5)
 -- pushing right wins in 7 ticks.
+
+local S = require("tests/support/shipped")
+
 local function open_puzzle_1(extra)
-    local steps = {
+    local steps = S.steps({
         { press = "return" },
-        { click_button = { id = "puzzle:1" } },
+        S.arrows("basics"),
+        { click_button = S.row("identity") },
         { assert_text = "Identity Check" },
-    }
+    })
     for _, s in ipairs(extra or {}) do steps[#steps + 1] = s end
     return steps
 end
@@ -23,7 +27,7 @@ end
 return {
     {
         name  = "drag an op from the ops column onto a grid cell",
-        given = { solved = {} },
+        given = { solved = S.before("basics") },
         steps = open_puzzle_1({
             { drag = { from = { id = "palette:pusher" }, to = { cell = { 3, 3 } } } },
             { assert_tile = { x = 3, y = 3, kind = "pusher" } },
@@ -38,7 +42,7 @@ return {
     },
     {
         name  = "drag a chip onto the timeline: write, replace same pusher, clear, move",
-        given = { solved = {} },
+        given = { solved = S.before("basics") },
         steps = with_pusher({
             { drag = { from = { id = "chip:right" }, to = { slot = { 1, 1 } } } },
             { assert_text = "A>" },
@@ -71,7 +75,7 @@ return {
     },
     {
         name  = "a command persists: the pusher keeps moving after its chip",
-        given = { solved = {} },
+        given = { solved = S.before("basics") },
         steps = with_pusher({
             { drag = { from = { id = "chip:right" }, to = { slot = { 1, 1 } } } },
             { click_button = "Run" },
@@ -82,7 +86,7 @@ return {
     },
     {
         name  = "stop chip halts the pusher",
-        given = { solved = {} },
+        given = { solved = S.before("basics") },
         steps = with_pusher({
             { drag = { from = { id = "chip:right" }, to = { slot = { 1, 1 } } } },
             { drag = { from = { id = "chip:stop" }, to = { slot = { 1, 3 } } } },
@@ -94,7 +98,7 @@ return {
     },
     {
         name  = "timeline scrolls to tick 60",
-        given = { solved = {} },
+        given = { solved = S.before("basics") },
         steps = with_pusher({
             { assert_button = { id = "slot:1:60", visible = false } },
             { click_button = { id = "tl:scroll_right" } },
@@ -116,7 +120,7 @@ return {
     },
     {
         name  = "psel selector follows pusher erase",
-        given = { solved = {} },
+        given = { solved = S.before("basics") },
         steps = with_pusher({
             { drag = { from = { id = "palette:pusher" }, to = { cell = { 1, 7 } } } },
             { assert_button = { id = "psel:B", visible = true } },
@@ -135,7 +139,7 @@ return {
     },
     {
         name  = "win, Continue, recap replays the new timeline",
-        given = { solved = {} },
+        given = { solved = S.before("basics") },
         steps = with_pusher({
             { drag = { from = { id = "chip:right" }, to = { slot = { 1, 1 } } } },
             { click_button = "Run" },

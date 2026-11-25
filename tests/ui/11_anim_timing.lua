@@ -1,11 +1,15 @@
 -- Regression: the matrix slides into an op with its pre-op values; the transform
 -- shows once it has arrived (matches the solution recap).
+
+local S = require("tests/support/shipped")
+
 return {
     name  = "matrix shows pre-op values while sliding into an op",
-    given = { solved = {} },
-    steps = {
+    given = { solved = S.before("basics") },
+    steps = S.steps({
         { press = "return" },
-        { click_button = { id = "puzzle:2" } },
+        S.arrows("basics"),
+        { click_button = S.row("flip") },
         { assert_text = "Flip It" },
         { click_button = { id = "palette:transpose" } },
         { click_cell = { 5, 6 } },
@@ -19,5 +23,5 @@ return {
         { assert_matrix = { { 1, 2 }, { 3, 4 } } },
         { wait_until = { matrix = { { 1, 3 }, { 2, 4 } }, max_frames = 120 } },
         { assert_matrix = { { 1, 3 }, { 2, 4 } } },
-    },
+    }),
 }

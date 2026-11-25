@@ -10,27 +10,30 @@
 -- Edge direction is asserted on tile state and on run results: the timeline
 -- chips always draw the same arrow characters, so the arrow text proves nothing here.
 
+local S = require("tests/support/shipped")
+
 local function add(steps, ...)
     for _, s in ipairs({ ... }) do steps[#steps + 1] = s end
 end
 
 local function open_puzzle_1()
-    return {
+    return S.steps({
         { press = "return" },
-        { click_button = { id = "puzzle:1" } },
+        S.arrows("basics"),
+        { click_button = S.row("identity") },
         { assert_text = "Identity Check" },
-    }
+    })
 end
 
--- World 5 (Fixed Pieces), reached with the world keys.
-local function open_world_5(index, name)
-    return {
+-- The Fixed Pieces world, reached with the world keys.
+local function open_fixed_pieces(id, name)
+    return S.steps({
         { press = "return" },
-        { press = "right" }, { press = "right" }, { press = "right" }, { press = "right" },
-        { assert_button = { id = "world:5", selected = true } },
-        { click_button = { id = "puzzle:" .. index } },
+        S.arrows("fixed_pieces"),
+        { assert_button = { id = S.tab("fixed_pieces").id, selected = true } },
+        { click_button = S.row(id) },
         { assert_text = name },
-    }
+    })
 end
 
 local function pick(steps, tool)
@@ -51,7 +54,7 @@ end
 
 local specs = {}
 local function spec(name, steps, given)
-    specs[#specs + 1] = { name = name, given = given or { solved = {} }, steps = steps }
+    specs[#specs + 1] = { name = name, given = given or { solved = S.before("basics") }, steps = steps }
 end
 
 -- 1. Every k tile: thirds change k and clamp ---------------------------------
@@ -177,7 +180,7 @@ end
 -- 4. Fixed and locked tiles ---------------------------------------------------
 
 do
-    local steps = open_world_5(19, "Fixed Tools, Bent Path")
+    local steps = open_fixed_pieces("fixed_player", "Fixed Tools, Bent Path")
     pick(steps, "fixed:scalar_mul")
     click(steps, 5, 2)
     pick(steps, "fixed:flip_v")
@@ -217,7 +220,7 @@ do
 end
 
 do
-    local steps = open_world_5(21, "Locked Scale, Full Maze")
+    local steps = open_fixed_pieces("locked_scale", "Locked Scale, Full Maze")
     expect(steps, 5, 3, "edge_scale", 3, "top")
     add(steps, { assert_text = "x3" })
     for _, tool in ipairs({ "scalar_mul", "transpose", "pusher", "drag", "erase" }) do

@@ -1,5 +1,7 @@
 -- MatrixScene:draw must leave the draw color white; main.lua composites the
 -- scene canvas with the current color, so a leaked color tints the whole screen.
+
+local S = require("tests/support/shipped")
 local runner = require("lua/headless/runner")
 
 local last
@@ -14,7 +16,7 @@ local function assert_white(label)
         label .. ": draw ended with color " .. (last and table.concat(last, ",") or "nil"))
 end
 
-local ctx   = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(1) end)
+local ctx   = runner.setup(function() return require("lua/game/scenes/matrix_scene").new(S.puzzle("identity")) end)
 local scene = ctx.sm.current
 
 scene:draw()

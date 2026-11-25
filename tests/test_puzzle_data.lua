@@ -1,6 +1,6 @@
 -- test_puzzle_data.lua
 -- Every shipped puzzle uses only supported ops and params, locked op tiles are
--- 1x1, and the five worlds cover the expected puzzle ranges.
+-- 1x1, and the worlds are well formed and list every puzzle once, in order.
 
 local PuzzleLoader = require("lua/game/puzzle_loader")
 local Ops          = require("lua/game/ops")
@@ -40,28 +40,24 @@ for n = 1, PuzzleLoader.count() do
 end
 print("PASS: every shipped puzzle uses supported ops and params")
 
--- ── World ranges ─────────────────────────────────────────────────────────────
+-- ── World structure ──────────────────────────────────────────────────────────
 
-local expected = {
-    { name = "Basics",       first = 1,  last = 5  },
-    { name = "Combos",       first = 6,  last = 11 },
-    { name = "Advanced",     first = 12, last = 15 },
-    { name = "Transforms",   first = 16, last = 18 },
-    { name = "Fixed Pieces", first = 19, last = 21 },
-}
+assert(PuzzleLoader.world_count() >= 1, "expected at least one world")
+assert(PuzzleLoader.count() >= 1, "expected at least one puzzle")
 
-assert(PuzzleLoader.world_count() == #expected, "expected five worlds")
-for w, want in ipairs(expected) do
+local next_index = 1
+for w = 1, PuzzleLoader.world_count() do
     local world = PuzzleLoader.world(w)
-    assert(world.name == want.name, string.format("world %d is named %s", w, want.name))
-    assert(#world.puzzles == want.last - want.first + 1,
-        string.format("world %d has %d puzzles", w, want.last - want.first + 1))
+    assert(type(world.name) == "string" and world.name ~= "",
+        string.format("world %d has a non-empty name", w))
+    assert(#world.puzzles >= 1, string.format("world %d has at least one puzzle", w))
     for i, p in ipairs(world.puzzles) do
-        assert(p.index == want.first + i - 1,
-            string.format("world %d entry %d is puzzle %d", w, i, want.first + i - 1))
+        assert(p.index == next_index,
+            string.format("world %d entry %d is puzzle %d", w, i, next_index))
+        next_index = next_index + 1
     end
 end
-assert(PuzzleLoader.count() == expected[#expected].last, "no puzzle lies outside the worlds")
-print("PASS: world ranges")
+assert(PuzzleLoader.count() == next_index - 1, "no puzzle lies outside the worlds")
+print("PASS: world structure")
 
 print("ALL PUZZLE DATA TESTS PASSED")

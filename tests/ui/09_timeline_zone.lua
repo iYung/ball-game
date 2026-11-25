@@ -4,13 +4,16 @@
 -- exists. The goal is unchanged: the timeline zone is registered, hit-testable
 -- (invariants run every frame) and still drawn.
 
+local S = require("tests/support/shipped")
+
 return {
     {
         name  = "timeline controls registered; slots and psel follow pushers",
-        given = { solved = {} },
-        steps = {
+        given = { solved = S.before("basics") },
+        steps = S.steps({
             { press        = "return" },
-            { click_button = { id = "puzzle:1" } },
+            S.arrows("basics"),
+            { click_button = S.row("identity") },
             { assert_text  = "Identity Check" },
 
             -- No pusher yet: no selector buttons, scroll-left disabled at the start.
@@ -24,14 +27,15 @@ return {
             { click_cell   = { 5, 5 } },
             { assert_tile  = { x = 5, y = 5, kind = "pusher" } },
             { assert_button = { id = "psel:A", selected = true } },
-        },
+        }),
     },
     {
         name  = "CLR chip registered; arms and clears a filled slot",
-        given = { solved = {} },
-        steps = {
+        given = { solved = S.before("basics") },
+        steps = S.steps({
             { press        = "return" },
-            { click_button = { id = "puzzle:1" } },
+            S.arrows("basics"),
+            { click_button = S.row("identity") },
             { assert_text  = "Identity Check" },
             { click_button = "P" },
             { click_cell   = { 3, 3 } },
@@ -44,20 +48,21 @@ return {
             { assert_button = { id = "chip:clear", selected = true } },
             { click_button = { id = "slot:1:2" } },
             { assert_slot  = { lane = 1, tick = 2, empty = true } },
-        },
+        }),
     },
     {
         name  = "timeline label still drawn after background draw (regression)",
-        given = { solved = {} },
-        steps = {
+        given = { solved = S.before("basics") },
+        steps = S.steps({
             { press        = "return" },
-            { click_button = { id = "puzzle:1" } },
+            S.arrows("basics"),
+            { click_button = S.row("identity") },
             { assert_text  = "Identity Check" },
             { click_button = "P" },
             { click_cell   = { 3, 3 } },
             -- The bar header (tick numbers) and panel label are still drawn.
             { assert_text  = "INSTRUCTIONS" },
             { assert_text  = "1" },
-        },
+        }),
     },
 }

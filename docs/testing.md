@@ -103,7 +103,7 @@ return {
 | Field | Meaning |
 |---|---|
 | `name` | Shown in the report. Defaults to `spec <n>`. |
-| `given.solved` | `{1, 2, 3}` marks those puzzle indices solved before the spec starts. `"all"` calls `Progress.unlock_all()`. Omit it or use `{}` to start with nothing solved. |
+| `given.solved` | `{1, 2, 3}` marks the puzzles at those positions (not ids) solved before the spec starts. `"all"` calls `Progress.unlock_all()`. Omit it or use `{}` to start with nothing solved. |
 | `given.cutscenes_unseen` | By default **all** cutscenes are marked as already seen so that navigating between worlds does not unexpectedly trigger cutscenes in unrelated specs. Pass `{2}` (or any list of world numbers) to leave those worlds' cutscenes unseen, allowing them to trigger. Only needed in specs that explicitly test cutscene flow (see `tests/ui/06_cutscene.lua`). |
 | `steps` | An array of steps. Each step is a table with **exactly one** key from the vocabulary below. |
 
@@ -150,7 +150,30 @@ A full play-through looks like this (puzzle 1: a pusher at (1,5) given one "righ
 { assert_text = "Flip It" },
 ```
 
-See the files in `tests/ui/` for more: `01_solve_puzzle_1.lua`, `02_level_select_keyboard.lua`, `03_world_locking.lua`, `04_sweep_all_puzzles.lua` (generated steps, all 21 puzzles), `05_start_screen.lua`, `06_cutscene.lua` (CutsceneScene end-to-end), `07_drag_drop.lua` (Mv drag tool), and `08_matrix_scene_ops.lua` (op tiles: editing by thirds, fixed and locked tiles, moving and erasing). `13_solve_converted.lua` wins puzzles through real input and `14_editor_ops.lua` covers op tiles in the editor. `11_anim_timing.lua` checks the matrix shows pre-op values while sliding into an op (`assert_matrix` mid-run).
+See the files in `tests/ui/` for more: `01_solve_puzzle_1.lua`, `02_level_select_keyboard.lua`, `03_world_locking.lua`, `04_sweep_all_puzzles.lua` (generated steps, every puzzle), `05_start_screen.lua`, `06_cutscene.lua` (CutsceneScene end-to-end), `07_drag_drop.lua` (Mv drag tool), and `08_matrix_scene_ops.lua` (op tiles: editing by thirds, fixed and locked tiles, moving and erasing). `13_solve_converted.lua` wins puzzles through real input and `14_editor_ops.lua` covers op tiles in the editor. `11_anim_timing.lua` checks the matrix shows pre-op values while sliding into an op (`assert_matrix` mid-run). `17_editor_fixed_ops.lua` covers `fixed_ops` and `ops = {}` through the editor's Paste, Test and Copy, and `18_folder_worlds.lua` covers world tabs, unlocking and cutscenes read from the world folders.
+
+---
+
+## Finding shipped puzzles
+
+A level can be added anywhere (see [Adding a level](#adding-a-level)), which shifts the positions of everything after it. Tests and specs must not hardcode the position of a shipped puzzle, a world number or the puzzle count. `given.solved`, `given.cutscenes_unseen`, `puzzle:<n>` and `world:<n>` still take positions and world numbers, so look them up by id with `require("tests/support/shipped")`:
+
+| Helper | Returns |
+|---|---|
+| `S.puzzle("flip")` / `S.world("combos")` | position of a puzzle id / number of a world id |
+| `S.row("flip")` / `S.tab("combos")` | level select selectors (`puzzle:<n>`, `world:<n>`) |
+| `S.name_after("flip", 1)` | name of the puzzle that many places after it |
+| `S.before("combos")` | positions of all puzzles in earlier worlds, for `given.solved` |
+| `S.arrows("combos")` | the Right presses from the first world to that one (every world on the way must be unlocked) |
+| `S.steps({ ... })` | the step list with nested step lists (such as `S.arrows`) spliced in |
+
+The short examples in this guide use literal positions for readability.
+
+---
+
+## Adding a level
+
+Put one file in a world folder, `data/puzzles/<NN>_<world>/<NN>_<id>.lua`; the editor's Copy output works unchanged. The folder and naming rules are in the [README](../README.md#adding-levels). No test needs editing. `tests/test_shipped_puzzles.lua` fails on a puzzle outside a world folder, a puzzle without a name, more than 10 puzzles in a world, a cutscene that does not load, or any file in `data/cutscenes/` other than `world_0.lua`; `tests/test_puzzle_data.lua` rejects unsupported ops.
 
 ---
 
@@ -193,7 +216,7 @@ There are deliberately no assertions on scene names or internal status. Assert w
 - **A click** at (x, y) with button b (1 = left, 2 = right) is `Stubs.set_mouse(x, y)`, `sm:mouse_moved(x, y)`, `sm:mouse_pressed(x, y, b)`, `sm:mouse_released(x, y, b)`. This is what LÖVE does. A move is `set_mouse` plus `mouse_moved`.
 - Element centres are rounded to whole pixels (`UI.centre`).
 - The runner never calls a scene handler or private method directly. Its only scene calls are the read-only `ui_elements()`, `ui_matrix()`, `ui_tile()` and `ui_slot()`. Everything else goes through `SceneManager`.
-- Headless stubs (`lua/headless/stubs.lua`): `love.graphics.getWidth/getHeight` return 1280/720. `love.mouse.getX/getY/getPosition` return the virtual cursor, and `isDown` returns false. Fonts are stubs that report a width of 120 for any text, so **never use `font:getWidth()` for layout**. Use constants.
+- Headless stubs (`lua/headless/stubs.lua`): `love.graphics.getWidth/getHeight` return 1280/720. `love.mouse.getX/getY/getPosition` return the virtual cursor, and `isDown` returns false. `love.filesystem.getInfo` reports anything `io.open` can open as a file, directories included, so `PuzzleLoader` (and tests that fake the folder layout) rely on `getDirectoryItems` only; call `PuzzleLoader.rescan()` after stubbing it and again after restoring it. Fonts are stubs that report a width of 120 for any text, so **never use `font:getWidth()` for layout**. Use constants.
 
 ---
 

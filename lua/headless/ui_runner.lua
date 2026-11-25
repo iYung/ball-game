@@ -21,6 +21,7 @@ local STEP_KEYS = {
     "click_cell", "right_click_cell",
     "drag", "wheel", "move_mouse", "hover_button", "wait", "wait_until", "assert_text",
     "assert_no_text", "assert_button", "assert_matrix", "assert_tile", "assert_slot",
+    "text_input", "set_clipboard",
 }
 local STEP_KEY_SET = {}
 for _, k in ipairs(STEP_KEYS) do STEP_KEY_SET[k] = true end
@@ -250,6 +251,17 @@ local handlers = {}
 function handlers.press(ctx, key)
     settle(ctx)
     ctx.sm:key_pressed(key)
+    run_frame(ctx)
+end
+
+function handlers.text_input(ctx, ch)
+    settle(ctx)
+    ctx.sm:text_input(ch)
+    run_frame(ctx)
+end
+
+function handlers.set_clipboard(ctx, text)
+    love.system.setClipboardText(text)
     run_frame(ctx)
 end
 

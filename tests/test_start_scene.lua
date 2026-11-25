@@ -13,9 +13,10 @@ Progress.reset()
 do
     local ctx = fresh()
     local els = ctx.sm.current:ui_elements()
-    assert(#els == 2, "start scene has 2 elements, got " .. #els)
+    assert(#els == 3, "start scene has 3 elements, got " .. #els)
     assert(els[1].id == "start:play" and els[1].label == "Play", "first element is start:play")
     assert(els[2].id == "start:unlock_all" and els[2].label == "Unlock All", "second element is start:unlock_all")
+    assert(els[3].id == "start:editor" and els[3].label == "Editor", "third element is start:editor")
     local err = UIRunner.check_invariants(els)
     assert(err == nil, "invariants hold: " .. tostring(err))
     local r = els[1].rect

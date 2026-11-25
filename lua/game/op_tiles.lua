@@ -297,20 +297,33 @@ function OpTiles.draw_cell(tile, dc, dr, sx, sy, cell_size, fonts, editable)
     end
 end
 
+local ARROW_HEAD = 3
+
+-- An arrow from (x1,y1) to (x2,y2), which must be horizontal or vertical.
+local function arrow(x1, y1, x2, y2)
+    local ux = x2 > x1 and 1 or (x2 < x1 and -1 or 0)
+    local uy = y2 > y1 and 1 or (y2 < y1 and -1 or 0)
+    local bx, by = x2 - ux * ARROW_HEAD, y2 - uy * ARROW_HEAD
+    love.graphics.line(x1, y1, x2, y2)
+    love.graphics.line(bx - uy * ARROW_HEAD, by - ux * ARROW_HEAD, x2, y2,
+                       bx + uy * ARROW_HEAD, by + ux * ARROW_HEAD)
+end
+
 -- The swap mark between the two cells of a swap tile; (sx, sy) is the anchor's top-left.
--- Call after the cells.
-function OpTiles.draw_overlay(tile, sx, sy, cell_size, fonts)
-    local mark, x, y, align
-    if tile.op == "swap_rows" then
-        mark, x, y, align = "⇅", sx, sy + cell_size - 8, "center"
-    elseif tile.op == "swap_cols" then
-        mark, x, y, align = "⇄", sx + cell_size - 8, sy, "left"
-    else
-        return
-    end
+-- Drawn as lines because the default font has no swap-arrow glyphs. Call after the cells.
+function OpTiles.draw_overlay(tile, sx, sy, cell_size)
+    if tile.op ~= "swap_rows" and tile.op ~= "swap_cols" then return end
     love.graphics.setColor(0.9, 0.7, 0.3, 1)
-    love.graphics.setFont(fonts.ui)
-    love.graphics.printf(mark, x, y, cell_size, align)
+    love.graphics.setLineWidth(1)
+    if tile.op == "swap_rows" then
+        local x, y = sx + cell_size / 2, sy + cell_size
+        arrow(x - 4, y + 6, x - 4, y - 6)
+        arrow(x + 4, y - 6, x + 4, y + 6)
+    else
+        local x, y = sx + cell_size, sy + 9
+        arrow(x - 6, y - 4, x + 6, y - 4)
+        arrow(x + 6, y + 4, x - 6, y + 4)
+    end
 end
 
 -- ── Tile model (puzzle editor) ─────────────────────────────────────────────

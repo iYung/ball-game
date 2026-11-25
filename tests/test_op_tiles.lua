@@ -312,14 +312,27 @@ do
 end
 
 do
+    -- Two arrows (a shaft and a head each), drawn as lines with no text.
     local function overlay(op)
-        return drawn(function() OpTiles.draw_overlay({ op = op }, 10, 20, CS, FONTS) end)
+        local lines, real = {}, love.graphics.line
+        love.graphics.line = function(...) lines[#lines+1] = table.concat({...}, ",") end
+        local text = drawn(function() OpTiles.draw_overlay({ op = op }, 10, 20, CS) end)
+        love.graphics.line = real
+        eq(text, "", op .. " overlay draws no text")
+        return lines
     end
-    eq(overlay("swap_rows"), "⇅", "swap_rows overlay")
-    eq(overlay("swap_cols"), "⇄", "swap_cols overlay")
+    local mid, edge = 10 + CS / 2, 20 + CS
+    local rows = overlay("swap_rows")
+    eq(#rows, 4, "swap_rows overlay lines")
+    eq(rows[1], table.concat({ mid-4, edge+6, mid-4, edge-6 }, ","), "swap_rows up shaft")
+    eq(rows[3], table.concat({ mid+4, edge-6, mid+4, edge+6 }, ","), "swap_rows down shaft")
+    local cols = overlay("swap_cols")
+    eq(#cols, 4, "swap_cols overlay lines")
+    eq(cols[1], table.concat({ 10+CS-6, 25, 10+CS+6, 25 }, ","), "swap_cols right shaft")
+    eq(cols[3], table.concat({ 10+CS+6, 33, 10+CS-6, 33 }, ","), "swap_cols left shaft")
     for _, op in ipairs(ALL_OPS) do
         if op ~= "swap_rows" and op ~= "swap_cols" then
-            eq(overlay(op), "", op .. " has no overlay")
+            eq(#overlay(op), 0, op .. " has no overlay")
         end
     end
     print("PASS: op_tiles draw_overlay")

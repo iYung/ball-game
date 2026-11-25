@@ -35,6 +35,7 @@ local SPIN_H   = 20
 local OPS_W    = 36
 local OPS_H    = 22
 local OPS_GAP  = 4
+local OPS_LBL_H = 14
 
 local OP_NAMES = {
     "transpose","scale_row","swap_rows","negate","scalar_mul",
@@ -339,6 +340,7 @@ function EditorScene:_rebuild_hud()
 
     -- Op allowlist
     self._hud_ops_lbl_y = cy
+    cy = cy + OPS_LBL_H   -- buttons start below the label
     local ops_per_row = 8
     for i, op in ipairs(OP_NAMES) do
         local row = math.floor((i - 1) / ops_per_row)
@@ -952,7 +954,7 @@ local function draw_op_content(tile, sx, sy, fonts)
                 CELL_SIZE, fonts, true)
         end
     end
-    OpTiles.draw_overlay(tile, sx, sy, CELL_SIZE, fonts)
+    OpTiles.draw_overlay(tile, sx, sy, CELL_SIZE)
 
     local spot = SYMBOL_SPOTS[tile.op]
     if spot then

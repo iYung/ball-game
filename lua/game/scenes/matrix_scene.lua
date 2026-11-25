@@ -1002,7 +1002,7 @@ function MatrixScene:draw_tile(tile, cx, cy)
                 self:_draw_op_cell(tile, dc, dr, cx + dc, cy + dr)
             end
         end
-        OpTiles.draw_overlay(tile, sx, sy, cs, { cell = self.font_cell, ui = self.font_ui })
+        OpTiles.draw_overlay(tile, sx, sy, cs)
     end
 
     if tile.locked and tile.kind ~= "gap" then

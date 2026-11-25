@@ -16,7 +16,7 @@ local FIELD_DEFS = {
 }
 
 local C = {
-    bg           = {0.12, 0.12, 0.18, 0.97},
+    bg           = {0.12, 0.12, 0.18, 1},
     border       = {0.4,  0.6,  1.0,  1},
     field_bg     = {0.08, 0.08, 0.14, 1},
     field_border = {0.7,  0.9,  1.0,  1},
@@ -115,10 +115,6 @@ end
 
 function ParamPopup:draw()
     if not self._open then return end
-
-    -- Dim overlay
-    love.graphics.setColor(0, 0, 0, 0.55)
-    love.graphics.rectangle("fill", 0, 0, W, H)
 
     -- Box background
     love.graphics.setColor(C.bg)

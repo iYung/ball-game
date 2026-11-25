@@ -273,7 +273,7 @@ function LevelSelectScene:draw()
             love.graphics.rectangle("fill", r.x, r.y + 4, 4, r.h - 8)
             love.graphics.setColor(0.14, 0.16, 0.26, 1)
             love.graphics.rectangle("fill", r.x + 8, r.y + 2, r.w - 8, r.h - 4, 4, 4)
-            love.graphics.setColor(0.35, 0.45, 0.80, 0.6)
+            love.graphics.setColor(0.35, 0.45, 0.80, 1)
             love.graphics.rectangle("line", r.x + 8, r.y + 2, r.w - 8, r.h - 4, 4, 4)
         end
 

@@ -80,13 +80,27 @@ Op tiles span one board cell for the op plus one per parameter. Click the left t
 
 A built-in puzzle editor is accessible from the title screen — press **E** or click **(E) Editor**.
 
-The editor shares the same 10×10 grid and op-tile palette as the main game. Place a **Source**, **Sink**, **Gap** or any op tile on the grid; toggle the **[L]** lock button to mark placed tiles as immovable in the exported puzzle. The right-hand HUD lets you:
+The editor has the same 10×10 grid as the main game. The palette along the bottom shows every tool at once: **SRC** (Source), **SNK** (Sink), **GAP**, **P** (Pusher), all 18 ops and **Erase**. Select a tool and click an empty cell to place it. Every placed tile is exported as locked, so the player cannot move, edit or erase it.
+
+| Mouse | Action |
+|-------|--------|
+| Left-click an empty cell | Place the selected tool |
+| Left-click a value or parameter cell of an op tile | Edit it on the tile (when **Erase** is not selected) |
+| Left-click a green `+` / red `-` strip | Grow / shrink the tile |
+| **Erase**, then left-click any cell of a tile | Remove the whole tile |
+| Right-click any cell of a tile | Remove the whole tile, whatever tool is selected |
+
+- **Placing:** a tool never replaces an occupied cell, and a tile that does not fit in free cells is not placed. There is one Source (the size of the input matrix) and one Sink; placing another moves it. Up to 8 pushers (A–H) can be placed.
+- **Editing:** as in the game, the left third of a cell is −1 and the right third is +1. Values and scalars range from −9 to 9. On Scale Row / Scale Col, click a band to select it, then use the thirds of the selected band to change the scalar. Row and column indices are limited by the input matrix size (swap indices are 1–4).
+- **Resizing:** matrix ops (**+M**, **−M**, **×M**) resize in both directions; Scale Row and Set Col by rows; Scale Col and Set Row by columns, each up to 4. A `+` strip appears only when the cells it would cover are free. Strips are hidden while **Erase** is selected.
+
+The right-hand HUD lets you:
 
 - Set the **puzzle name** (click the name field to type)
 - Edit the **INPUT** and **TARGET** matrices (rows/cols spinners and click-to-edit value cells)
 - Choose which ops the player can freely use (**op allowlist** toggles)
 
-**Copy** serialises the current puzzle to a Lua string and copies it to the clipboard in the same format as `data/puzzles/*.lua`. **Paste** reads from the clipboard and loads a previously copied puzzle back into the editor. **Test** opens the puzzle directly in the game for play-testing; pressing Menu there returns to the editor. **Back** returns to the title screen.
+**Copy** serialises the current puzzle, including tile parameters, values and sizes, to a Lua string and copies it to the clipboard in the same format as `data/puzzles/*.lua`. **Paste** reads from the clipboard and loads a previously copied puzzle back into the editor. **Test** opens the puzzle directly in the game for play-testing; pressing Menu there returns to the editor. Place a Source and a Sink before using Test or Copy: without them the puzzle puts the Source at the top-left cell and the Sink at the bottom-right cell, over anything placed there. **Back** returns to the title screen.
 
 To add a custom puzzle to the game, copy the Lua source into a new file under `data/puzzles/` and register it in `lua/game/puzzle_loader.lua`.
 

@@ -1,6 +1,6 @@
 ## Puzzle Editor Erase & Params Checklist
 
-Design: [docs/design/puzzle-editor-erase-params.md](../design/puzzle-editor-erase-params.md). Testing rules: [docs/testing.md](../testing.md). All open questions are resolved with the recommended answers.
+Design: [docs/archive/design/puzzle-editor-erase-params.md](design/puzzle-editor-erase-params.md). Testing rules: [docs/testing.md](../testing.md). All open questions are resolved with the recommended answers.
 
 ### Waves
 

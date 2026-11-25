@@ -148,7 +148,7 @@ A full play-through looks like this (puzzle 1: a pusher at (1,5) pushing right f
 { assert_text = "Flip It" },
 ```
 
-See the files in `tests/ui/` for more: `01_solve_puzzle_1.lua`, `02_level_select_keyboard.lua`, `03_world_locking.lua`, `04_sweep_all_puzzles.lua` (generated steps, all 23 puzzles), `05_start_screen.lua`, `06_cutscene.lua` (CutsceneScene end-to-end), `07_drag_drop.lua` (Mv drag tool), and `08_matrix_scene_ops.lua` (all op-tile param cell click paths). `11_anim_timing.lua` checks the matrix shows pre-op values while sliding into an op (`assert_matrix` mid-run).
+See the files in `tests/ui/` for more: `01_solve_puzzle_1.lua`, `02_level_select_keyboard.lua`, `03_world_locking.lua`, `04_sweep_all_puzzles.lua` (generated steps, all 23 puzzles), `05_start_screen.lua`, `06_cutscene.lua` (CutsceneScene end-to-end), `07_drag_drop.lua` (Mv drag tool), `08_matrix_scene_ops.lua` (all op-tile param cell click paths), and `12_editor.lua` (puzzle editor: palette, erase, on-tile editing, resize strips, copy / paste / test). `11_anim_timing.lua` checks the matrix shows pre-op values while sliding into an op (`assert_matrix` mid-run).
 
 ---
 
@@ -172,9 +172,12 @@ A **selector** is either a label string (`"Run"`) or a table `{ id = "cmd:run" }
 | `assert_text = "..."` / `assert_no_text = "..."` | A plain substring match against every string drawn by `print`/`printf` in the most recent frame. |
 | `assert_button = { <selector fields>, visible = bool, enabled = bool, selected = bool }` | `visible = false` asserts that the element is absent from the registry. Fields you leave out are not checked. A nil `selected` counts as false. |
 | `assert_matrix = {{...}}` | The matrix the puzzle scene shows now: the travelling matrix during or after a run, otherwise the input matrix. Rows of numbers, compared exactly. |
-| `assert_tile = { x, y, kind = ..., op = ..., dir = ... }` | The tile at a grid cell. A ref cell of a multi-cell tile reports its anchor tile. Leaving out `kind` asserts that the cell is **empty**. Only the fields you give are compared. |
+| `assert_tile = { x, y, kind = ..., op = ..., dir = ... }` | The tile at a grid cell. A ref cell of a multi-cell tile reports its anchor tile. Leaving out `kind` asserts that the cell is **empty**. Only the fields you give are compared. The puzzle editor reports only `kind` and `op`. |
+| `assert_slot = { lane = L, tick = s, empty = bool, pusher = id, cmd = "..." }` | A timeline slot of the puzzle scene. With `empty = true` the slot must be empty; otherwise it must be filled, and `pusher` / `cmd` are compared when given. |
+| `text_input = "..."` | `sm:text_input(text)`, as typed text arrives (for example in the editor's name field). |
+| `set_clipboard = "..."` | Put text on the stubbed clipboard, for example before clicking the editor's `Paste`. |
 
-`assert_matrix`, `wait_until.matrix` and `assert_tile` need a scene that has `ui_matrix()` / `ui_tile()` (only `MatrixScene`). Otherwise they fail with `scene has no matrix` or `scene has no tiles`.
+`assert_matrix` and `wait_until.matrix` need a scene that has `ui_matrix()` (only `MatrixScene`). `assert_tile` needs `ui_tile()` (`MatrixScene` and `EditorScene`). `assert_slot` needs `ui_slot()` (only `MatrixScene`). Otherwise they fail with `scene has no matrix`, `scene has no tiles` or `scene has no ui_slot`.
 
 There are deliberately no assertions on scene names or internal status. Assert what the player can see.
 
@@ -187,7 +190,7 @@ There are deliberately no assertions on scene names or internal status. Assert w
 - **After every input step**, exactly one frame runs so that the result is drawn before the next assert.
 - **A click** at (x, y) with button b (1 = left, 2 = right) is `Stubs.set_mouse(x, y)`, `sm:mouse_moved(x, y)`, `sm:mouse_pressed(x, y, b)`, `sm:mouse_released(x, y, b)`. This is what LÖVE does. A move is `set_mouse` plus `mouse_moved`.
 - Element centres are rounded to whole pixels (`UI.centre`).
-- The runner never calls a scene handler or private method directly. Its only scene calls are the read-only `ui_elements()`, `ui_matrix()` and `ui_tile()`. Everything else goes through `SceneManager`.
+- The runner never calls a scene handler or private method directly. Its only scene calls are the read-only `ui_elements()`, `ui_matrix()`, `ui_tile()` and `ui_slot()`. Everything else goes through `SceneManager`.
 - Headless stubs (`lua/headless/stubs.lua`): `love.graphics.getWidth/getHeight` return 1280/720. `love.mouse.getX/getY/getPosition` return the virtual cursor, and `isDown` returns false. Fonts are stubs that report a width of 120 for any text, so **never use `font:getWidth()` for layout**. Use constants.
 
 ---
@@ -240,6 +243,13 @@ UI.overlaps(a, b)             -- positive-area intersection (shared edges do not
 | Matrix | `slot:<L>:<s>` | same as id | slot | `<L>` = pusher letter (`A` for pusher 1). `<s>` is the real slot index. Only slots in the visible window are listed. `enabled = not running`. |
 | Recap | `recap:next` `recap:replay` `recap:menu` | `Next puzzle` `Replay` `Menu` | button | always enabled. Clicks outside them do nothing. Enter / R / Esc still work. |
 | Puzzle editor | `resize:<ax>,<ay>:<action>` | `+` / `-` | resize | a resize strip of the tile anchored at `(<ax>, <ay>)`. `<action>` is `grow_col`, `shrink_col`, `grow_row` or `shrink_row`; grow strips are labelled `+`, shrink strips `-`. Listed before the grid cells, so hit-testing finds a strip first. Labels repeat, so select strips by id. |
+| Puzzle editor | `cell:<x>,<y>` | same as id | cell | the 10x10 grid |
+| Puzzle editor | `editor:pal:source` `editor:pal:sink` `editor:pal:gap` `editor:pal:pusher` `editor:pal:<op>` `editor:pal:erase` | `SRC` `SNK` `GAP` `P`, op label, `Erase` | button | all 23 are always present; `selected` marks the active tool |
+| Puzzle editor | `editor:back` `editor:test` `editor:copy` `editor:paste` | `Back` `Test` `Copy` `Paste` | button | |
+| Puzzle editor | `editor:name` | the puzzle name | button | `selected` while the name field has focus |
+| Puzzle editor | `editor:<m>_rows_dec` `editor:<m>_rows_inc` `editor:<m>_cols_dec` `editor:<m>_cols_inc` | `-` `+` | button | `<m>` is `input` or `target`; select by id |
+| Puzzle editor | `editor:<m>_cell:<r>,<c>` | the value | cell | left third decrements, the rest increments |
+| Puzzle editor | `editor:allow:<op>` | op label | button | op allowlist; `selected` when allowed. Labels repeat the palette's, so select by id |
 
 Matrix order: palette (left to right: [<], the visible items out of P, ops, fixed ops, Mv, [X], then [>]), then commands, then cells (y-major), then `tl:scroll_left`, `tl:scroll_right`, `tl:dec`, `tl:inc`, then slots (by pusher, then by slot). Timeline elements appear only after the HUD has drawn once.
 
@@ -306,7 +316,7 @@ FAIL  tests/ui/<file>.lua :: <spec name> — step <i> <step serialised as Lua> �
 | `matrix is {...}, expected {...}` | Board logic or wrong setup steps. |
 | `tile at x,y ...` | Placement failed (wrong tool selected, locked cell, cell occupied). |
 | `invariant: ... at frame N` | A real layout bug. Fix the layout, not the spec. |
-| `scene has no matrix` / `scene has no tiles` | Matrix assert used outside the puzzle scene. |
+| `scene has no matrix` / `scene has no tiles` | Matrix assert used outside the puzzle scene, or tile assert outside the puzzle scene and editor. |
 
 ---
 

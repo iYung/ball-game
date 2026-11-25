@@ -28,11 +28,8 @@ for w, world in ipairs(worlds) do
         add({ wait = 5 })
         add({ assert_text = p.name })
         if p.index == 1 then
-            -- puzzle 1 has the most ops, so its palette scrolls; check a scrolled layout too
-            add({ assert_button = { id = "palette:scroll_down", enabled = true } })
-            add({ click_button = { id = "palette:scroll_down" } })
-            add({ wait = 5 })
-            add({ assert_button = { id = "palette:scroll_up", enabled = true } })
+            -- puzzle 1 has the most ops; the full palette fits without scroll arrows
+            add({ assert_button = { id = "palette:scroll_down", visible = false } })
         end
         add({ press = "escape" })
         -- ESC now opens the settings overlay; "Exit to Menu" returns to level select

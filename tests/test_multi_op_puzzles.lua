@@ -1,77 +1,93 @@
-local Matrix = require("lua/game/matrix_math")
+-- Reference solutions of the converted puzzles: the shipped puzzle data, run through
+-- the op chain from docs/archive/design/simplified-ops.md (section 7), must reach the target.
 
-local function m(rows, cols, values)
-    return Matrix.new(rows, cols, values)
+local Matrix       = require("lua/game/matrix_math")
+local Sim          = require("lua/game/pusher_sim")
+local PuzzleLoader = require("lua/game/puzzle_loader")
+
+-- Chain entries -------------------------------------------------------------
+
+-- A tile the player places from the puzzle's palette.
+local function player(op, params)
+    return { source = "player", op = op, params = params }
+end
+-- The locked tile at (x, y), taken from the puzzle file.
+local function locked(x, y)
+    return { source = "locked", x = x, y = y }
+end
+-- The fixed_ops entry for op, taken from the puzzle file.
+local function fixed(op)
+    return { source = "fixed", op = op }
 end
 
-local function assert_eq(a, b, msg)
-    assert(a:equals(b), msg or "matrix mismatch")
+local function neg() return player("scalar_mul", { scalar = -1 }) end
+local function edge(op, side, k) return player(op, { edge = side, scalar = k }) end
+
+local function resolve(n, puzzle, entry)
+    if entry.source == "player" then
+        local offered = puzzle.ops == nil
+        for _, op in ipairs(puzzle.ops or {}) do
+            if op == entry.op then offered = true end
+        end
+        assert(offered, "puzzle " .. n .. " does not offer " .. entry.op)
+        return { kind = "op", op = entry.op, params = entry.params }
+    elseif entry.source == "locked" then
+        for _, t in ipairs(puzzle.locked or {}) do
+            if t.x == entry.x and t.y == entry.y then return t end
+        end
+        error("puzzle " .. n .. " has no locked tile at " .. entry.x .. "," .. entry.y)
+    end
+    for _, f in ipairs(puzzle.fixed_ops or {}) do
+        local op, params = f, nil
+        if type(f) == "table" then op, params = f.op, f.params end
+        if op == entry.op then return { kind = "op", op = op, params = params } end
+    end
+    error("puzzle " .. n .. " has no fixed op " .. entry.op)
 end
 
--- Puzzle 12: "Negate & Swap"
--- negate → swap_rows(1,2)
-do
-    local input  = m(2, 2, {{1,2},{3,4}})
-    local target = m(2, 2, {{-3,-4},{-1,-2}})
-    local result = input:negate():swap_rows(1, 2)
-    assert_eq(result, target, "puzzle 12: negate then swap_rows")
-    -- verify order matters: same result with swap-then-negate (commutative here)
-    local result2 = input:swap_rows(1, 2):negate()
-    assert_eq(result2, target, "puzzle 12: swap_rows then negate (same result)")
-    print("PASS: puzzle 12 - Negate & Swap")
+local function matrix(m)
+    return Matrix.new(m.rows, m.cols, m.values)
 end
 
--- Puzzle 13: "Flip & Scale"
--- transpose → scale_row(2, -1)
-do
-    local input  = m(2, 2, {{1,2},{3,4}})
-    local target = m(2, 2, {{1,3},{-2,-4}})
-    local result = input:transpose():scale_row(2, -1)
-    assert_eq(result, target, "puzzle 13: transpose then scale_row")
-    -- verify single-op paths don't reach target
-    assert(not input:transpose():equals(target),  "puzzle 13: transpose alone is insufficient")
-    assert(not input:scale_row(2, -1):equals(target), "puzzle 13: scale_row alone is insufficient")
-    print("PASS: puzzle 13 - Flip & Scale")
+-- Applies the chain to the puzzle's input and checks it reaches the target. With two
+-- or more tiles, no single one of them may be enough on its own.
+local function check(n, name, chain)
+    local puzzle = PuzzleLoader.load(n)
+    assert(puzzle.name == name,
+        "puzzle " .. n .. " is '" .. tostring(puzzle.name) .. "', expected '" .. name .. "'")
+    local input, target = matrix(puzzle.input), matrix(puzzle.target)
+    local result = input
+    for _, entry in ipairs(chain) do
+        local tile = resolve(n, puzzle, entry)
+        if #chain > 1 then
+            assert(not Sim.apply_op(tile, input):equals(target),
+                "puzzle " .. n .. ": " .. tile.op .. " alone should be insufficient")
+        end
+        result = Sim.apply_op(tile, result)
+    end
+    assert(result:equals(target), "puzzle " .. n .. " (" .. name .. "): chain misses the target")
+    print("PASS: puzzle " .. n .. " - " .. name)
 end
 
--- Puzzle 14: "Elimination"
--- scale_row(1, 0.5) → add_rows(1, 2, -4)
-do
-    local input  = m(3, 3, {{2,0,0},{4,1,0},{0,0,1}})
-    local target = m(3, 3, {{1,0,0},{0,1,0},{0,0,1}})
-    local result = input:scale_row(1, 0.5):add_rows(1, 2, -4)
-    assert_eq(result, target, "puzzle 14: scale_row then add_rows")
-    -- verify single-op paths don't reach target
-    assert(not input:scale_row(1, 0.5):equals(target), "puzzle 14: scale_row alone is insufficient")
-    assert(not input:add_rows(1, 2, -4):equals(target), "puzzle 14: add_rows alone is insufficient")
-    print("PASS: puzzle 14 - Elimination")
-end
-
--- Puzzle 15: "Scale & Swap"
--- swap_rows(1, 3) → scale_row(3, -1)
-do
-    local input  = m(3, 3, {{1,2,3},{0,0,0},{7,8,9}})
-    local target = m(3, 3, {{7,8,9},{0,0,0},{-1,-2,-3}})
-    local result = input:swap_rows(1, 3):scale_row(3, -1)
-    assert_eq(result, target, "puzzle 15: swap_rows then scale_row")
-    -- verify single-op paths don't reach target
-    assert(not input:swap_rows(1, 3):equals(target),  "puzzle 15: swap_rows alone is insufficient")
-    assert(not input:scale_row(3, -1):equals(target), "puzzle 15: scale_row alone is insufficient")
-    print("PASS: puzzle 15 - Scale & Swap")
-end
-
--- Puzzle 16: "Triple Threat"
--- transpose → negate → scale_row(1, 2)
-do
-    local input  = m(2, 2, {{1,2},{3,4}})
-    local target = m(2, 2, {{-2,-6},{-2,-4}})
-    local result = input:transpose():negate():scale_row(1, 2)
-    assert_eq(result, target, "puzzle 16: transpose then negate then scale_row")
-    -- verify two-op paths don't reach target
-    assert(not input:transpose():negate():equals(target),    "puzzle 16: transpose+negate alone is insufficient")
-    assert(not input:transpose():scale_row(1, 2):equals(target), "puzzle 16: transpose+scale_row alone is insufficient")
-    assert(not input:negate():scale_row(1, 2):equals(target),    "puzzle 16: negate+scale_row alone is insufficient")
-    print("PASS: puzzle 16 - Triple Threat")
-end
-
-print("ALL MULTI-OP PUZZLE TESTS PASSED")
+check(3,  "Sharp Left",   { neg() })
+check(4,  "Drop First",   { player("flip_v") })
+check(6,  "Z-Bend",       { neg(), player("flip_v") })
+-- Both orders work, scaling whichever edge holds the first input row at that moment.
+check(7,  "Ordered Ops",  { edge("edge_scale", "top", 2), player("flip_v") })
+check(7,  "Ordered Ops",  { player("flip_v"), edge("edge_scale", "bottom", 2) })
+check(8,  "Corner Scale", { edge("edge_scale", "top", -1) })
+check(8,  "Corner Scale", { edge("edge_scale", "left", -1) })
+check(9,  "Arch",         { neg(), player("flip_v") })
+check(10, "Staircase",    { edge("edge_scale", "bottom", 4), edge("edge_sub", "right", 8) })
+check(12, "Deep Arch",    { neg(), player("flip_v") })
+check(13, "Flip Scale Arch", { locked(5, 3), player("transpose") })
+check(14, "Three-Step Elimination",
+    { edge("edge_scale", "top", 4), edge("edge_sub", "left", 4) })
+check(15, "Triple Bend",
+    { neg(), edge("edge_scale", "top", 2), player("transpose") })
+check(16, "Column Work Maze", { player("flip_h"), edge("edge_scale", "right", 2) })
+check(18, "Double Negative",
+    { locked(5, 3), edge("edge_scale", "right", -1), edge("edge_scale", "bottom", -1) })
+check(19, "Fixed Tools, Bent Path", { fixed("scalar_mul"), fixed("flip_v") })
+check(20, "Mandatory Negate, Arch Path", { locked(6, 6) })
+check(21, "Locked Scale, Full Maze", { locked(5, 3), player("transpose"), neg() })

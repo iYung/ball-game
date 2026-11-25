@@ -98,14 +98,39 @@ do
     print("PASS: small palette and command zone")
 end
 
--- Puzzle 1 (all 18 ops) overflows: arrows scroll one slot, every item reachable once.
+-- Puzzle 1 (all ten ops) fits: no arrows, last button ends at y=454.
 do
     local scene = new_scene(1)
+    local els = scene:ui_elements()
+    assert(not UI.find(els, "palette:scroll_up") and not UI.find(els, "palette:scroll_down"), "no scroll arrows")
+    assert(#item_ids(scene) == 10 + 3, "all 10 ops plus P, Mv, [X] shown, got " .. #item_ids(scene))
+    local last = UI.find(els, "palette:erase").rect
+    assert(last.y + last.h == 454, "last button ends at y=454, got " .. (last.y + last.h))
+    print("PASS: full palette fits")
+end
+
+-- A definition with every op plus several fixed ops overflows: arrows scroll one slot,
+-- every item reachable once. (No shipped puzzle overflows.)
+do
+    local def = {
+        name = "overflow", grid_w = 10, grid_h = 10,
+        source = { x=2, y=5 }, sink = { x=10, y=5 }, gaps = {},
+        input  = { rows=2, cols=2, values={ {1,0}, {0,1} } },
+        target = { rows=2, cols=2, values={ {1,0}, {0,1} } },
+        fixed_ops = { "transpose", "rotate_90", "flip_h", "flip_v",
+                      { op = "scalar_mul", params = { scalar = -1 } } },
+    }
+    local ctx = runner.setup(function(_, sm)
+        return require("lua/game/scenes/matrix_scene").new_from_def(def, sm)
+    end)
+    local scene = ctx.sm.current
+    scene:draw()
     local left  = UI.find(scene:ui_elements(), "palette:scroll_up")
     local right = UI.find(scene:ui_elements(), "palette:scroll_down")
     assert(left and right, "scroll arrows present")
     assert(left.label == "^" and right.label == "v", "arrow labels")
     assert(left.enabled == false and right.enabled == true, "arrow states at scroll 0")
+    check_bar(scene, "overflow scroll 0")
 
     -- Select the first op; selection must survive scrolling.
     local first_op
@@ -125,12 +150,16 @@ do
     click(scene, "palette:scroll_down")
     local after = item_ids(scene)
     assert(after[1] == before[2], "scrolling down shifts by exactly one row (P sits alone in row 0)")
-    for _ = 2, scene._palette_max_scroll do click(scene, "palette:scroll_down") end
+    check_bar(scene, "overflow scroll 1")
+    for s = 2, scene._palette_max_scroll do
+        click(scene, "palette:scroll_down")
+        check_bar(scene, "overflow scroll " .. s)
+    end
     for _, id in ipairs(item_ids(scene)) do seen[id] = true end
 
     local n = 0
     for _ in pairs(seen) do n = n + 1 end
-    assert(n == 18 + 3, "all 18 ops plus P, Mv, [X] reachable, got " .. n)
+    assert(n == 10 + 5 + 3, "all 10 ops, 5 fixed ops plus P, Mv, [X] reachable, got " .. n)
     local last = scene:ui_elements()
     assert(UI.find(last, "palette:scroll_down").enabled == false, "right disabled at the end")
     assert(UI.find(last, "palette:scroll_up").enabled == true, "left enabled at the end")
@@ -141,21 +170,21 @@ do
 
     scene:load_puzzle(1)
     assert(scene._palette_scroll == 0, "load_puzzle resets the scroll")
-    print("PASS: puzzle 1 scrolling")
+    print("PASS: overflow scrolling")
 end
 
--- Puzzle 21: only fixed ops plus tools.
+-- Puzzle 19: only fixed ops plus tools.
 do
-    local scene = new_scene(21)
+    local scene = new_scene(19)
     local seen = {}
     for _, id in ipairs(item_ids(scene)) do
         seen[id] = true
         if id ~= "palette:pusher" and id ~= "palette:drag" and id ~= "palette:erase" then
-            assert(id:sub(1, 14) == "palette:fixed:", "puzzle 21 offers no editable op, got " .. id)
+            assert(id:sub(1, 14) == "palette:fixed:", "puzzle 19 offers no editable op, got " .. id)
         end
     end
-    assert(seen["palette:fixed:swap_rows"] and seen["palette:fixed:negate"], "puzzle 21 fixed ops")
-    print("PASS: puzzle 21 fixed-only palette")
+    assert(seen["palette:fixed:flip_v"] and seen["palette:fixed:scalar_mul"], "puzzle 19 fixed ops")
+    print("PASS: puzzle 19 fixed-only palette")
 end
 
 -- The puzzle hint is drawn in the HUD, without "[Esc] Menu".

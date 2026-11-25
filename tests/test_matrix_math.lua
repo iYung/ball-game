@@ -58,50 +58,6 @@ do
     print("PASS: double transpose")
 end
 
--- scale_row()
-do
-    local a = m(2, 2, {{1,2},{3,4}})
-    local s = a:scale_row(1, 2)
-    assert_immutable(a, s, "scale_row")
-    assert_eq(s, m(2, 2, {{2,4},{3,4}}), "scale_row row1 by 2")
-    -- original unchanged
-    assert(a.values[1][1] == 1, "scale_row: original row1 unchanged")
-    print("PASS: scale_row")
-end
-
--- add_rows()
-do
-    local a = m(3, 3, {{1,0,0},{2,1,0},{0,0,1}})
-    -- add row1 * -2 to row2  =>  row2 becomes [0,1,0]
-    local r = a:add_rows(1, 2, -2)
-    assert_immutable(a, r, "add_rows")
-    assert_eq(r, m(3, 3, {{1,0,0},{0,1,0},{0,0,1}}), "add_rows result")
-    assert(a.values[2][1] == 2, "add_rows: original unchanged")
-    print("PASS: add_rows")
-end
-
--- swap_rows()
-do
-    local a = m(2, 2, {{1,2},{3,4}})
-    local s = a:swap_rows(1, 2)
-    assert_immutable(a, s, "swap_rows")
-    assert_eq(s, m(2, 2, {{3,4},{1,2}}), "swap_rows result")
-    -- double swap = original
-    assert_eq(s:swap_rows(1, 2), a, "double swap = original")
-    print("PASS: swap_rows")
-end
-
--- negate()
-do
-    local a = m(2, 2, {{1,-2},{3,0}})
-    local n = a:negate()
-    assert_immutable(a, n, "negate")
-    assert_eq(n, m(2, 2, {{-1,2},{-3,0}}), "negate result")
-    -- double negate = original
-    assert_eq(n:negate(), a, "double negate = original")
-    print("PASS: negate")
-end
-
 -- scalar_mul()
 do
     local a = m(2, 2, {{1,2},{3,4}})
@@ -121,124 +77,6 @@ do
     assert(a:equals(b), "within epsilon")
     assert(not a:equals(c), "outside epsilon")
     print("PASS: epsilon equals")
-end
-
--- add_matrix()
-do
-    -- basic 2×2 element-wise addition
-    local a = m(2, 2, {{1,2},{3,4}})
-    local b = m(2, 2, {{10,20},{30,40}})
-    local r = a:add_matrix(b)
-    assert_immutable(a, r, "add_matrix")
-    assert_eq(r, m(2, 2, {{11,22},{33,44}}), "add_matrix 2x2")
-    -- original unchanged
-    assert(a.values[1][1] == 1, "add_matrix: original unchanged")
-
-    -- dimension mismatch: 1×1 added to 2×2 — only overlapping cell changes
-    local c = m(2, 2, {{5,6},{7,8}})
-    local small = m(1, 1, {{100}})
-    local r2 = c:add_matrix(small)
-    assert(r2.values[1][1] == 105, "add_matrix: overlapping cell updated")
-    assert(r2.values[1][2] == 6,   "add_matrix: non-overlapping col unchanged")
-    assert(r2.values[2][1] == 7,   "add_matrix: non-overlapping row unchanged")
-    assert(r2.values[2][2] == 8,   "add_matrix: non-overlapping cell unchanged")
-    print("PASS: add_matrix")
-end
-
--- sub_matrix()
-do
-    -- basic 2×2 element-wise subtraction
-    local a = m(2, 2, {{10,20},{30,40}})
-    local b = m(2, 2, {{1,2},{3,4}})
-    local r = a:sub_matrix(b)
-    assert_immutable(a, r, "sub_matrix")
-    assert_eq(r, m(2, 2, {{9,18},{27,36}}), "sub_matrix 2x2")
-    -- original not mutated (copy semantics)
-    assert(a.values[1][1] == 10, "sub_matrix: original row1 col1 unchanged")
-    assert(a.values[2][2] == 40, "sub_matrix: original row2 col2 unchanged")
-    print("PASS: sub_matrix")
-end
-
--- mul_matrix()
-do
-    -- basic 2×2 element-wise multiplication
-    local a = m(2, 2, {{2,3},{4,5}})
-    local b = m(2, 2, {{10,10},{10,10}})
-    local r = a:mul_matrix(b)
-    assert_immutable(a, r, "mul_matrix")
-    assert_eq(r, m(2, 2, {{20,30},{40,50}}), "mul_matrix 2x2")
-
-    -- all-ones operand returns identical matrix (identity for element-wise multiply)
-    local ones = m(2, 2, {{1,1},{1,1}})
-    local r2 = a:mul_matrix(ones)
-    assert_eq(r2, a, "mul_matrix: all-ones operand is identity")
-    print("PASS: mul_matrix")
-end
-
--- set_row()
-do
-    -- replace row 2 of a 3×3 matrix with specific values
-    local a = m(3, 3, {{1,2,3},{4,5,6},{7,8,9}})
-    local r = a:set_row(2, {10,20,30})
-    assert_immutable(a, r, "set_row")
-    assert_eq(r, m(3, 3, {{1,2,3},{10,20,30},{7,8,9}}), "set_row row2")
-    -- original unchanged
-    assert(a.values[2][1] == 4, "set_row: original unchanged")
-
-    -- out-of-range row returns unchanged copy (r=0)
-    local r2 = a:set_row(0, {99,99,99})
-    assert_eq(r2, a, "set_row: r=0 returns unchanged copy")
-
-    -- out-of-range row returns unchanged copy (r=5 on 3-row matrix)
-    local r3 = a:set_row(5, {99,99,99})
-    assert_eq(r3, a, "set_row: r=5 on 3-row matrix returns unchanged copy")
-
-    -- values shorter than cols — only specified cols change, rest unchanged
-    local r4 = a:set_row(1, {77})
-    assert(r4.values[1][1] == 77, "set_row: short values col1 updated")
-    assert(r4.values[1][2] == 2,  "set_row: short values col2 unchanged")
-    assert(r4.values[1][3] == 3,  "set_row: short values col3 unchanged")
-    print("PASS: set_row")
-end
-
--- scale_col()
-do
-    local a = m(2, 2, {{1,2},{3,4}})
-    local r = a:scale_col(2, 3)
-    assert_immutable(a, r, "scale_col")
-    assert_eq(r, m(2, 2, {{1,6},{3,12}}), "scale_col result")
-    print("PASS: scale_col")
-end
-
--- swap_cols()
-do
-    local a = m(2, 3, {{1,2,3},{4,5,6}})
-    local r = a:swap_cols(1, 3)
-    assert_immutable(a, r, "swap_cols")
-    assert_eq(r, m(2, 3, {{3,2,1},{6,5,4}}), "swap_cols result")
-    local same = a:swap_cols(2, 2)
-    assert_eq(same, a, "swap_cols same col no-op")
-    print("PASS: swap_cols")
-end
-
--- add_cols()
-do
-    local a = m(2, 2, {{1,0},{2,0}})
-    local r = a:add_cols(1, 2, 3)
-    assert_immutable(a, r, "add_cols")
-    assert_eq(r, m(2, 2, {{1,3},{2,6}}), "add_cols result")
-    local same = a:add_cols(1, 1, 5)
-    assert(same == a, "add_cols same col is a no-op")
-    print("PASS: add_cols")
-end
-
--- set_col()
-do
-    local a = m(3, 2, {{1,2},{3,4},{5,6}})
-    local r = a:set_col(1, {9,8,7})
-    assert_immutable(a, r, "set_col")
-    assert_eq(r, m(3, 2, {{9,2},{8,4},{7,6}}), "set_col result")
-    print("PASS: set_col")
 end
 
 -- rotate_90()
@@ -268,13 +106,103 @@ do
     print("PASS: flip_v")
 end
 
--- abs()
+local function assert_no_negative_zero(mat, msg)
+    for r = 1, mat.rows do
+        for c = 1, mat.cols do
+            local v = mat.values[r][c]
+            assert(not (v == 0 and 1 / v == -math.huge), msg .. ": -0 at " .. r .. "," .. c)
+        end
+    end
+end
+
+-- op applied to src gives expected, in a new matrix, leaving src alone and without -0
+local function check(src, op, args, expected, msg)
+    local before = src:copy()
+    local result = src[op](src, unpack(args))
+    assert_immutable(src, result, msg)
+    assert_eq(result, expected, msg)
+    assert_eq(src, before, msg .. ": source unchanged")
+    assert_no_negative_zero(result, msg)
+end
+
+-- scalar_add() / scalar_sub()
 do
-    local a = m(2, 2, {{-1,2},{-3,-4}})
-    local r = a:abs()
-    assert_immutable(a, r, "abs")
-    assert_eq(r, m(2, 2, {{1,2},{3,4}}), "abs result")
-    print("PASS: abs")
+    local a = m(2, 3, {{1,2,3},{4,5,9}})
+    check(a, "scalar_add", {7}, m(2, 3, {{8,9,10},{11,12,16}}), "scalar_add above 9")
+    check(a, "scalar_add", {0}, a, "scalar_add 0")
+    check(a, "scalar_sub", {5}, m(2, 3, {{-4,-3,-2},{-1,0,4}}), "scalar_sub negative results")
+    check(a, "scalar_sub", {0}, a, "scalar_sub 0")
+    check(m(1, 3, {{-1,0,1}}), "scalar_add", {1}, m(1, 3, {{0,1,2}}), "scalar_add one row")
+    check(m(3, 1, {{1},{2},{3}}), "scalar_sub", {1}, m(3, 1, {{0},{1},{2}}), "scalar_sub one column")
+    print("PASS: scalar_add/scalar_sub")
+end
+
+-- edge_scale() / edge_add() / edge_sub(): all four edges of a non-square matrix
+do
+    local a = m(3, 4, {{1,2,3,4},{5,6,7,8},{9,10,11,12}})
+    check(a, "edge_scale", {"top", 2},    m(3, 4, {{2,4,6,8},{5,6,7,8},{9,10,11,12}}),     "edge_scale top")
+    check(a, "edge_scale", {"right", 2},  m(3, 4, {{1,2,3,8},{5,6,7,16},{9,10,11,24}}),    "edge_scale right")
+    check(a, "edge_scale", {"bottom", 2}, m(3, 4, {{1,2,3,4},{5,6,7,8},{18,20,22,24}}),    "edge_scale bottom")
+    check(a, "edge_scale", {"left", 2},   m(3, 4, {{2,2,3,4},{10,6,7,8},{18,10,11,12}}),   "edge_scale left")
+    check(a, "edge_add", {"top", 9},      m(3, 4, {{10,11,12,13},{5,6,7,8},{9,10,11,12}}), "edge_add top")
+    check(a, "edge_add", {"right", 9},    m(3, 4, {{1,2,3,13},{5,6,7,17},{9,10,11,21}}),   "edge_add right")
+    check(a, "edge_add", {"bottom", 9},   m(3, 4, {{1,2,3,4},{5,6,7,8},{18,19,20,21}}),    "edge_add bottom")
+    check(a, "edge_add", {"left", 9},     m(3, 4, {{10,2,3,4},{14,6,7,8},{18,10,11,12}}),  "edge_add left")
+    check(a, "edge_sub", {"top", 5},      m(3, 4, {{-4,-3,-2,-1},{5,6,7,8},{9,10,11,12}}), "edge_sub top")
+    check(a, "edge_sub", {"right", 5},    m(3, 4, {{1,2,3,-1},{5,6,7,3},{9,10,11,7}}),     "edge_sub right")
+    check(a, "edge_sub", {"bottom", 9},   m(3, 4, {{1,2,3,4},{5,6,7,8},{0,1,2,3}}),        "edge_sub bottom")
+    check(a, "edge_sub", {"left", 5},     m(3, 4, {{-4,2,3,4},{0,6,7,8},{4,10,11,12}}),    "edge_sub left")
+    for _, edge in ipairs({"top", "right", "bottom", "left"}) do
+        check(a, "edge_add", {edge, 0}, a, "edge_add 0 " .. edge)
+        check(a, "edge_sub", {edge, 0}, a, "edge_sub 0 " .. edge)
+    end
+    check(a, "edge_scale", {"top", 0},   m(3, 4, {{0,0,0,0},{5,6,7,8},{9,10,11,12}}),    "edge_scale 0")
+    check(a, "edge_scale", {"left", -1}, m(3, 4, {{-1,2,3,4},{-5,6,7,8},{-9,10,11,12}}), "edge_scale -1")
+    print("PASS: edge ops")
+end
+
+-- one-row and one-column matrices: both opposite edges are that line, changed once
+do
+    local row = m(1, 3, {{1,2,3}})
+    for _, edge in ipairs({"top", "bottom"}) do
+        check(row, "edge_scale", {edge, 3}, m(1, 3, {{3,6,9}}),  "one row scale " .. edge)
+        check(row, "edge_add",   {edge, 2}, m(1, 3, {{3,4,5}}),  "one row add " .. edge)
+        check(row, "edge_sub",   {edge, 2}, m(1, 3, {{-1,0,1}}), "one row sub " .. edge)
+    end
+    check(row, "edge_add", {"left", 2},  m(1, 3, {{3,2,3}}), "one row left")
+    check(row, "edge_add", {"right", 2}, m(1, 3, {{1,2,5}}), "one row right")
+
+    local col = m(3, 1, {{1},{2},{3}})
+    for _, edge in ipairs({"left", "right"}) do
+        check(col, "edge_scale", {edge, 3}, m(3, 1, {{3},{6},{9}}),  "one column scale " .. edge)
+        check(col, "edge_add",   {edge, 2}, m(3, 1, {{3},{4},{5}}),  "one column add " .. edge)
+        check(col, "edge_sub",   {edge, 2}, m(3, 1, {{-1},{0},{1}}), "one column sub " .. edge)
+    end
+    check(col, "edge_add", {"top", 2},    m(3, 1, {{3},{2},{3}}), "one column top")
+    check(col, "edge_add", {"bottom", 2}, m(3, 1, {{1},{2},{5}}), "one column bottom")
+
+    check(m(1, 1, {{4}}), "edge_add", {"top", 1}, m(1, 1, {{5}}), "1x1 edge")
+    print("PASS: edge ops on one row / one column")
+end
+
+-- no operation produces or keeps -0
+do
+    local zeros = m(2, 2, {{0,1},{0,0}})
+    check(zeros, "scalar_mul", {-1}, m(2, 2, {{0,-1},{0,0}}), "scalar_mul -1 of zeros")
+    check(zeros, "scalar_mul", {-9}, m(2, 2, {{0,-9},{0,0}}), "scalar_mul -9 of zeros")
+    for _, edge in ipairs({"top", "right", "bottom", "left"}) do
+        assert_no_negative_zero(zeros:edge_scale(edge, -1), "edge_scale -1 " .. edge)
+    end
+    local negative = -1 * 0
+    assert(1 / negative == -math.huge, "test setup: value is -0")
+    local signed = m(2, 2, {{negative,negative},{negative,negative}})
+    assert_no_negative_zero(signed, "new")
+    assert_no_negative_zero(signed:copy(), "copy")
+    for _, op in ipairs({"transpose", "rotate_90", "flip_h", "flip_v"}) do
+        assert_no_negative_zero(signed[op](signed), op)
+    end
+    assert(tostring(zeros:scalar_mul(-1).values[1][1]) == "0", "zero prints without a sign")
+    print("PASS: no -0")
 end
 
 print("ALL TESTS PASSED")

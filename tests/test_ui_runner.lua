@@ -215,6 +215,31 @@ do
     print("PASS: ui_runner: assert_matrix / assert_tile")
 end
 
+-- assert_tile compares edge and scalar ------------------------------------
+do
+    local s = fake_scene({})
+    local tiles = {
+        { kind = "op", op = "edge_add", edge = "left", scalar = 0 },
+        { kind = "op", op = "scalar_mul", scalar = -9 },
+    }
+    function s:ui_tile(x, _y) return tiles[x] end
+    local ok, err = run(s, {
+        { assert_tile = { x = 1, y = 1, kind = "op", op = "edge_add", edge = "left", scalar = 0 } },
+        { assert_tile = { x = 2, y = 1, kind = "op", scalar = -9 } },
+        { assert_tile = { x = 1, y = 1, kind = "op" } },
+    })
+    assert(ok, tostring(err))
+    ok, err = run(s, { { assert_tile = { x = 1, y = 1, kind = "op", edge = "top" } } })
+    expect_fail(ok, err, "tile at 1,1 edge is left, expected top")
+    ok, err = run(s, { { assert_tile = { x = 1, y = 1, kind = "op", scalar = 1 } } })
+    expect_fail(ok, err, "tile at 1,1 scalar is 0, expected 1")
+    ok, err = run(s, { { assert_tile = { x = 2, y = 1, kind = "op", scalar = 9 } } })
+    expect_fail(ok, err, "tile at 2,1 scalar is -9, expected 9")
+    ok, err = run(s, { { assert_tile = { x = 2, y = 1, kind = "op", edge = "top" } } })
+    expect_fail(ok, err, "tile at 2,1 edge is nil, expected top")
+    print("PASS: ui_runner: assert_tile edge / scalar")
+end
+
 -- invariant failure inside a spec reports the frame ------------------------
 do
     local ok, err = run(fake_scene({ btn("a", "A", 0, 0, 10, 10), btn("b", "B", 5, 5, 10, 10) }), {})

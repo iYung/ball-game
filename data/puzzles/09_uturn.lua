@@ -11,7 +11,7 @@ return {
     grid_w = 10, grid_h = 10,
     source = { x=2, y=2 },
     sink   = { x=1, y=9 },
-    ops    = { "negate", "swap_rows" },
+    ops    = { "scalar_mul", "flip_v" },
     input  = { rows=2, cols=2, values={ {1,2},{3,4} } },
     target = { rows=2, cols=2, values={ {-3,-4},{-1,-2} } },
     gaps = {

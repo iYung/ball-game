@@ -3,7 +3,7 @@ return {
     grid_w = 10, grid_h = 10,
     source = { x=2, y=2 },
     sink   = { x=8, y=8 },
-    ops    = { "swap_rows" },
+    ops    = { "flip_v" },
     input  = { rows=3, cols=3, values={ {0,0,1},{0,1,0},{1,0,0} } },
     target = { rows=3, cols=3, values={ {1,0,0},{0,1,0},{0,0,1} } },
     gaps   = {

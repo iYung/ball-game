@@ -79,7 +79,7 @@ Saved progress from the earlier 23-puzzle numbering is converted to the new numb
 
 A built-in puzzle editor is accessible from the title screen — press **E** or click **(E) Editor**.
 
-The editor has the same 10×10 grid as the game and a bottom palette with **SRC** (Source), **SNK** (Sink), **GAP**, the pusher **P**, all ten op tiles and the eraser **[X]**. Every tile you place is exported as locked, but stays editable inside the editor: click the thirds of an op tile to change *k* or turn its edge, as in the game. Erase with **[X]** or a right-click. The right-hand HUD lets you:
+The editor has the same 10×10 grid as the game and a bottom palette with **SRC** (Source), **SNK** (Sink), **GAP**, the pusher **P**, all ten op tiles and **Erase**. Every tile you place is exported as locked, but stays editable inside the editor: click the thirds of an op tile to change *k* or turn its edge, as in the game. Select **Erase** and click a tile to remove it (any cell of the source works), or right-click it. Placing a tool, including the Sink, never replaces an occupied cell. The right-hand HUD lets you:
 
 - Set the **puzzle name** (click the name field to type)
 - Edit the **INPUT** and **TARGET** matrices (rows/cols spinners and click-to-edit value cells)

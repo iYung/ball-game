@@ -245,7 +245,7 @@ UI.overlaps(a, b)             -- positive-area intersection (shared edges do not
 | Matrix | `chip:<cmd>` | `^` `v` `<` `>` `.` `CLR` | button | `cmd` is `up`, `down`, `left`, `right`, `stop` or `clear` |
 | Matrix | `tl:scroll_left` `tl:scroll_right` | `<` `>` | button | enabled when the timeline can scroll that way. The `<` / `>` chips share these labels, so click by id. |
 | Matrix | `slot:<lane>:<tick>` | same as id | slot | lane 1-4, tick is the real tick number. Only slots in the visible window are listed. `enabled = not running`. |
-| Editor | `editor:pal:<tool>` | `SRC` `SNK` `GAP` `P`, op labels, `[X]` | button | `<tool>` is `source`, `sink`, `gap`, `pusher`, an op name or `erase` |
+| Editor | `editor:pal:<tool>` | `SRC` `SNK` `GAP` `P`, op labels, `Erase` | button | `<tool>` is `source`, `sink`, `gap`, `pusher`, an op name or `erase` |
 | Editor | `editor:back` `editor:test` `editor:copy` `editor:paste` | `Back` `Test` `Copy` `Paste` | button | |
 | Editor | `editor:name`, `editor:allow:<op>` | name text / op label | button | |
 | Editor | `editor:input_rows_dec` etc. | `-` `+` | button | also `_rows_inc`, `_cols_dec`, `_cols_inc`, and the same for `target` |

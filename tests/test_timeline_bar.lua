@@ -108,4 +108,23 @@ do
     assert(find(scene, "psel:A").enabled == false)
 end
 
+-- CLR chip: arming it and clicking a slot clears the slot; clicking empty is a no-op.
+do
+    local scene = new_scene()
+    place_pusher(scene, 3, 3)
+    scene:ui_elements()
+    click(scene, "chip:right")
+    click(scene, "slot:1:5")
+    assert(Timeline.get(scene.timeline, 1, 5), "slot written before clear test")
+
+    click(scene, "chip:clear")
+    assert(find(scene, "chip:clear").selected and scene.armed_chip == "clear")
+    click(scene, "slot:1:5")
+    assert(Timeline.get(scene.timeline, 1, 5) == nil, "CLR chip clears filled slot")
+
+    -- Clicking an empty slot with CLR armed is a no-op (no error).
+    click(scene, "slot:1:5")
+    assert(Timeline.get(scene.timeline, 1, 5) == nil, "CLR on empty slot is a no-op")
+end
+
 print("test_timeline_bar passed")

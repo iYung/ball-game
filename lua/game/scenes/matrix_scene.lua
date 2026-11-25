@@ -126,11 +126,11 @@ local OP_SIZES = {
 
 -- Bottom bar (x 0..CMD_BTN_X-10): pusher selector + instruction chips, then 4 lanes x 60 ticks.
 local MAX_PUSHERS = 8
-local CMD_GLYPH   = { up="^", down="v", left="<", right=">", stop="." }
-local CHIP_ORDER  = { "up", "down", "left", "right", "stop" }
+local CMD_GLYPH   = { up="^", down="v", left="<", right=">", stop=".", clear="CLR" }
+local CHIP_ORDER  = { "up", "down", "left", "right", "stop", "clear" }
 local BAR = {
     PANEL_X = 8,  PSEL_Y = BAR_Y + 10, PSEL_W = 28, PSEL_H = 28, PSEL_STEP = 30,
-    CHIP_Y  = BAR_Y + 60, CHIP_W = 44, CHIP_H = 44, CHIP_STEP = 48,
+    CHIP_Y  = BAR_Y + 60, CHIP_W = 38, CHIP_H = 38, CHIP_STEP = 42,
     TL_X    = 260, TL_RIGHT = CMD_BTN_X - 10,
     ARROW_W = 16,
     HEAD_Y  = BAR_Y + 6,  HEAD_H = 16,
@@ -1634,6 +1634,8 @@ function MatrixScene:_bar_click(e, btn)
         local lane, tick = tonumber(a), tonumber(b)
         if btn == 2 then
             Timeline.clear(self.timeline, lane, tick)
+        elseif btn == 1 and self.armed_chip == "clear" then
+            Timeline.clear(self.timeline, lane, tick)
         elseif btn == 1 and self.armed_chip and self.sel_pusher then
             Timeline.set(self.timeline, lane, tick, self.sel_pusher, self.armed_chip)
         end
@@ -1724,6 +1726,11 @@ function MatrixScene:ui_matrix()
         for c = 1, m.cols do rows[r][c] = m.values[r][c] end
     end
     return rows
+end
+
+-- C6 query: timeline slot content at (lane, tick), or nil when empty.
+function MatrixScene:ui_slot(lane, tick)
+    return Timeline.get(self.timeline, lane, tick)
 end
 
 -- C6 query: tile at a grid cell (ref cells resolve to their anchor tile), or nil.

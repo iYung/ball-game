@@ -25,6 +25,10 @@ local function cell_size(mat)
     return math.min(120, math.floor(180 / n))
 end
 
+local function grid_height(mat)
+    return mat and cell_size(mat) * mat.rows or 0
+end
+
 function HUD:draw_matrix(mat, cx, top_y, font_num)
     if not mat then return end
     local cs = cell_size(mat)
@@ -52,7 +56,8 @@ function HUD:draw_matrix(mat, cx, top_y, font_num)
 end
 
 -- Returns the y just below the divider, where the scene draws the timeline panel.
-function HUD:draw(input_mat, target_mat, puzzle_name)
+-- With input2_mat, the two inputs sit side by side above the target.
+function HUD:draw(input_mat, target_mat, puzzle_name, input2_mat)
     local x, y, w, h = self.x, self.y, self.w, self.h
 
     -- Background
@@ -71,13 +76,24 @@ function HUD:draw(input_mat, target_mat, puzzle_name)
     -- INPUT
     love.graphics.setFont(self.font_label)
     love.graphics.setColor(0.6, 0.75, 1.0, 1)
-    love.graphics.printf("INPUT", x, cursor_y, w, "center")
-    cursor_y = cursor_y + 22
+    if input2_mat then
+        local half = math.floor(w / 2)
+        local half_cx = x + math.floor(half / 2)
+        love.graphics.printf("INPUT 1", x, cursor_y, half, "center")
+        love.graphics.printf("INPUT 2", x + half, cursor_y, half, "center")
+        cursor_y = cursor_y + 22
 
-    if input_mat then
-        local h_used = cell_size(input_mat) * input_mat.rows
-        self:draw_matrix(input_mat, cx, cursor_y, self.font_num)
-        cursor_y = cursor_y + h_used + 14
+        self:draw_matrix(input_mat, half_cx, cursor_y, self.font_num)
+        self:draw_matrix(input2_mat, half_cx + half, cursor_y, self.font_num)
+        cursor_y = cursor_y + math.max(grid_height(input_mat), grid_height(input2_mat)) + 14
+    else
+        love.graphics.printf("INPUT", x, cursor_y, w, "center")
+        cursor_y = cursor_y + 22
+
+        if input_mat then
+            self:draw_matrix(input_mat, cx, cursor_y, self.font_num)
+            cursor_y = cursor_y + grid_height(input_mat) + 14
+        end
     end
 
     -- Arrow separator
@@ -93,9 +109,8 @@ function HUD:draw(input_mat, target_mat, puzzle_name)
     cursor_y = cursor_y + 22
 
     if target_mat then
-        local h_used = cell_size(target_mat) * target_mat.rows
         self:draw_matrix(target_mat, cx, cursor_y, self.font_num)
-        cursor_y = cursor_y + h_used + 20
+        cursor_y = cursor_y + grid_height(target_mat) + 20
     end
 
     -- Divider

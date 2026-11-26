@@ -113,6 +113,35 @@ function Matrix:edge_sub(edge, k)
     return map_edge(self, edge, minus(k))
 end
 
+-- Element-wise sum; both matrices must have the same shape.
+function Matrix:add(other)
+    assert(self.rows == other.rows and self.cols == other.cols, "Matrix.add: shapes differ")
+    local out = self:copy()
+    for r = 1, self.rows do
+        for c = 1, self.cols do
+            out.values[r][c] = unsigned_zero(self.values[r][c] + other.values[r][c])
+        end
+    end
+    return out
+end
+
+-- Matrix product self x other; self.cols must equal other.rows.
+function Matrix:mul(other)
+    assert(self.cols == other.rows, "Matrix.mul: inner sizes differ")
+    local v = {}
+    for r = 1, self.rows do
+        v[r] = {}
+        for c = 1, other.cols do
+            local sum = 0
+            for i = 1, self.cols do
+                sum = sum + self.values[r][i] * other.values[i][c]
+            end
+            v[r][c] = sum
+        end
+    end
+    return Matrix.new(self.rows, other.cols, v)
+end
+
 function Matrix:rotate_90()
     -- 90° clockwise: new[c][rows-r+1] = old[r][c], result is cols×rows
     local v = {}

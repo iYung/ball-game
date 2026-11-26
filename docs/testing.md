@@ -150,7 +150,7 @@ A full play-through looks like this (puzzle 1: a pusher at (1,5) given one "righ
 { assert_text = "Flip It" },
 ```
 
-See the files in `tests/ui/` for more: `01_solve_puzzle_1.lua`, `02_level_select_keyboard.lua`, `03_world_locking.lua`, `04_sweep_all_puzzles.lua` (generated steps, every puzzle), `05_start_screen.lua`, `06_cutscene.lua` (CutsceneScene end-to-end), `07_drag_drop.lua` (Mv drag tool), and `08_matrix_scene_ops.lua` (op tiles: editing by thirds, fixed and locked tiles, moving and erasing). `13_solve_converted.lua` wins puzzles through real input and `14_editor_ops.lua` covers op tiles in the editor. `11_anim_timing.lua` checks the matrix shows pre-op values while sliding into an op (`assert_matrix` mid-run). `17_editor_fixed_ops.lua` covers `fixed_ops` and `ops = {}` through the editor's Paste, Test and Copy, and `18_folder_worlds.lua` covers world tabs, unlocking and cutscenes read from the world folders.
+See the files in `tests/ui/` for more: `01_solve_puzzle_1.lua`, `02_level_select_keyboard.lua`, `03_world_locking.lua`, `04_sweep_all_puzzles.lua` (generated steps, every puzzle), `05_start_screen.lua`, `06_cutscene.lua` (CutsceneScene end-to-end), `07_drag_drop.lua` (Mv drag tool), and `08_matrix_scene_ops.lua` (op tiles: editing by thirds, fixed and locked tiles, moving and erasing). `13_solve_converted.lua` wins puzzles through real input and `14_editor_ops.lua` covers op tiles in the editor. `11_anim_timing.lua` checks the matrix shows pre-op values while sliding into an op (`assert_matrix` mid-run). `17_editor_fixed_ops.lua` covers `fixed_ops` and `ops = {}` through the editor's Paste, Test and Copy, and `18_folder_worlds.lua` covers world tabs, unlocking and cutscenes read from the world folders. For two sources and matrix ops, see `19_two_sources_run.lua` (merge and failure banners), `20_two_cell_tiles.lua` (placing, turning with `t`, moving and erasing, with `mouse_down` / `mouse_up`), `21_recap_merge.lua`, `22_editor_two_sources.lua` `23_two_source_world.lua` (solves every puzzle of that world) and `24_two_source_fixes.lua` (palette drags onto a two-cell tile; a lone **SRC2** through Copy, Paste and Test).
 
 ---
 
@@ -192,17 +192,19 @@ A **selector** is either a label string (`"Run"`) or a table `{ id = "cmd:run" }
 | `drag = { from = <selector>, to = <selector> }` | Press at the centre of `from`, move to `to`, release there (frames in between). Selectors may also be `{ cell = {x, y} }` or `{ slot = {lane, tick} }`. Use it to drag ops onto cells and chips onto timeline slots; the runner **never auto-scrolls** the timeline: click `tl:scroll_right` yourself. |
 | `move_mouse = {x, y}` | Move the virtual cursor and fire `sm:mouse_moved`. |
 | `hover_button = sel` | Move to the element's centre. Disabled elements are allowed. |
+| `mouse_down = sel` / `mouse_up = sel` | Move to the element's centre and press (or release) button 1, then run one frame. Other steps, such as `press` or `right_click_cell`, can run while the button is held. Both fail on a missing or disabled element. |
 | `wait = n` | Run n frames. |
-| `wait_until = { text = "...", matrix = {{...}}, max_frames = n }` | Run frames until all given conditions hold. `max_frames` defaults to 600. On timeout: `wait_until exceeded <n> frames`. It does **not** settle a fade first. |
+| `wait_until = { text = "...", matrix = {{...}}, matrices = {...}, max_frames = n }` | Run frames until all given conditions hold. `max_frames` defaults to 600. On timeout: `wait_until exceeded <n> frames`. It does **not** settle a fade first. |
 | `assert_text = "..."` / `assert_no_text = "..."` | A plain substring match against every string drawn by `print`/`printf` in the most recent frame. |
 | `assert_button = { <selector fields>, visible = bool, enabled = bool, selected = bool }` | `visible = false` asserts that the element is absent from the registry. Fields you leave out are not checked. A nil `selected` counts as false. |
-| `assert_matrix = {{...}}` | The matrix the puzzle scene shows now: the travelling matrix during or after a run, otherwise the input matrix. Rows of numbers, compared exactly. |
-| `assert_tile = { x, y, kind = ..., op = ..., dir = ..., edge = ..., scalar = ... }` | The tile at a grid cell. A ref cell of a multi-cell tile reports its anchor tile. Leaving out `kind` asserts that the cell is **empty**. Only the fields you give are compared. |
+| `assert_matrix = {{...}}` | The matrix the puzzle scene shows now: the travelling matrix during or after a run, otherwise the input matrix. Rows of numbers, compared exactly. With two matrices this is the primary one (source 1's, or the merge result). |
+| `assert_matrices = { { x = , y = , values = {{...}} }, ... }` | Every matrix the puzzle scene shows, primary first, compared by count and order. `values` is required; `x` / `y` (grid cell of the top-left) are compared only when given. Idle, these are the inputs at their sources. |
+| `assert_tile = { x, y, kind = ..., op = ..., dir = ..., edge = ..., scalar = ..., facing = ..., index = ... }` | The tile at a grid cell. A ref cell of a multi-cell tile reports its anchor tile. Leaving out `kind` asserts that the cell is **empty**. Only the fields you give are compared. `facing` is a two-cell op's orientation; `index` is 1 or 2 on a source tile when there are two sources. |
 | `assert_slot = { lane = n, tick = n, pusher = n, cmd = "..." }` | The command in a timeline slot (`pusher` 1 = A). `empty = true` asserts that the slot is empty. |
 | `set_clipboard = "..."` | Put text on the stubbed clipboard (for the editor's Paste). |
 | `text_input = "..."` | `sm:text_input(ch)`, for typing into a text field. |
 
-`assert_matrix` and `wait_until.matrix` need a scene that has `ui_matrix()` (`MatrixScene`), `assert_slot` needs `ui_slot()` (`MatrixScene`), and `assert_tile` needs `ui_tile()` (`MatrixScene` and `EditorScene`). Otherwise they fail, for example with `scene has no matrix` or `scene has no tiles`.
+`assert_matrix` and `wait_until.matrix` need a scene that has `ui_matrix()` (`MatrixScene`), `assert_matrices` and `wait_until.matrices` need `ui_matrices()` (`MatrixScene`), `assert_slot` needs `ui_slot()` (`MatrixScene`), and `assert_tile` needs `ui_tile()` (`MatrixScene` and `EditorScene`). Otherwise they fail, for example with `scene has no matrix` or `scene has no tiles`.
 
 There are deliberately no assertions on scene names or internal status. Assert what the player can see.
 
@@ -215,7 +217,7 @@ There are deliberately no assertions on scene names or internal status. Assert w
 - **After every input step**, exactly one frame runs so that the result is drawn before the next assert.
 - **A click** at (x, y) with button b (1 = left, 2 = right) is `Stubs.set_mouse(x, y)`, `sm:mouse_moved(x, y)`, `sm:mouse_pressed(x, y, b)`, `sm:mouse_released(x, y, b)`. This is what LÖVE does. A move is `set_mouse` plus `mouse_moved`.
 - Element centres are rounded to whole pixels (`UI.centre`).
-- The runner never calls a scene handler or private method directly. Its only scene calls are the read-only `ui_elements()`, `ui_matrix()`, `ui_tile()` and `ui_slot()`. Everything else goes through `SceneManager`.
+- The runner never calls a scene handler or private method directly. Its only scene calls are the read-only `ui_elements()`, `ui_matrix()`, `ui_matrices()`, `ui_tile()` and `ui_slot()`. Everything else goes through `SceneManager`.
 - Headless stubs (`lua/headless/stubs.lua`): `love.graphics.getWidth/getHeight` return 1280/720. `love.mouse.getX/getY/getPosition` return the virtual cursor, and `isDown` returns false. `love.filesystem.getInfo` reports anything `io.open` can open as a file, directories included, so `PuzzleLoader` (and tests that fake the folder layout) rely on `getDirectoryItems` only; call `PuzzleLoader.rescan()` after stubbing it and again after restoring it. Fonts are stubs that report a width of 120 for any text, so **never use `font:getWidth()` for layout**. Use constants.
 
 ---
@@ -258,8 +260,8 @@ UI.overlaps(a, b)             -- positive-area intersection (shared edges do not
 | Level select | `world:<n>` | world name, or `[?]` when locked | button | one tab per world; locked tabs are disabled. `selected` marks the current world. Rects are computed in `draw`. Listed first. |
 | Level select | `puzzle:<index>` | puzzle name | button | one per row of the current world. `selected` marks the highlighted row. Hover changes the selection only on mouse **movement**. |
 | Matrix | `palette:pusher` | `P` | button | `selected` when this tool is active |
-| Matrix | `palette:<op>` | `xk` `xk^` `+k` `+k^` `-k` `-k^` `T` `R90` `FLh` `FLv` | button | `<op>` is the op **name** from `lua/game/ops.lua`, e.g. `palette:edge_add` |
-| Matrix | `palette:fixed:<op>` | preset + `!` (e.g. `x-1!`, `x3>!`, `FLv!`) | button | |
+| Matrix | `palette:<op>` | `xk` `xk^` `+k` `+k^` `-k` `-k^` `T` `R90` `FLh` `FLv`; `M+` / `Mx` plus the tool's arrow (e.g. `M+>`, `Mxv`) | button | `<op>` is the op **name** from `lua/game/ops.lua`, e.g. `palette:edge_add`, `palette:matrix_mul`. A matrix op's label changes when the tool turns, so click it by id; clicking it while selected turns it |
+| Matrix | `palette:fixed:<op>` | preset + `!` (e.g. `x-1!`, `x3>!`, `FLv!`, `M+>!`) | button | |
 | Matrix | `palette:scroll_up` / `palette:scroll_down` | `^` / `v` | button | only when the ops column overflows (no shipped puzzle does). Each click scrolls one row; `enabled` is false at either end. Only on-screen palette buttons are in the registry. |
 | Matrix | `palette:drag` / `palette:erase` | `Mv` / `[X]` | button | erase is `selected` when nothing is selected |
 | Matrix | `cmd:run` `cmd:reset` `cmd:menu` `cmd:continue` | `Run` `Reset` `Menu` `Continue` | button | `enabled` comes from `MatrixScene:_cmd_enabled(id)`, the same function the `r` / `backspace` / `return` keys use |
@@ -268,9 +270,11 @@ UI.overlaps(a, b)             -- positive-area intersection (shared edges do not
 | Matrix | `chip:<cmd>` | `^` `v` `<` `>` `.` `CLR` | button | `cmd` is `up`, `down`, `left`, `right`, `stop` or `clear` |
 | Matrix | `tl:scroll_left` `tl:scroll_right` | `<` `>` | button | enabled when the timeline can scroll that way. The `<` / `>` chips share these labels, so click by id. |
 | Matrix | `slot:<lane>:<tick>` | same as id | slot | lane 1-4, tick is the real tick number. Only slots in the visible window are listed. `enabled = not running`. |
-| Editor | `editor:pal:<tool>` | `SRC` `SNK` `GAP` `P`, op labels, `Erase` | button | `<tool>` is `source`, `sink`, `gap`, `pusher`, an op name or `erase` |
+| Editor | `editor:pal:<tool>` | `SRC` `SRC2` `SNK` `GAP` `P`, op labels (matrix ops with arrow), `Erase` | button | `<tool>` is `source`, `source2`, `sink`, `gap`, `pusher`, an op name or `erase` |
 | Editor | `editor:back` `editor:test` `editor:copy` `editor:paste` | `Back` `Test` `Copy` `Paste` | button | |
-| Editor | `editor:name`, `editor:allow:<op>` | name text / op label | button | |
+| Editor | `editor:name`, `editor:allow:<op>` | name text / op label | button | the ten one-cell ops |
+| Editor | `editor:allow_matrix:<op>` | `M+` `Mx` | button | `matrix_add`, `matrix_mul` |
+| Editor | `editor:input_sel:<n>` | `#1` `#2` | button | which input the spinners and `editor:input_cell:*` edit; `selected` marks it |
 | Editor | `editor:input_rows_dec` etc. | `-` `+` | button | also `_rows_inc`, `_cols_dec`, `_cols_inc`, and the same for `target` |
 | Editor | `editor:input_cell:<r>,<c>`, `editor:target_cell:<r>,<c>` | value | cell | |
 | Editor | `cell:<x>,<y>` | same as id | cell | every grid cell |
@@ -364,7 +368,7 @@ FAIL  tests/ui/<file>.lua :: <spec name> — step <i> <step serialised as Lua> �
 4. **Draw from the same state.** Style each button from its element's `enabled`/`selected`. Keyboard shortcuts should check the same enabled function the registry uses.
 5. **Pick ids** as `<scene>:<thing>` and keep them stable. Specs depend on them. Labels are the text the player sees.
 6. **Write a spec** in `tests/ui/NN_<feature>.lua` that reaches the scene through real input from the title screen and clicks the new elements. Run `love . --headless tests/ui/NN_<feature>.lua`, then the full suite.
-7. If the scene shows a board, `ui_matrix()` / `ui_tile(x, y)` (read-only) enable the matrix and tile asserts. See `MatrixScene`.
+7. If the scene shows a board, `ui_matrix()` / `ui_matrices()` / `ui_tile(x, y)` (read-only) enable the matrix and tile asserts. See `MatrixScene`.
 
 ## Writing a unit test
 

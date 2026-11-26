@@ -10,8 +10,21 @@ local UI           = require("lua/core/ui")
 local SettingsMenu = require("lua/game/scenes/settings_menu")
 local Ops          = require("lua/game/ops")
 local OpTile       = require("lua/game/op_tile")
+local TwoCell      = require("lua/game/two_cell")
 
 local function cell_key(x, y) return x .. "," .. y end
+
+-- Where the run state of each travelling matrix lives: 1 is the primary (source
+-- 1's matrix, after a merge the result), 2 the other one in a two-source run.
+local SLOTS = {
+    { matrix = "current_matrix", fired = "occupied_ops", last = "_last_fp" },
+    { matrix = "second_matrix",  fired = "second_fired", last = "_second_fp" },
+}
+
+-- Matrix border colour by source; a merged result keeps the left operand's.
+local MATRIX_BORDER = { [1] = {0.91, 0.73, 0.15}, [2] = {0.25, 0.80, 0.90} }
+local PREVIEW_DIM   = 0.52   -- idle previews use a dimmed border
+local SRC_TAG_W, SRC_TAG_H = 40, 13   -- "SRC n" tag above a preview's first value
 
 local MatrixScene = {}
 MatrixScene.__index = MatrixScene
@@ -40,6 +53,10 @@ local STATUS_COLORS = {
     stuck     = {0.9, 0.6, 0.1, 1},
     running   = {0.4, 0.6, 1.0, 1},
     no_pusher = {0.9, 0.6, 0.1, 1},
+    collided    = {0.9, 0.2, 0.2, 1},
+    both_inputs = {0.9, 0.2, 0.2, 1},
+    bad_shape   = {0.9, 0.2, 0.2, 1},   -- text comes from status_message
+    uncombined  = {0.9, 0.2, 0.2, 1},
 }
 
 local STATUS_LABELS = {
@@ -49,6 +66,9 @@ local STATUS_LABELS = {
     stuck     = "STUCK — nothing is pushing",
     running   = "Running...",
     no_pusher = "Place a pusher first",
+    collided    = "FAIL — matrices collided",
+    both_inputs = "FAIL — one matrix on both inputs",
+    uncombined  = "FAIL — matrices not combined",
 }
 
 -- Bottom bar (x 0..CMD_BTN_X-10): pusher selector + instruction chips, then 4 lanes x 60 ticks.
@@ -74,6 +94,10 @@ local PALETTE_BUTTONS = { { kind="pusher", label="P" }, { sep=true } }
 for i, op in ipairs(Ops.ORDER) do
     table.insert(PALETTE_BUTTONS, { kind="op", op=op, label=Ops.label(op) })
     if i == 6 then table.insert(PALETTE_BUTTONS, { sep=true }) end
+end
+-- The two-cell ops stay in the shape group (a separator of their own would overflow).
+for _, op in ipairs(Ops.MATRIX_ORDER) do
+    table.insert(PALETTE_BUTTONS, { kind="op", op=op, label=Ops.label(op) })
 end
 table.insert(PALETTE_BUTTONS, { sep=true })
 table.insert(PALETTE_BUTTONS, { kind="drag", label="Mv" })
@@ -105,6 +129,43 @@ local function in_grid_panel(mx, my)
 end
 
 local function lerp(a, b, t) return a + (b - a) * t end
+
+-- Board cells (keyed by cell_key) a matrix anchored at pos = { x, y } covers.
+local function footprint_of(grid, pos, mat)
+    local fp = {}
+    for r = 0, mat.rows - 1 do
+        for c = 0, mat.cols - 1 do
+            local x, y = pos.x + c, pos.y + r
+            if grid:in_bounds(x, y) then
+                fp[cell_key(x, y)] = {x=x, y=y}
+            end
+        end
+    end
+    return fp
+end
+
+-- True when the footprints of two matrices share a cell.
+local function overlaps(a_pos, a, b_pos, b)
+    return a_pos.x < b_pos.x + b.cols and b_pos.x < a_pos.x + a.cols
+       and a_pos.y < b_pos.y + b.rows and b_pos.y < a_pos.y + a.rows
+end
+
+-- Forgets fired op tiles that footprint fp no longer covers, so they can fire again.
+local function rearm_fired(fired, fp)
+    for key in pairs(fired) do
+        if not fp[key] then fired[key] = nil end
+    end
+end
+
+-- True for a palette button, or the selection made from it, that is a two-cell
+-- tool the player can turn (fixed ones keep their preset facing).
+local function is_turnable_tool(tool)
+    return tool ~= nil and tool.kind == "op" and not tool.fixed and Ops.is_two_cell(tool.op)
+end
+
+local function is_two_cell_tile(tile)
+    return tile ~= nil and tile.kind == "op" and Ops.is_two_cell(tile.op)
+end
 
 -- ── Constructor ────────────────────────────────────────────────────────────
 
@@ -150,6 +211,9 @@ function MatrixScene:on_enter()
     self._drag_tile   = nil
     self._drag_origin = nil
     self._drag_ghost  = nil
+    self._drag_grab   = nil   -- "R" when a two-cell tile is held by its right operand
+    self._drag_facing = nil   -- its facing when picked up
+    self._mouse       = nil   -- last logical mouse position (for the T key)
 
     self:load_puzzle(self._start_puzzle)
 
@@ -181,6 +245,9 @@ function MatrixScene:load_puzzle(n)
     end
     local p             = self.puzzle
     self.input_matrix   = Matrix.new(p.input.rows,  p.input.cols,  p.input.values)
+    local two_sources   = p.source2 ~= nil and p.input2 ~= nil
+    self.input2_matrix  = two_sources
+        and Matrix.new(p.input2.rows, p.input2.cols, p.input2.values) or nil
     self.target_matrix  = Matrix.new(p.target.rows, p.target.cols, p.target.values)
     self.current_matrix = nil
     self._anim_display_matrix = nil
@@ -195,11 +262,15 @@ function MatrixScene:load_puzzle(n)
     self._palette_scroll  = 0
     self.grid            = Grid.new(p.grid_w, p.grid_h)
 
-    -- Locked puzzle tiles are always one cell; any size fields on an entry are ignored.
+    -- Locked puzzle tiles are one cell (any size fields on an entry are ignored),
+    -- except the two-cell matrix ops, which are placed last.
     local locked = p.locked or {}
     local pusher_ids = Sim.assign_pusher_ids(locked)
+    local two_cell = {}
     for _, t in ipairs(locked) do
-        if t.kind ~= "pusher" or pusher_ids[t] then
+        if t.kind == "op" and Ops.is_two_cell(t.op) then
+            two_cell[#two_cell + 1] = t
+        elseif t.kind ~= "pusher" or pusher_ids[t] then
             self.grid:set(t.x, t.y, {
                 kind   = t.kind,
                 dir    = t.dir,
@@ -210,11 +281,13 @@ function MatrixScene:load_puzzle(n)
             })
         end
     end
-    local src_cols = p.input.cols
-    local src_rows = p.input.rows
-    self.grid:set_multi_2d(p.source.x, p.source.y, {
-        kind="source", locked=true, width=src_cols, height=src_rows
-    }, src_cols, src_rows)
+    local function put_source(at, input, index)
+        self.grid:set_multi_2d(at.x, at.y, {
+            kind="source", locked=true, width=input.cols, height=input.rows, index=index
+        }, input.cols, input.rows)
+    end
+    put_source(p.source, p.input, two_sources and 1 or nil)
+    if two_sources then put_source(p.source2, p.input2, 2) end
     self.grid:set(p.sink.x,   p.sink.y,   {kind="sink",   locked=true})
     self.gaps = {}
     for _, g in ipairs(p.gaps or {}) do
@@ -222,8 +295,15 @@ function MatrixScene:load_puzzle(n)
         self.gaps[g.y][g.x] = true
         self.grid:set(g.x, g.y, {kind="gap", locked=true})
     end
+    for _, t in ipairs(two_cell) do
+        local tile = { kind="op", op=t.op, params=Ops.params(t.op, t.params), locked=true }
+        if self.grid:fits(t.x, t.y, tile) then self.grid:put(t.x, t.y, tile) end
+    end
     self.occupied_ops = {}
     self._last_fp     = {}
+    self:_clear_pair_state()
+    self._tool_facing = {}
+    for _, op in ipairs(Ops.MATRIX_ORDER) do self._tool_facing[op] = Ops.params(op).facing end
     self:_build_palette()
     self:_sync_pushers()
 end
@@ -275,7 +355,9 @@ function MatrixScene:_build_palette()
     for _, btn in ipairs(PALETTE_BUTTONS) do
         if btn.sep then
             pending = true
-        elseif not btn.op or not allowed or allowed[btn.op] then
+        elseif not btn.op or (allowed and allowed[btn.op])
+            or (not allowed and not Ops.is_two_cell(btn.op)) then
+            -- Two-cell ops are offered only when the puzzle lists them.
             push(btn)
         end
     end
@@ -297,7 +379,14 @@ function MatrixScene:_build_palette()
     self:_layout_palette()
 
     local sel = self.palette:selected()
-    if sel and sel.kind == "op" and allowed and not allowed[sel.op] then
+    if sel and sel.kind == "op" and Ops.is_two_cell(sel.op) then
+        -- Keep a matrix tool only when this puzzle has its button.
+        local id, kept = palette_id(sel), nil
+        for _, it in ipairs(items) do
+            if it.id == id then kept = it.btn end
+        end
+        if kept then self:_palette_select(kept) else self.palette:select(nil) end
+    elseif sel and sel.kind == "op" and allowed and not allowed[sel.op] then
         if not fixed_allowed[sel.op] then self.palette:select(nil) end
     end
     self:_build_cmd_buttons()
@@ -379,6 +468,19 @@ function MatrixScene:_build_cmd_buttons()
     end
 end
 
+-- Run state that only matters with a second matrix or a two-cell tile.
+function MatrixScene:_clear_pair_state()
+    self.second_matrix  = nil
+    self.second_fired   = {}
+    self._second_fp     = {}
+    self._tag           = 1       -- border colour (source) of the primary matrix
+    self.disarmed       = {}      -- two-cell tiles ignored until the result leaves them
+    self.status_message = nil     -- banner text overriding the status label
+    self._anim_second   = nil     -- the second matrix's slide in the current tick
+    self._anim_tag      = nil
+    self._anim_merged   = nil     -- the current tick merged the two matrices
+end
+
 function MatrixScene:do_reset()
     self.current_matrix = nil
     self._anim_display_matrix = nil
@@ -389,37 +491,37 @@ function MatrixScene:do_reset()
     self.timeline_scroll = 0
     self.occupied_ops   = {}
     self._last_fp       = {}
+    self:_clear_pair_state()
     self.anim_t         = 1
     self.anim_ready     = false
+    self:_clear_drag()   -- a held tile goes back to the board
+    self:_sync_pushers() -- it may be a pusher, which can be selected again
+end
+
+-- Forgets the Mv drag without touching the board.
+function MatrixScene:_end_drag()
     self._drag_tile   = nil
     self._drag_origin = nil
     self._drag_ghost  = nil
+    self._drag_grab   = nil
+    self._drag_facing = nil
 end
 
+-- Cancels an Mv drag: the tile returns to where, and how, it was picked up.
 function MatrixScene:_clear_drag()
-    if self._drag_tile and self._drag_origin then
-        self.grid:set(self._drag_origin.x, self._drag_origin.y, self._drag_tile)
+    local tile = self._drag_tile
+    if tile and self._drag_origin then
+        if self._drag_facing then tile.params.facing = self._drag_facing end
+        self.grid:put(self._drag_origin.x, self._drag_origin.y, tile)
     end
-    self._drag_tile   = nil
-    self._drag_origin = nil
-    self._drag_ghost  = nil
+    self:_end_drag()
 end
 
--- Returns a table keyed by cell_key for every board cell the matrix currently covers.
+-- Returns a table keyed by cell_key for every board cell the primary matrix covers.
 function MatrixScene:get_footprint()
     local mat  = self.current_matrix
     if not mat or not self.sim then return {} end
-    local cx, cy = self.sim.x, self.sim.y
-    local fp = {}
-    for r = 0, mat.rows - 1 do
-        for c = 0, mat.cols - 1 do
-            local x, y = cx + c, cy + r
-            if self.grid:in_bounds(x, y) then
-                fp[cell_key(x, y)] = {x=x, y=y}
-            end
-        end
-    end
-    return fp
+    return footprint_of(self.grid, self.sim, mat)
 end
 
 function MatrixScene:_snap_anim_to_matrix()
@@ -441,14 +543,32 @@ function MatrixScene:start_run()
     self.running         = true
     self.occupied_ops    = {}
     self._last_fp        = {}
+    self:_clear_pair_state()
+    if self.input2_matrix then
+        self.second_matrix = self.input2_matrix:copy()
+        self.sim.second    = { x=p.source2.x, y=p.source2.y }
+    end
     self.cur_slot        = nil
     self.timeline_scroll = 0
     self.anim_t          = 1
     self.anim_ready      = true
     self._run_frames     = {}
+    if self.sim.second and overlaps(self.sim, self.current_matrix,
+                                    self.sim.second, self.second_matrix) then
+        self:_end_run("collided")
+    else
+        -- Ops under the starting footprints fire immediately (the sink is not checked).
+        self:_resolve_ops()
+    end
+    -- After the ops: a merge may have moved the primary to the left operand.
     self:_snap_anim_to_matrix()
-    -- Ops under the starting footprint fire immediately.
-    self:_process_footprint({})
+end
+
+-- Stops the run with a final status; message overrides the status label in the banner.
+function MatrixScene:_end_run(status, message)
+    self.running        = false
+    self.status         = status
+    self.status_message = message
 end
 
 function MatrixScene:_count_pieces()
@@ -467,16 +587,22 @@ function MatrixScene:_count_pieces()
     return count
 end
 
--- Recomputes the footprint, re-arms op tiles the matrix has left, and fires each
--- newly entered op tile once. Returns the new footprint.
-function MatrixScene:_process_footprint(old_fp)
-    local new_fp  = self:get_footprint()
-    self._last_fp = new_fp
-    self:_rearm_ops(new_fp)
+-- For one travelling matrix (slot 1, the primary, by default): recomputes the
+-- footprint, re-arms op tiles it has left, and fires each newly entered single-cell
+-- op tile once. Returns the new footprint, and true when an op ended the run.
+function MatrixScene:_process_footprint(old_fp, slot)
+    slot = slot or 1
+    local names = SLOTS[slot]
+    local pos   = slot == 1 and self.sim or self.sim.second
+    local mat   = self[names.matrix]
+    local fired = self[names.fired]
+    local new_fp = footprint_of(self.grid, pos, mat)
+    self[names.last] = new_fp
+    rearm_fired(fired, new_fp)
 
     local entered = {}
     for key, cell in pairs(new_fp) do
-        if not old_fp[key] and not self.occupied_ops[key] then
+        if not old_fp[key] and not fired[key] then
             entered[#entered+1] = {x=cell.x, y=cell.y, key=key}
         end
     end
@@ -485,39 +611,98 @@ function MatrixScene:_process_footprint(old_fp)
         return a.y < b.y or (a.y == b.y and a.x < b.x)
     end)
 
-    local mat = self.current_matrix
+    local other_pos, other
+    if self.sim.second then
+        if slot == 1 then
+            other_pos, other = self.sim.second, self.second_matrix
+        else
+            other_pos, other = self.sim, self.current_matrix
+        end
+    end
+
     for _, info in ipairs(entered) do
         local tile = self.grid:get(info.x, info.y)
-        if tile and tile.kind == "op" then
+        -- Two-cell tiles react to coverage by both matrices (_resolve_two_cell).
+        if tile and tile.kind == "op" and not Ops.is_two_cell(tile.op) then
             mat = Sim.apply_op(tile, mat)
-            self.occupied_ops[info.key] = true
-            if not Sim.footprint_clear(self.sim.x, self.sim.y,
-                                        mat.rows, mat.cols,
-                                        self.grid.w, self.grid.h,
-                                        self.sim.gaps, self.sim.pushers) then
-                self.running = false
-                self.status  = "blocked"
-                self.current_matrix = mat
-                return new_fp
+            fired[info.key] = true
+            local failure
+            if not Sim.footprint_clear(pos.x, pos.y,
+                                       mat.rows, mat.cols,
+                                       self.grid.w, self.grid.h,
+                                       self.sim.gaps, self.sim.pushers) then
+                failure = "blocked"
+            elseif other and overlaps(pos, mat, other_pos, other) then
+                failure = "collided"
+            end
+            if failure then
+                self[names.matrix] = mat
+                self:_end_run(failure)
+                return new_fp, true
             end
         end
     end
-    self.current_matrix = mat
+    self[names.matrix] = mat
 
     -- An op may have changed the matrix dimensions (e.g. transpose), so the pre-op
     -- new_fp may no longer reflect which cells are covered. Recompute the true footprint
     -- and re-arm any occupied op that the post-op matrix no longer overlaps.
-    local actual_fp = self:get_footprint()
-    self:_rearm_ops(actual_fp)
-    self._last_fp = actual_fp
-    return actual_fp
+    local actual_fp = footprint_of(self.grid, pos, mat)
+    rearm_fired(fired, actual_fp)
+    self[names.last] = actual_fp
+    return actual_fp, false
 end
 
--- Forgets fired op tiles that footprint fp no longer covers, so they can fire again.
-function MatrixScene:_rearm_ops(fp)
-    for key in pairs(self.occupied_ops) do
-        if not fp[key] then self.occupied_ops[key] = nil end
+-- Fires the two-cell tiles for the matrices where they now are, merging the two into
+-- the result when a tile has one on each cell. Returns ok (false: the run ended) and
+-- merged.
+function MatrixScene:_resolve_two_cell()
+    local sim   = self.sim
+    local tiles = self.grid:two_cell_tiles()
+    local a = { x = sim.x, y = sim.y, matrix = self.current_matrix }
+    local b = sim.second
+        and { x = sim.second.x, y = sim.second.y, matrix = self.second_matrix }
+    -- Tiles are only disarmed after a merge, when the primary is the one matrix left.
+    TwoCell.rearm(self.disarmed, tiles, a)
+    local verdict = TwoCell.judge(tiles, a, b, self.disarmed)
+    if not verdict then return true, false end
+    if verdict.status then
+        self:_end_run(verdict.status, verdict.message)
+        return false, false
     end
+
+    -- The result takes the left operand's place; the right operand is consumed.
+    local left, result = verdict.left, verdict.matrix
+    if not Sim.footprint_clear(left.x, left.y, result.rows, result.cols,
+                               self.grid.w, self.grid.h, sim.gaps, sim.pushers) then
+        self:_end_run("blocked")
+        return false, false
+    end
+    if left == b then
+        self.occupied_ops = self.second_fired
+        self._tag         = 2
+    end
+    sim.x, sim.y, sim.second = left.x, left.y, nil
+    self.current_matrix = result
+    self.second_matrix  = nil
+    self.second_fired   = {}
+    self._second_fp     = {}
+    -- Single-cell tiles newly under the result wait until it leaves and re-enters.
+    self._last_fp = self:get_footprint()
+    rearm_fired(self.occupied_ops, self._last_fp)
+    TwoCell.disarm(self.disarmed, tiles, { x = sim.x, y = sim.y, matrix = result })
+    return true, true
+end
+
+-- The op part of a tick: single-cell ops (source 1's matrix fully, then source 2's),
+-- then two-cell tiles. Stops at the first failure. Returns ok, merged.
+function MatrixScene:_resolve_ops()
+    local _, failed = self:_process_footprint(self._last_fp, 1)
+    if not failed and self.sim.second then
+        _, failed = self:_process_footprint(self._second_fp, 2)
+    end
+    if failed then return false, false end
+    return self:_resolve_two_cell()
 end
 
 -- Pushers on the board, ordered by letter id.
@@ -554,21 +739,36 @@ function MatrixScene:do_step()
         w=grid.w, h=grid.h, pushers=sim.pushers,
         tick=sim.tick, gaps=sim.gaps,
     }
-    local moved, blocked = Sim.advance(st, Timeline.column(self.timeline, sim.tick + 1))
+    -- The second matrix's slide this tick: its pre-op values and pixel path.
+    local second
+    if sim.second then
+        local m = self.second_matrix
+        st.second = { x=sim.second.x, y=sim.second.y, rows=m.rows, cols=m.cols }
+        local px, py = cell_top_left(sim.second.x, sim.second.y)
+        second = { matrix = m, from_x = px, from_y = py }
+    end
+    local moved, blocked, collided = Sim.advance(st, Timeline.column(self.timeline, sim.tick + 1))
     if blocked then
-        self.running = false
-        self.status  = "blocked"
+        self:_end_run(collided and "collided" or "blocked")
         return
     end
     sim.x, sim.y, sim.tick = st.x, st.y, st.tick
+    if second then
+        sim.second.x, sim.second.y = st.second.x, st.second.y
+        second.to_x, second.to_y   = cell_top_left(sim.second.x, sim.second.y)
+    end
     sim.idle     = moved and 0 or sim.idle + 1
     self.cur_slot = sim.tick
     self:_follow_tick(sim.tick)
 
     local to_x, to_y = cell_top_left(sim.x, sim.y)
-    -- Ops fire on entry, but the matrix slides in with its pre-op values (as in the recap).
+    -- Ops fire on entry, but the matrices slide in with their pre-op values (as in the recap).
+    local tag = self._tag or 1
     self._anim_display_matrix = mat
-    local new_fp     = self:_process_footprint(self._last_fp)
+    self._anim_tag            = tag
+    self._anim_second         = second
+    local ok, merged          = self:_resolve_ops()
+    self._anim_merged         = merged
 
     if self._run_frames then
         local pushers_to = {}
@@ -576,44 +776,54 @@ function MatrixScene:do_step()
             local px, py = cell_top_left(p.x, p.y)
             pushers_to[#pushers_to + 1] = { id = p.id, px = px, py = py }
         end
-        self._run_frames[#self._run_frames + 1] = {
+        local frame = {
             from_x       = from_x,       from_y       = from_y,
             to_x         = to_x,         to_y         = to_y,
             matrix       = mat:copy(),
+            tag          = tag,
             pushers_from = pushers_from,
             pushers_to   = pushers_to,
         }
+        if second then
+            frame.second = {
+                from_x = second.from_x, from_y = second.from_y,
+                to_x   = second.to_x,   to_y   = second.to_y,
+                matrix = second.matrix:copy(), tag = 2,
+            }
+        end
+        if merged then
+            local px, py = cell_top_left(sim.x, sim.y)
+            frame.merged = { x = px, y = py, matrix = self.current_matrix:copy(), tag = self._tag }
+        end
+        self._run_frames[#self._run_frames + 1] = frame
     end
 
-    -- Any matrix cell on the sink ends the run.
-    local status = "ok"
-    if new_fp[cell_key(self.puzzle.sink.x, self.puzzle.sink.y)] then
-        status = "sink"
-    elseif sim.tick > Timeline.last_tick(self.timeline) and not moved then
-        status = "stuck"
+    -- An op failure is final. Otherwise any matrix cell on the sink ends the run.
+    local stuck = false
+    if ok then
+        local key = cell_key(self.puzzle.sink.x, self.puzzle.sink.y)
+        if self._last_fp[key] or (sim.second and self._second_fp[key]) then
+            if sim.second then
+                self:_end_run("uncombined")
+            else
+                self:_end_run(self.current_matrix:equals(self.target_matrix) and "win" or "fail")
+            end
+        elseif sim.tick > Timeline.last_tick(self.timeline) and not moved then
+            stuck = true
+            self:_end_run("stuck")
+        end
     end
 
-    if status == "sink" then
-        self.running = false
-        self.status  = self.current_matrix:equals(self.target_matrix) and "win" or "fail"
-        -- Animate the final step in; running=false prevents any further steps.
-        self.anim_from_x=from_x; self.anim_from_y=from_y
-        self.anim_to_x=to_x;     self.anim_to_y=to_y
-        self.anim_t     = 0
-        self.anim_ready = false
-    elseif status ~= "ok" then
-        self.running = false
-        self.status  = status
+    -- Animate the step in (a final one too: running=false prevents further steps).
+    -- A stuck tick moved nothing, so it is shown settled.
+    if stuck then
         self.anim_from_x=to_x; self.anim_from_y=to_y
-        self.anim_to_x=to_x;   self.anim_to_y=to_y
-        self.anim_t  = 1
-        self.anim_ready = false
     else
         self.anim_from_x=from_x; self.anim_from_y=from_y
-        self.anim_to_x=to_x;     self.anim_to_y=to_y
-        self.anim_t     = 0
-        self.anim_ready = false
     end
+    self.anim_to_x=to_x; self.anim_to_y=to_y
+    self.anim_t     = stuck and 1 or 0
+    self.anim_ready = false
 end
 
 -- ── Update ─────────────────────────────────────────────────────────────────
@@ -674,12 +884,20 @@ function MatrixScene:draw_grid()
         end
     end
 
-    -- Pass 2: tile content. The source anchor draws its full span; its ref cells fill in.
+    -- Pass 2: source ref cells fill in first, so they cannot cover a source label.
+    -- (A two-cell tile's ref cell is drawn by its anchor.)
     for cy = 1, 10 do
         for cx = 1, 10 do
-            if self.grid:is_ref(cx, cy) then
+            if self.grid:is_ref(cx, cy) and self.grid:get(cx, cy).kind ~= "op" then
                 self:draw_ref_cell(cx, cy)
-            else
+            end
+        end
+    end
+
+    -- Pass 3: tile content. A source anchor draws its label across its full span.
+    for cy = 1, 10 do
+        for cx = 1, 10 do
+            if not self.grid:is_ref(cx, cy) then
                 local tile = self.grid:get(cx, cy)
                 if tile then self:draw_tile(tile, cx, cy) end
             end
@@ -687,33 +905,69 @@ function MatrixScene:draw_grid()
     end
 
     -- Ghost preview while dragging
-    if self._drag_tile and self._drag_ghost then
+    local pair, ax, ay = self:_two_cell_preview()
+    if pair then
+        self:_draw_two_cell_preview(pair, ax, ay)
+    elseif self._drag_tile and self._drag_ghost then
         local tile = self._drag_tile
         local gx, gy = self._drag_ghost.cx, self._drag_ghost.cy
-        local valid = self:_can_drop(gx, gy)
-        local sx, sy = cell_top_left(gx, gy)
-        if valid then
-            love.graphics.setColor(0.14, 0.35, 0.14, 1)
-        else
-            love.graphics.setColor(0.35, 0.14, 0.14, 1)
-        end
-        love.graphics.rectangle("fill", sx, sy, CELL_SIZE, CELL_SIZE)
-        love.graphics.setColor(valid and 0.34 or 0.74, valid and 0.74 or 0.26, valid and 0.34 or 0.26, 1)
-        love.graphics.setLineWidth(2)
-        love.graphics.rectangle("line", sx + 1, sy + 1, CELL_SIZE - 2, CELL_SIZE - 2)
-        love.graphics.setLineWidth(1)
         local label
         if tile.kind == "pusher" then
             label = string.char(64 + (tile.id or 1))
         else
             label = Ops.tile_text(tile.op, tile.params)
         end
-        love.graphics.setColor(0.82, 0.82, 0.82, 1)
-        love.graphics.setFont(self.font_cell)
-        love.graphics.printf(label, sx, sy + CELL_SIZE / 2 - 8, CELL_SIZE, "center")
+        self:_draw_ghost_cell(gx, gy, self:_can_drop(gx, gy), label)
     end
 
     love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- One cell of a drag preview: green when the drop is valid, red when not.
+function MatrixScene:_draw_ghost_cell(cx, cy, valid, label)
+    local sx, sy = cell_top_left(cx, cy)
+    if valid then
+        love.graphics.setColor(0.14, 0.35, 0.14, 1)
+    else
+        love.graphics.setColor(0.35, 0.14, 0.14, 1)
+    end
+    love.graphics.rectangle("fill", sx, sy, CELL_SIZE, CELL_SIZE)
+    love.graphics.setColor(valid and 0.34 or 0.74, valid and 0.74 or 0.26, valid and 0.34 or 0.26, 1)
+    love.graphics.setLineWidth(2)
+    love.graphics.rectangle("line", sx + 1, sy + 1, CELL_SIZE - 2, CELL_SIZE - 2)
+    love.graphics.setLineWidth(1)
+    love.graphics.setColor(0.82, 0.82, 0.82, 1)
+    love.graphics.setFont(self.font_cell)
+    love.graphics.printf(label, sx, sy + CELL_SIZE / 2 - 8, CELL_SIZE, "center")
+end
+
+-- The two-cell tile a drag (Mv or from the palette) would drop now, as
+-- tile, x, y (its left-operand cell); nil when there is none over the board.
+function MatrixScene:_two_cell_preview()
+    local ghost = self._drag_ghost
+    if is_two_cell_tile(self._drag_tile) and ghost then
+        return self._drag_tile, self:_drop_anchor(ghost.cx, ghost.cy)
+    end
+    local d = self._dnd
+    local btn = d and d.btn
+    if self.running or not (btn and d.moved and btn.kind == "op" and Ops.is_two_cell(btn.op)) then
+        return nil
+    end
+    local cx, cy = screen_to_cell(d.x, d.y)
+    if not self.grid:in_bounds(cx, cy) then return nil end
+    local facing = btn.fixed and btn.params.facing or self._tool_facing[btn.op]
+    return { kind = "op", op = btn.op, params = { facing = facing } }, cx, cy
+end
+
+-- Both cells (those on the board), each naming its operand.
+function MatrixScene:_draw_two_cell_preview(tile, ax, ay)
+    local valid = self.grid:fits(ax, ay, tile)
+    local rx, ry = Ops.partner(ax, ay, tile.params.facing)
+    for _, cell in ipairs({ { "L", ax, ay }, { "R", rx, ry } }) do
+        if self.grid:in_bounds(cell[2], cell[3]) then
+            self:_draw_ghost_cell(cell[2], cell[3], valid, cell[1] .. " " .. Ops.label(tile.op))
+        end
+    end
 end
 
 function MatrixScene:draw_pusher(id, sx, sy, ghost, dir)
@@ -743,7 +997,7 @@ function MatrixScene:draw_live_pushers()
     end
 end
 
--- Only the source tile spans several cells; this fills one of its non-anchor cells.
+-- Fills one of a source tile's non-anchor cells.
 function MatrixScene:draw_ref_cell(cx, cy)
     local sx, sy = cell_top_left(cx, cy)
     love.graphics.setColor(0.09, 0.29, 0.17, 1)
@@ -763,7 +1017,8 @@ function MatrixScene:draw_tile(tile, cx, cy)
         love.graphics.rectangle("fill", sx, sy, span_w, span_h)
         love.graphics.setColor(0.4, 1.0, 0.5, 1)
         love.graphics.setFont(self.font_cell)
-        love.graphics.printf("SRC", sx, sy + span_h / 2 - 7, span_w, "center")
+        local label = tile.index and ("SRC " .. tile.index) or "SRC"
+        love.graphics.printf(label, sx, sy + span_h / 2 - 7, span_w, "center")
 
     elseif tile.kind == "sink" then
         love.graphics.setColor(0.09, 0.19, 0.42, 1)
@@ -807,55 +1062,76 @@ function MatrixScene:_display_matrix()
     return self.current_matrix
 end
 
-function MatrixScene:draw_travelling_matrix()
+-- The matrices on screen now, primary first: { matrix, px, py (drawn top-left),
+-- x, y (logical cell), tag, preview }. Idle, these are the inputs at their sources;
+-- while sliding, the pre-op matrices headed for their new cells.
+function MatrixScene:_shown_matrices()
+    local out = {}
     local mat = self:_display_matrix()
     if not mat then
         if self.sim == nil and self.input_matrix then
-            local px, py = cell_top_left(self.puzzle.source.x, self.puzzle.source.y)
-            local preview = self.input_matrix
-            for r = 1, preview.rows do
-                for c = 1, preview.cols do
-                    local cx = px + (c - 1) * CELL_SIZE
-                    local cy = py + (r - 1) * CELL_SIZE
-                    local v  = preview.values[r][c]
-                    love.graphics.setColor(0.11, 0.11, 0.17, 1)
-                    love.graphics.rectangle("fill", cx, cy, CELL_SIZE, CELL_SIZE)
-                    love.graphics.setColor(0.47, 0.37, 0.07, 1)
-                    love.graphics.setLineWidth(2)
-                    love.graphics.rectangle("line", cx+1, cy+1, CELL_SIZE-2, CELL_SIZE-2)
-                    love.graphics.setLineWidth(1)
-                    local s
-                    if v == math.floor(v) then s = tostring(math.floor(v))
-                    else s = string.format("%.1f", v) end
-                    love.graphics.setColor(0.50, 0.50, 0.53, 1)
-                    love.graphics.setFont(self.font_cell)
-                    love.graphics.printf(s, cx, cy + CELL_SIZE / 2 - 9, CELL_SIZE, "center")
-                end
+            local function preview(m, at, tag)
+                local px, py = cell_top_left(at.x, at.y)
+                out[#out + 1] = { matrix = m, px = px, py = py, x = at.x, y = at.y,
+                                  tag = tag, preview = true }
             end
-            love.graphics.setColor(1, 1, 1, 1)
+            preview(self.input_matrix, self.puzzle.source, 1)
+            if self.input2_matrix then preview(self.input2_matrix, self.puzzle.source2, 2) end
         end
-        return
+        return out
     end
 
     local t  = self.anim_t
     local et = t * t * (3 - 2 * t)  -- smooth-step
-    local px = lerp(self.anim_from_x, self.anim_to_x, et)
-    local py = lerp(self.anim_from_y, self.anim_to_y, et)
+    local sliding = t < 1 and self._anim_display_matrix ~= nil
 
-    -- Each matrix element = one board cell
-    local bx = px
-    local by = py
+    local first = { matrix = mat, tag = self._tag or 1,
+                    px = lerp(self.anim_from_x, self.anim_to_x, et),
+                    py = lerp(self.anim_from_y, self.anim_to_y, et) }
+    if sliding then
+        first.tag = self._anim_tag or first.tag
+        first.x, first.y = screen_to_cell(self.anim_to_x, self.anim_to_y)
+    elseif self.sim then
+        first.x, first.y = self.sim.x, self.sim.y
+        -- A merge result appears at the left operand, wherever the primary slid to.
+        if self._anim_merged then first.px, first.py = cell_top_left(first.x, first.y) end
+    else
+        first.x, first.y = screen_to_cell(self.anim_to_x, self.anim_to_y)
+    end
+    out[1] = first
 
+    local slide = sliding and self._anim_second
+    if slide then
+        local x, y = screen_to_cell(slide.to_x, slide.to_y)
+        out[2] = { matrix = slide.matrix, tag = 2, x = x, y = y,
+                   px = lerp(slide.from_x, slide.to_x, et),
+                   py = lerp(slide.from_y, slide.to_y, et) }
+    elseif not sliding and self.sim and self.sim.second then
+        local at = self.sim.second
+        local px, py = cell_top_left(at.x, at.y)
+        out[2] = { matrix = self.second_matrix, tag = 2, x = at.x, y = at.y, px = px, py = py }
+    end
+    return out
+end
+
+-- Each matrix element covers one board cell.
+function MatrixScene:_draw_matrix_cells(body)
+    local mat, border = body.matrix, MATRIX_BORDER[body.tag]
+    local dim = body.preview and PREVIEW_DIM or 1
     for r = 1, mat.rows do
         for c = 1, mat.cols do
-            local cx = bx + (c - 1) * CELL_SIZE
-            local cy = by + (r - 1) * CELL_SIZE
+            local cx = body.px + (c - 1) * CELL_SIZE
+            local cy = body.py + (r - 1) * CELL_SIZE
             local v  = mat.values[r][c]
 
-            love.graphics.setColor(0.08, 0.08, 0.15, 1)
+            if body.preview then
+                love.graphics.setColor(0.11, 0.11, 0.17, 1)
+            else
+                love.graphics.setColor(0.08, 0.08, 0.15, 1)
+            end
             love.graphics.rectangle("fill", cx, cy, CELL_SIZE, CELL_SIZE)
 
-            love.graphics.setColor(0.91, 0.73, 0.15, 1)
+            love.graphics.setColor(border[1] * dim, border[2] * dim, border[3] * dim, 1)
             love.graphics.setLineWidth(2)
             love.graphics.rectangle("line", cx+1, cy+1, CELL_SIZE-2, CELL_SIZE-2)
             love.graphics.setLineWidth(1)
@@ -863,11 +1139,38 @@ function MatrixScene:draw_travelling_matrix()
             local s
             if v == math.floor(v) then s = tostring(math.floor(v))
             else s = string.format("%.1f", v) end
-            love.graphics.setColor(0.95, 0.95, 1.0, 1)
+            if body.preview then
+                love.graphics.setColor(0.50, 0.50, 0.53, 1)
+            else
+                love.graphics.setColor(0.95, 0.95, 1.0, 1)
+            end
             love.graphics.setFont(self.font_cell)
             love.graphics.printf(s, cx, cy + CELL_SIZE / 2 - 9, CELL_SIZE, "center")
         end
     end
+end
+
+-- An idle preview hides its source tile's label, so with two sources each preview
+-- carries a tag at the top of its first cell, clear of the value.
+function MatrixScene:_draw_source_tag(body)
+    local x, y = body.px + (CELL_SIZE - SRC_TAG_W) / 2, body.py + 3
+    local border = MATRIX_BORDER[body.tag]
+    love.graphics.setColor(0.04, 0.04, 0.06, 1)
+    love.graphics.rectangle("fill", x, y, SRC_TAG_W, SRC_TAG_H)
+    love.graphics.setColor(border[1], border[2], border[3], 1)
+    love.graphics.setFont(self.font_ui)
+    love.graphics.printf("SRC " .. body.tag, x, y, SRC_TAG_W, "center")
+end
+
+function MatrixScene:draw_travelling_matrix()
+    local shown = self:_shown_matrices()
+    for _, body in ipairs(shown) do
+        self:_draw_matrix_cells(body)
+        if body.preview and self.input2_matrix then self:_draw_source_tag(body) end
+    end
+
+    OpTile.draw_covered_badges(self.grid:two_cell_tiles(), shown, cell_top_left,
+                               CELL_SIZE, self.font_ui)
 
     love.graphics.setColor(1, 1, 1, 1)
 end
@@ -891,6 +1194,7 @@ function MatrixScene:_cmd_activate(id)
     if id == "run" then
         if #self:_pusher_list() == 0 then
             self.status = "no_pusher"
+            self.status_message = nil
         else
             self:start_run()
         end
@@ -971,6 +1275,18 @@ function MatrixScene:_palette_is_selected(btn)
     return false
 end
 
+-- The label a palette button shows now: a turnable two-cell tool points towards
+-- its right operand.
+function MatrixScene:_button_label(btn)
+    if is_turnable_tool(btn) then return Ops.tool_label(btn.op, self._tool_facing[btn.op]) end
+    return btn.label
+end
+
+-- Turns a two-cell tool clockwise.
+function MatrixScene:_turn_tool(op)
+    self._tool_facing[op] = Ops.next_facing(self._tool_facing[op])
+end
+
 -- Applies a palette button click (same semantics as before the registry).
 function MatrixScene:_palette_select(btn)
     if btn.erase then
@@ -1014,7 +1330,7 @@ function MatrixScene:draw_palette()
             love.graphics.setColor(0.4, 0.4, 0.5, 1)
         end
         love.graphics.setFont(self.font_ui)
-        love.graphics.printf(btn.label, rect.x, rect.y + math.floor((rect.h - 11) / 2) - 1, rect.w, "center")
+        love.graphics.printf(self:_button_label(btn), rect.x, rect.y + math.floor((rect.h - 11) / 2) - 1, rect.w, "center")
     end
 
     self:_draw_cmd_buttons()
@@ -1193,7 +1509,8 @@ function MatrixScene:ui_elements()
     local out = {}
     for _, r in ipairs(self._palette_rects or {}) do
         local enabled = r.enabled ~= false
-        out[#out + 1] = el(r.id, r.btn.label, "button", r, enabled, self:_palette_is_selected(r.btn))
+        out[#out + 1] = el(r.id, self:_button_label(r.btn), "button", r, enabled,
+                           self:_palette_is_selected(r.btn))
     end
     for _, r in ipairs(self._cmd_btn_rects or {}) do
         out[#out + 1] = el("cmd:" .. r.id, r.label, "button", r, self:_cmd_enabled(r.id))
@@ -1209,15 +1526,28 @@ function MatrixScene:ui_elements()
     return out
 end
 
--- C6 query: matrix values currently shown, as plain rows.
-function MatrixScene:ui_matrix()
-    local m = self:_display_matrix() or self.input_matrix
+local function plain_rows(m)
     local rows = {}
     for r = 1, m.rows do
         rows[r] = {}
         for c = 1, m.cols do rows[r][c] = m.values[r][c] end
     end
     return rows
+end
+
+-- C6 query: matrix values currently shown, as plain rows (the primary matrix).
+function MatrixScene:ui_matrix()
+    return plain_rows(self:_display_matrix() or self.input_matrix)
+end
+
+-- C6 query: every matrix shown now, primary first, as { x, y, values } where x,y is
+-- the logical grid cell of its top-left.
+function MatrixScene:ui_matrices()
+    local out = {}
+    for _, body in ipairs(self:_shown_matrices()) do
+        out[#out + 1] = { x = body.x, y = body.y, values = plain_rows(body.matrix) }
+    end
+    return out
 end
 
 -- C6 query: timeline slot content at (lane, tick), or nil when empty.
@@ -1232,7 +1562,8 @@ function MatrixScene:ui_tile(x, y)
     if tile == nil then return nil end
     local params = tile.params or {}
     return { kind = tile.kind, op = tile.op, dir = tile.dir,
-             edge = params.edge, scalar = params.scalar }
+             edge = params.edge, scalar = params.scalar,
+             facing = params.facing, index = tile.index }
 end
 
 function MatrixScene:_draw_status_banner()
@@ -1244,7 +1575,8 @@ function MatrixScene:_draw_status_banner()
     love.graphics.rectangle("fill", OPS_W, by, HUD_X - OPS_W, bh)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setFont(self.font_ui)
-    love.graphics.printf(STATUS_LABELS[self.status] or self.status, OPS_W, by + 13, HUD_X - OPS_W, "center")
+    local text = self.status_message or STATUS_LABELS[self.status] or self.status
+    love.graphics.printf(text, OPS_W, by + 13, HUD_X - OPS_W, "center")
     love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -1254,7 +1586,7 @@ function MatrixScene:draw()
     self:draw_travelling_matrix()
     self:draw_palette()
     self:_draw_bar()
-    self.hud:draw(self.input_matrix, self.target_matrix, self.puzzle.name)
+    self.hud:draw(self.input_matrix, self.target_matrix, self.puzzle.name, self.input2_matrix)
     love.graphics.setColor(0.5, 0.65, 0.5, 1)
     love.graphics.setFont(self.font_key)
     love.graphics.print(string.format("Puzzle %d/%d", self.puzzle_index, PuzzleLoader.count()), HUD_X + 8, 12)
@@ -1274,6 +1606,15 @@ function MatrixScene:_place_tile_at(cx, cy, spec)
     if not self.grid:in_bounds(cx, cy) then return end
     local old = self.grid:get(cx, cy)
     if old and old.locked then return end
+
+    -- A two-cell tile goes only where both cells are free; it overwrites nothing.
+    if spec.kind == "op" and Ops.is_two_cell(spec.op) then
+        local facing = spec.params and spec.params.facing or self._tool_facing[spec.op]
+        local tile = { kind = "op", op = spec.op, params = { facing = facing },
+                       locked = false, fixed = spec.fixed or false }
+        if self.grid:fits(cx, cy, tile) then self.grid:put(cx, cy, tile) end
+        return
+    end
 
     -- Pushers get the lowest free letter id (a pusher being replaced frees its own id)
     local pusher_id
@@ -1295,13 +1636,29 @@ function MatrixScene:_place_tile_at(cx, cy, spec)
     self:_sync_pushers()
 end
 
--- True when a dragged tile may be dropped on (cx, cy): on the board and empty.
+-- The anchor cell the dragged tile gets when dropped with the cursor on (cx, cy):
+-- a tile held by its right-operand cell keeps that cell under the cursor.
+function MatrixScene:_drop_anchor(cx, cy)
+    if self._drag_grab ~= "R" then return cx, cy end
+    local ox, oy = Ops.partner(0, 0, self._drag_tile.params.facing)
+    return cx - ox, cy - oy
+end
+
+-- True when the dragged tile may be dropped with the cursor on (cx, cy): every
+-- cell it would take is on the board and empty.
 function MatrixScene:_can_drop(cx, cy)
-    return self.grid:in_bounds(cx, cy) and self.grid.cells[cy][cx] == nil
+    local ax, ay = self:_drop_anchor(cx, cy)
+    return self.grid:fits(ax, ay, self._drag_tile)
 end
 
 function MatrixScene:mouse_moved(mx, my)
-    if self._dnd then self._dnd.x, self._dnd.y, self._dnd.moved = mx, my, true end
+    self._mouse = { x = mx, y = my }
+    local d = self._dnd
+    if d then
+        d.x, d.y, d.moved = mx, my, true
+        -- A drag that leaves the button no longer counts as a click on it.
+        if d.turn and not UI.hit(d.rect, mx, my) then d.turn = nil end
+    end
     if not self._drag_tile then return end
     if in_grid_panel(mx, my) then
         local cx, cy = screen_to_cell(mx, my)
@@ -1316,6 +1673,7 @@ function MatrixScene:mouse_moved(mx, my)
 end
 
 function MatrixScene:mouse_pressed(mx, my, btn)
+    self._mouse = { x = mx, y = my }
     if self._settings_menu and self._settings_menu.is_open then
         self._settings_menu:mouse_pressed(mx, my)
         return
@@ -1341,7 +1699,10 @@ function MatrixScene:_dnd_begin(e)
     if id:sub(1, 8) == "palette:" then
         for _, r in ipairs(self._palette_rects) do
             if r.id == id and r.btn.kind ~= "scroll" and r.btn.kind ~= "drag" then
-                return { src = "palette", id = id, label = r.btn.label }
+                -- Clicking the already selected tool turns it, on release.
+                local turn = is_turnable_tool(r.btn) and self:_palette_is_selected(r.btn)
+                return { src = "palette", id = id, btn = r.btn, rect = e.rect,
+                         turn = turn and r.btn.op or nil }
             end
         end
     elseif id:sub(1, 5) == "chip:" then
@@ -1365,7 +1726,11 @@ function MatrixScene:_dnd_drop(d, mx, my)
     if tid then tlane, ttick = tid:match("^slot:(%d+):(%d+)$") end
     if d.src == "palette" then
         if tid and tid:sub(1, 5) == "cell:" then
-            self:_mouse_pressed_inner(mx, my, 1)
+            -- Only a click turns a two-cell tile; of the dragged tools just the
+            -- eraser acts on one.
+            if d.btn.erase or not is_two_cell_tile(self.grid:get(screen_to_cell(mx, my))) then
+                self:_mouse_pressed_inner(mx, my, 1)
+            end
         end
     elseif d.src == "chip" then
         if tlane and self.sel_pusher then
@@ -1390,7 +1755,8 @@ function MatrixScene:_draw_dnd_ghost()
     love.graphics.setColor(0.17, 0.21, 0.33, 1)
     love.graphics.rectangle("fill", d.x - 22, d.y - 16, 44, 32, 4, 4)
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.printf(d.label or "", d.x - 22, d.y - 6, 44, "center")
+    local label = d.btn and self:_button_label(d.btn) or d.label
+    love.graphics.printf(label, d.x - 22, d.y - 6, 44, "center")
     love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -1410,6 +1776,11 @@ function MatrixScene:_mouse_pressed_inner(mx, my, btn)
                 if r.btn.kind == "scroll" then
                     if e.enabled then self:_palette_scroll_by(r.btn.dir) end
                 else
+                    -- During a run there is no drag, so a second click turns at once.
+                    if self.running and btn == 1 and is_turnable_tool(r.btn)
+                        and self:_palette_is_selected(r.btn) then
+                        self:_turn_tool(r.btn.op)
+                    end
                     self:_palette_select(r.btn)
                 end
                 break
@@ -1439,9 +1810,12 @@ function MatrixScene:_mouse_pressed_inner(mx, my, btn)
         -- Drag pickup: when in drag mode, pick up an existing unlocked tile
         if self.palette:is_drag() and not self.running then
             if tile and not tile.locked and tile.kind ~= "gap" then
+                local ax, ay = self.grid:get_anchor(cx, cy)
                 self._drag_tile   = tile
-                self._drag_origin = {x=cx, y=cy}
+                self._drag_origin = {x=ax, y=ay}
                 self._drag_ghost  = {cx=cx, cy=cy}
+                self._drag_grab   = (ax ~= cx or ay ~= cy) and "R" or nil
+                self._drag_facing = is_two_cell_tile(tile) and tile.params.facing or nil
                 self.grid:clear(cx, cy)
             end
             return
@@ -1453,9 +1827,13 @@ function MatrixScene:_mouse_pressed_inner(mx, my, btn)
             return
         end
 
-        -- Clicking an op tile edits it (thirds of the cell); it is never replaced.
+        -- Clicking an op tile edits it (thirds of the cell, or a turn for either
+        -- cell of a two-cell tile); it is never replaced.
         if tile and tile.kind == "op" then
-            if not (tile.fixed or tile.locked) then
+            if tile.fixed or tile.locked then return end
+            if Ops.is_two_cell(tile.op) then
+                if not self.palette:is_drag() then self.grid:rotate(cx, cy) end
+            else
                 local left = cell_top_left(cx, cy)
                 Ops.click(tile.op, tile.params, Ops.part(mx - left, CELL_SIZE))
             end
@@ -1471,7 +1849,9 @@ function MatrixScene:mouse_released(mx, my, btn)
     if btn == 1 and self._dnd then
         local d = self._dnd
         self._dnd = nil
-        if not self.running then
+        if d.turn and UI.hit(d.rect, mx, my) then
+            self:_turn_tool(d.turn)
+        elseif not self.running then
             self:_dnd_drop(d, mx, my)
             self:_sync_pushers()
         end
@@ -1481,23 +1861,57 @@ function MatrixScene:mouse_released(mx, my, btn)
     local tile = self._drag_tile
     local ghost = self._drag_ghost
     if ghost and self:_can_drop(ghost.cx, ghost.cy) then
-        self.grid:set(ghost.cx, ghost.cy, tile)
-        self._drag_tile   = nil
-        self._drag_origin = nil
-        self._drag_ghost  = nil
+        local ax, ay = self:_drop_anchor(ghost.cx, ghost.cy)
+        self.grid:put(ax, ay, tile)
+        self:_end_drag()
         return
     end
     self:_clear_drag()
 end
 
+-- The T key turns, in this order of priority: the thing being dragged, else the
+-- editable two-cell tile under the cursor, else the selected two-cell tool.
+function MatrixScene:_turn_key()
+    local held = self._drag_tile
+    if held then
+        -- A lifted tile turns freely; the preview shows where it fits.
+        if is_two_cell_tile(held) and not held.fixed then
+            held.params.facing = Ops.next_facing(held.params.facing)
+        end
+        return
+    end
+    local d = self._dnd
+    if d then
+        if is_turnable_tool(d.btn) then
+            self:_turn_tool(d.btn.op)
+            d.turn = nil   -- the release must not turn it a second time
+        end
+        return
+    end
+    local m = self._mouse
+    if m then
+        local cx, cy = screen_to_cell(m.x, m.y)
+        local tile = self.grid:in_bounds(cx, cy) and self.grid:get(cx, cy)
+        if tile and is_two_cell_tile(tile) and not (tile.locked or tile.fixed) then
+            self.grid:rotate(cx, cy)
+            return
+        end
+    end
+    local sel = self.palette:selected()
+    if is_turnable_tool(sel) then self:_turn_tool(sel.op) end
+end
+
 function MatrixScene:key_pressed(key)
     if self._settings_menu and self._settings_menu.is_open then
         if self._settings_menu:key_pressed(key) then return end
+        if key == "t" then return end
     end
     local KEY_CMD = { r = "run", backspace = "reset" }
     local cmd = KEY_CMD[key]
     if cmd then
         if self:_cmd_enabled(cmd) then self:_cmd_activate(cmd) end
+    elseif key == "t" then
+        self:_turn_key()
     elseif key == "return" and self.status == "win" then
         self:_cmd_activate("continue")
     elseif key == "escape" then
@@ -1510,6 +1924,7 @@ end
 function MatrixScene:text_input(_) end
 
 -- Board geometry shared with the solution recap so replays line up with the game board.
-MatrixScene.GEOM = { GRID_X = GRID_X, GRID_Y = GRID_Y, CELL_SIZE = CELL_SIZE, HUD_X = HUD_X }
+MatrixScene.GEOM = { GRID_X = GRID_X, GRID_Y = GRID_Y, CELL_SIZE = CELL_SIZE, HUD_X = HUD_X,
+                     MATRIX_BORDER = MATRIX_BORDER }
 
 return MatrixScene

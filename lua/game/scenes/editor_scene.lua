@@ -26,6 +26,9 @@ local BAR_BTN_Y = PALETTE_Y + 6
 local CMD_BTN_W    = 56
 local CMD_BTN_H    = 48
 local CMD_BTN_STEP = 62
+local CMD_COUNT    = 4
+-- The command buttons end 10px from the right edge of the bar.
+local CMD_X        = W - 10 - ((CMD_COUNT - 1) * CMD_BTN_STEP + CMD_BTN_W)
 
 -- HUD layout constants
 local HUD_PAD  = 12
@@ -36,16 +39,25 @@ local OPS_W    = 36
 local OPS_H    = 22
 local OPS_GAP  = 4
 local OPS_LBL_H = 14
+local SEL_W    = 30   -- input selector buttons on the INPUT heading row
+local SEL_H    = 20
+local SEL_STEP = 34
 
 local EDITOR_PALETTE = {
     { id="editor:pal:source",   kind="source",  label="SRC"  },
+    { id="editor:pal:source2",  kind="source2", label="SRC2" },
     { id="editor:pal:sink",     kind="sink",    label="SNK"  },
     { id="editor:pal:gap",      kind="gap",     label="GAP"  },
     { sep=true },
     { id="editor:pal:pusher",   kind="pusher",  label="P"    },
     { sep=true },
 }
-for _, op in ipairs(Ops.ORDER) do
+-- Classic ops then the two-cell matrix ops, in palette and allowlist order.
+local ALL_OPS = {}
+for _, list in ipairs({ Ops.ORDER, Ops.MATRIX_ORDER }) do
+    for _, op in ipairs(list) do ALL_OPS[#ALL_OPS+1] = op end
+end
+for _, op in ipairs(ALL_OPS) do
     EDITOR_PALETTE[#EDITOR_PALETTE+1] =
         { id="editor:pal:"..op, kind="op", op=op, label=Ops.label(op) }
 end
@@ -83,13 +95,17 @@ local function deep_copy(src)
     return t
 end
 
--- The allowed ops in palette order, or nil unless they are a proper non-empty subset.
+-- The allowed ops in palette order. nil when the selection means "the ten classic
+-- ops": nothing toggled, or exactly those ten.
 local function ops_subset(allowed)
-    local enabled = {}
-    for _, op in ipairs(Ops.ORDER) do
-        if allowed[op] then enabled[#enabled+1] = op end
+    local enabled, matrix = {}, false
+    for _, op in ipairs(ALL_OPS) do
+        if allowed[op] then
+            enabled[#enabled+1] = op
+            matrix = matrix or Ops.is_two_cell(op)
+        end
     end
-    if #enabled > 0 and #enabled < #Ops.ORDER then return enabled end
+    if matrix or (#enabled > 0 and #enabled < #Ops.ORDER) then return enabled end
     return nil
 end
 
@@ -167,6 +183,39 @@ local function validate_ops(def)
     return true
 end
 
+local function is_integer(v)
+    return type(v) == "number" and v == math.floor(v)
+end
+
+local function is_input_matrix(mat)
+    if type(mat) ~= "table" then return false end
+    for _, n in ipairs({ "rows", "cols" }) do
+        if not (is_integer(mat[n]) and mat[n] >= 1 and mat[n] <= 4) then return false end
+    end
+    if type(mat.values) ~= "table" then return false end
+    for _, row in pairs(mat.values) do
+        if type(row) ~= "table" then return false end
+        for _, v in pairs(row) do
+            if type(v) ~= "number" then return false end
+        end
+    end
+    return true
+end
+
+-- true, or false plus a message about the optional second source.
+local function validate_second(def)
+    if def.source2 == nil and def.input2 == nil then return true end
+    if def.source2 == nil or def.input2 == nil then
+        return false, "source2 and input2 come together"
+    end
+    if not is_input_matrix(def.input2) then return false, "Invalid input2" end
+    local at = def.source2
+    if not (type(at) == "table" and is_integer(at.x) and is_integer(at.y)) then
+        return false, "Invalid source2"
+    end
+    return true
+end
+
 local function ensure_matrix_values(mat)
     for r = 1, mat.rows do
         if not mat.values[r] then mat.values[r] = {} end
@@ -191,6 +240,8 @@ function EditorScene.new(scene_manager)
     self._name           = "Untitled"
     self._name_focus     = false
     self._input          = { rows=2, cols=2, values={{1,0},{0,1}} }
+    self._input2         = { rows=2, cols=2, values={{1,0},{0,1}} }
+    self._input_sel      = 1      -- which input the matrix section edits
     self._target         = { rows=2, cols=2, values={{1,0},{0,1}} }
     self._sel            = nil
     self._copy_flash     = 0
@@ -200,7 +251,10 @@ function EditorScene.new(scene_manager)
     self._no_ops         = false  -- loaded with an empty ops list: no editable ops
     self._fixed_ops      = nil
     self._source         = nil
+    self._source2        = nil    -- the puzzle has two sources only while this is set
     self._sink           = nil
+    self._mouse          = nil    -- last logical mouse position (for the T key)
+    self:_reset_tool_facing()
     self._pal_rects      = {}
     self._hud_els        = {}
     -- stored y positions for section labels (set by _rebuild_hud)
@@ -218,6 +272,24 @@ function EditorScene:on_enter()
     self._font_title = love.graphics.newFont(16)
     self:_layout_palette()
     self:_rebuild_hud()
+end
+
+-- ── Tools and inputs ───────────────────────────────────────────────────────
+
+-- Each two-cell tool starts with its right operand to the right.
+function EditorScene:_reset_tool_facing()
+    self._tool_facing = {}
+    for _, op in ipairs(Ops.MATRIX_ORDER) do self._tool_facing[op] = Ops.params(op).facing end
+end
+
+function EditorScene:_turn_tool(op)
+    self._tool_facing[op] = Ops.next_facing(self._tool_facing[op])
+end
+
+-- The input matrix of source 1 or 2.
+function EditorScene:_input_of(slot)
+    if slot == 2 then return self._input2 end
+    return self._input
 end
 
 -- ── Palette layout ─────────────────────────────────────────────────────────
@@ -246,7 +318,7 @@ end
 -- Returns the y just below all cells in this section.
 function EditorScene:_add_matrix_section(out, key, cy)
     local hx    = HUD_X + HUD_PAD   -- 832
-    local mat   = key == "input" and self._input or self._target
+    local mat   = key == "input" and self:_input_of(self._input_sel) or self._target
     local spin_y = cy + 22
     local cell_y = cy + 50
 
@@ -297,6 +369,11 @@ function EditorScene:_rebuild_hud()
     -- INPUT section
     self._hud_inp_lbl_y  = cy
     self._hud_inp_cell_y = cy + 50
+    for n = 1, 2 do
+        out[#out+1] = {id="editor:input_sel:"..n, label="#"..n, kind="button",
+            rect={x=hx+(n-1)*SEL_STEP, y=cy, w=SEL_W, h=SEL_H},
+            enabled=true, selected=self._input_sel == n}
+    end
     local inp_next = self:_add_matrix_section(out, "input", cy)
     cy = inp_next + 10
 
@@ -310,14 +387,14 @@ function EditorScene:_rebuild_hud()
     self._hud_ops_lbl_y = cy
     cy = cy + OPS_LBL_H   -- buttons start below the label
     local ops_per_row = 8
-    for i, op in ipairs(Ops.ORDER) do
+    for i, op in ipairs(ALL_OPS) do
         local row = math.floor((i - 1) / ops_per_row)
         local col = (i - 1) % ops_per_row
         local ox  = hx + col * (OPS_W + OPS_GAP)
         local oy  = cy + row * (OPS_H + OPS_GAP)
         if oy + OPS_H <= PALETTE_Y - 4 then
             out[#out+1] = {
-                id      = "editor:allow:"..op,
+                id      = (Ops.is_two_cell(op) and "editor:allow_matrix:" or "editor:allow:")..op,
                 label   = Ops.label(op),
                 kind    = "button",
                 rect    = {x=ox, y=oy, w=OPS_W, h=OPS_H},
@@ -339,7 +416,14 @@ function EditorScene:ui_tile(x, y)
     if tile == nil then return nil end
     local params = tile.params or {}
     return { kind = tile.kind, op = tile.op, dir = tile.dir,
-             edge = params.edge, scalar = params.scalar }
+             edge = params.edge, scalar = params.scalar,
+             facing = params.facing, index = self:_source_index(tile) }
+end
+
+-- 1 or 2 for a source tile while there are two sources, else nil.
+function EditorScene:_source_index(tile)
+    if tile.kind == "source" and self._source2 then return tile.slot end
+    return nil
 end
 
 function EditorScene:_sel_matches(btn)
@@ -369,8 +453,11 @@ function EditorScene:ui_elements()
     end
 
     for _, r in ipairs(self._pal_rects) do
+        local op    = r.btn.op
+        local label = r.btn.label
+        if op and Ops.is_two_cell(op) then label = Ops.tool_label(op, self._tool_facing[op]) end
         els[#els+1] = {
-            id=r.id, label=r.btn.label, kind="button",
+            id=r.id, label=label, kind="button",
             rect={x=r.x, y=r.y, w=r.w, h=r.h},
             enabled=true, selected=self:_sel_matches(r.btn),
         }
@@ -379,7 +466,7 @@ function EditorScene:ui_elements()
     for i, cmd in ipairs(CMD_BUTTONS) do
         els[#els+1] = {
             id=cmd.id, label=cmd.label, kind="button",
-            rect={x=HUD_X+(i-1)*CMD_BTN_STEP, y=BAR_BTN_Y, w=CMD_BTN_W, h=CMD_BTN_H},
+            rect={x=CMD_X+(i-1)*CMD_BTN_STEP, y=BAR_BTN_Y, w=CMD_BTN_W, h=CMD_BTN_H},
             enabled=true,
         }
     end
@@ -405,8 +492,19 @@ function EditorScene:_erase_at(cx, cy)
     local tile = self._grid.cells[ay][ax]
     if tile == nil then return end
 
-    if tile.kind == "source" then self._source = nil end
+    if tile.kind == "source" then
+        if tile.slot == 2 then self._source2 = nil
+        else                   self._source  = nil end
+    end
     if tile.kind == "sink"   then self._sink   = nil end
+
+    -- A two-cell tile's partner can be on any side of the anchor.
+    if tile.kind == "op" and Ops.is_two_cell(tile.op) then
+        local px, py = Ops.partner(ax, ay, tile.params.facing)
+        self._grid.cells[ay][ax] = nil
+        self._grid.cells[py][px] = nil
+        return
+    end
 
     local tw = tile.width  or 1
     local th = tile.height or 1
@@ -437,18 +535,10 @@ function EditorScene:_place_at(cx, cy)
 
     if sel.kind == "erase" then self:_erase_at(cx, cy); return end
 
-    if sel.kind == "source" then
-        if self._source then self:_erase_at(self._source.x, self._source.y) end
-        self._source = nil
-        local sc, sr = self._input.cols, self._input.rows
-        if not self._grid:in_bounds_multi_2d(cx, cy, sc, sr) then return end
-        for dy = 0, sr-1 do
-            for dx = 0, sc-1 do
-                if self._grid.cells[cy+dy] and self._grid.cells[cy+dy][cx+dx] then return end
-            end
-        end
-        self._grid:set_multi_2d(cx, cy, {kind="source", locked=true, width=sc, height=sr}, sc, sr)
-        self._source = {x=cx, y=cy}
+    if sel.kind == "source" or sel.kind == "source2" then
+        local slot = sel.kind == "source2" and 2 or 1
+        self:_remove_source(slot)
+        self:_put_source(slot, cx, cy)
         return
     end
 
@@ -466,9 +556,10 @@ function EditorScene:_place_at(cx, cy)
     end
 
     if sel.kind == "op" then
-        if self._grid.cells[cy][cx] == nil then
-            self._grid:set(cx, cy, {kind="op", op=sel.op, locked=true, params=Ops.params(sel.op)})
-        end
+        -- facing only applies to the two-cell ops; nothing is ever overwritten.
+        local params = Ops.params(sel.op, {facing=self._tool_facing[sel.op]})
+        local tile   = {kind="op", op=sel.op, locked=true, params=params}
+        if self._grid:fits(cx, cy, tile) then self._grid:put(cx, cy, tile) end
         return
     end
 
@@ -481,21 +572,47 @@ end
 
 -- ── Matrix helpers ─────────────────────────────────────────────────────────
 
--- Re-places the source tile at its current position with the current input dimensions.
--- Called whenever input rows/cols change so the source footprint stays in sync.
-function EditorScene:_refit_source()
-    if not self._source then return end
-    local sx, sy = self._source.x, self._source.y
-    self:_erase_at(sx, sy)   -- also sets self._source = nil
-    local sc, sr = self._input.cols, self._input.rows
-    if not self._grid:in_bounds_multi_2d(sx, sy, sc, sr) then return end
+function EditorScene:_source_pos(slot)
+    if slot == 2 then return self._source2 end
+    return self._source
+end
+
+function EditorScene:_remove_source(slot)
+    local at = self:_source_pos(slot)
+    if at then self:_erase_at(at.x, at.y) end   -- also forgets the position
+end
+
+-- Places source `slot`, sized by its input, with its top-left at (x,y) if every
+-- cell of the footprint is on the grid and free.
+function EditorScene:_put_source(slot, x, y)
+    local input  = self:_input_of(slot)
+    local sc, sr = input.cols, input.rows
     for dy = 0, sr-1 do
         for dx = 0, sc-1 do
-            if self._grid.cells[sy+dy] and self._grid.cells[sy+dy][sx+dx] then return end
+            if not self:_is_free(x+dx, y+dy) then return end
         end
     end
-    self._grid:set_multi_2d(sx, sy, {kind="source", locked=true, width=sc, height=sr}, sc, sr)
-    self._source = {x=sx, y=sy}
+    self._grid:set_multi_2d(x, y,
+        {kind="source", locked=true, width=sc, height=sr, slot=slot}, sc, sr)
+    if slot == 2 then self._source2 = {x=x, y=y}
+    else              self._source  = {x=x, y=y} end
+end
+
+-- Re-places a source tile at its current position with its input's dimensions.
+-- Called whenever those change so the footprint stays in sync; a source that no
+-- longer fits is removed.
+function EditorScene:_refit_source(slot)
+    local at = self:_source_pos(slot)
+    if not at then return end
+    self:_remove_source(slot)
+    self:_put_source(slot, at.x, at.y)
+end
+
+-- Spinner change of the selected input.
+function EditorScene:_resize_input(drows, dcols)
+    local mat = self:_input_of(self._input_sel)
+    self:_adjust_matrix(mat, mat.rows+drows, mat.cols+dcols)
+    self:_refit_source(self._input_sel)
 end
 
 function EditorScene:_adjust_matrix(mat, new_rows, new_cols)
@@ -518,10 +635,12 @@ function EditorScene:_paste()
     local def = DefParser.parse(love.system.getClipboardText())
     local valid, msg = false, "Parse error"
     if def and def.input and def.target then
-        valid, msg = validate_ops(def)
+        valid, msg = validate_second(def)
+        if valid then valid, msg = validate_ops(def) end
     end
     if valid then
         self:_load_def(def)
+        self:_rebuild_hud()
     else
         self._paste_error   = msg
         self._paste_error_t = 2.0
@@ -539,6 +658,7 @@ function EditorScene:key_pressed(key)
         end
         return
     end
+    if key == "t" then self:_turn_key(); return end
     if key == "escape" then
         local StartScene = require("lua/game/scenes/start_scene")
         self._scene_manager:switch(StartScene.new(self._scene_manager))
@@ -551,7 +671,31 @@ function EditorScene:text_input(ch)
     end
 end
 
+-- The T key turns the two-cell tile under the cursor, else the selected matrix tool.
+function EditorScene:_turn_key()
+    local m = self._mouse
+    local e = m and UI.element_at(self:ui_elements(), m.x, m.y)
+    if e then
+        local cx, cy = e.id:match("^cell:(%d+),(%d+)$")
+        if cx then
+            cx, cy = tonumber(cx), tonumber(cy)
+            local tile = self._grid:get(cx, cy)
+            if tile and tile.kind == "op" and Ops.is_two_cell(tile.op) then
+                self._grid:rotate(cx, cy)   -- stops here even when it cannot turn
+                return
+            end
+        end
+    end
+    local sel = self._sel
+    if sel and sel.kind == "op" and Ops.is_two_cell(sel.op) then self:_turn_tool(sel.op) end
+end
+
+function EditorScene:mouse_moved(mx, my)
+    self._mouse = {x=mx, y=my}
+end
+
 function EditorScene:mouse_pressed(mx, my, btn)
+    self._mouse = {x=mx, y=my}
     local e = UI.element_at(self:ui_elements(), mx, my)
     if e then
         -- Grid cell elements: route to place/erase.
@@ -561,7 +705,10 @@ function EditorScene:mouse_pressed(mx, my, btn)
             if btn == 1 then
                 local tile    = self._grid:get(cx, cy)
                 local erasing = self._sel and self._sel.kind == "erase"
-                if not erasing and tile and tile.kind == "op" and Ops.has_scalar(tile.op) then
+                local is_op   = not erasing and tile ~= nil and tile.kind == "op"
+                if is_op and Ops.is_two_cell(tile.op) then
+                    self._grid:rotate(cx, cy)
+                elseif is_op and Ops.has_scalar(tile.op) then
                     Ops.click(tile.op, tile.params, Ops.part(mx - e.rect.x, CELL_SIZE))
                 else
                     self:_place_at(cx, cy)
@@ -588,17 +735,16 @@ function EditorScene:mouse_pressed(mx, my, btn)
                 local ms  = require("lua/game/scenes/matrix_scene")
                 self._scene_manager:switch(ms.new_from_def(def, self._scene_manager, self))
             elseif e.id == "editor:input_rows_dec" then
-                self:_adjust_matrix(self._input, self._input.rows-1, self._input.cols)
-                self:_refit_source()
+                self:_resize_input(-1, 0)
             elseif e.id == "editor:input_rows_inc" then
-                self:_adjust_matrix(self._input, self._input.rows+1, self._input.cols)
-                self:_refit_source()
+                self:_resize_input(1, 0)
             elseif e.id == "editor:input_cols_dec" then
-                self:_adjust_matrix(self._input, self._input.rows, self._input.cols-1)
-                self:_refit_source()
+                self:_resize_input(0, -1)
             elseif e.id == "editor:input_cols_inc" then
-                self:_adjust_matrix(self._input, self._input.rows, self._input.cols+1)
-                self:_refit_source()
+                self:_resize_input(0, 1)
+            elseif e.id:find("^editor:input_sel:") then
+                self._input_sel = tonumber(e.id:match("(%d)$"))
+                self:_rebuild_hud()   -- the cells now belong to the other input
             elseif e.id == "editor:target_rows_dec" then
                 self:_adjust_matrix(self._target, self._target.rows-1, self._target.cols)
             elseif e.id == "editor:target_rows_inc" then
@@ -610,7 +756,8 @@ function EditorScene:mouse_pressed(mx, my, btn)
             else
                 local ir, ic = e.id:match("^editor:input_cell:(%d+),(%d+)$")
                 if ir then
-                    self:_cell_click(self._input, tonumber(ir), tonumber(ic), mx, e.rect.x)
+                    self:_cell_click(self:_input_of(self._input_sel),
+                        tonumber(ir), tonumber(ic), mx, e.rect.x)
                     return
                 end
                 local tr, tc = e.id:match("^editor:target_cell:(%d+),(%d+)$")
@@ -619,6 +766,7 @@ function EditorScene:mouse_pressed(mx, my, btn)
                     return
                 end
                 local op = e.id:match("^editor:allow:(.+)$")
+                    or e.id:match("^editor:allow_matrix:(.+)$")
                 if op then
                     if self._allowed_ops[op] then self._allowed_ops[op] = nil
                     else                          self._allowed_ops[op] = true end
@@ -628,7 +776,12 @@ function EditorScene:mouse_pressed(mx, my, btn)
                 for _, pal_btn in ipairs(EDITOR_PALETTE) do
                     if pal_btn.id == e.id then
                         if     pal_btn.kind == "erase" then self._sel = {kind="erase"}
-                        elseif pal_btn.kind == "op"    then self._sel = {kind="op", op=pal_btn.op}
+                        elseif pal_btn.kind == "op"    then
+                            -- Clicking the selected matrix tool again turns it.
+                            if Ops.is_two_cell(pal_btn.op) and self:_sel_matches(pal_btn) then
+                                self:_turn_tool(pal_btn.op)
+                            end
+                            self._sel = {kind="op", op=pal_btn.op}
                         elseif pal_btn.kind then
                             self._sel = {kind=pal_btn.kind}
                         end
@@ -666,8 +819,33 @@ function EditorScene:_def_ops()
     return ops_subset(self._allowed_ops)
 end
 
+-- Where Copy and Test put source 1 when none is placed: (1,1), or with a second
+-- source on the board the first spot (reading order) where input 1 covers nothing,
+-- the default sink included; failing that, the first one clear of source 2.
+function EditorScene:_default_source()
+    if not self._source2 then return {x=1, y=1} end
+    local cols, rows = self._input.cols, self._input.rows
+    local beside
+    for y = 1, 10 - rows + 1 do
+        for x = 1, 10 - cols + 1 do
+            local free, clear = true, true
+            for cy = y, y + rows - 1 do
+                for cx = x, x + cols - 1 do
+                    local tile = self._grid:get(cx, cy)
+                    if tile or (not self._sink and cx == 10 and cy == 10) then free = false end
+                    if tile and tile.kind == "source" then clear = false end
+                end
+            end
+            if free then return {x=x, y=y} end
+            if clear then beside = beside or {x=x, y=y} end
+        end
+    end
+    -- A 10x10 board always has room beside one source of at most 4x4.
+    return beside
+end
+
 function EditorScene:_build_def()
-    local src = self._source or {x=1, y=1}
+    local src = self._source or self:_default_source()
     local snk = self._sink   or {x=10, y=10}
 
     local gaps = {}
@@ -711,6 +889,11 @@ function EditorScene:_build_def()
     }
     if #gaps   > 0 then def.gaps   = gaps   end
     if #locked > 0 then def.locked = locked end
+    if self._source2 then
+        def.source2 = { x=self._source2.x, y=self._source2.y }
+        def.input2  = { rows=self._input2.rows, cols=self._input2.cols,
+                        values=deep_copy(self._input2.values) }
+    end
     def.ops = self:_def_ops()
     if self._fixed_ops then def.fixed_ops = deep_copy(self._fixed_ops) end
     return def
@@ -721,7 +904,10 @@ function EditorScene:_load_def(def)
     self._name_focus  = false
     self._grid        = Grid.new(10, 10)
     self._source      = nil
+    self._source2     = nil
     self._sink        = nil
+    self._input_sel   = 1
+    self:_reset_tool_facing()
     self._allowed_ops = {}
     self._copy_flash  = 0
     self._paste_error = nil
@@ -732,37 +918,28 @@ function EditorScene:_load_def(def)
                      values=deep_copy(def.input.values) }
     self._target = { rows=def.target.rows, cols=def.target.cols,
                      values=deep_copy(def.target.values) }
+    local input2 = def.input2 or { rows=2, cols=2, values={{1,0},{0,1}} }
+    self._input2 = { rows=input2.rows, cols=input2.cols, values=deep_copy(input2.values) }
     ensure_matrix_values(self._input)
+    ensure_matrix_values(self._input2)
     ensure_matrix_values(self._target)
 
-    -- No tile is placed over another. Locked tiles (always one cell) go first:
-    -- without a placed source or sink the def carries a default position that a
-    -- tile may occupy.
+    -- No tile is placed over another; one that does not fit is skipped whole.
+    -- Locked tiles (one cell, or two for a matrix op) go first: without a placed
+    -- source or sink the def carries a default position that a tile may occupy.
     local locked = def.locked or {}
     local pusher_ids = Sim.assign_pusher_ids(locked)
     for _, t in ipairs(locked) do
-        if self:_is_free(t.x, t.y) and (t.kind ~= "pusher" or pusher_ids[t]) then
+        if t.kind ~= "pusher" or pusher_ids[t] then
             local tile = { kind=t.kind, op=t.op, id=pusher_ids[t], locked=true }
             if t.kind == "op" then tile.params = Ops.params(t.op, t.params) end
-            self._grid:set(t.x, t.y, tile)
+            if self._grid:fits(t.x, t.y, tile) then self._grid:put(t.x, t.y, tile) end
         end
     end
 
-    -- Source
-    if def.source then
-        local sx, sy = def.source.x, def.source.y
-        local sc, sr = def.input.cols, def.input.rows
-        local free = true
-        for dy = 0, sr-1 do
-            for dx = 0, sc-1 do
-                free = free and self:_is_free(sx+dx, sy+dy)
-            end
-        end
-        if free then
-            self._grid:set_multi_2d(sx, sy, {kind="source", locked=true, width=sc, height=sr}, sc, sr)
-            self._source = {x=sx, y=sy}
-        end
-    end
+    -- Sources
+    if def.source  then self:_put_source(1, def.source.x,  def.source.y)  end
+    if def.source2 then self:_put_source(2, def.source2.x, def.source2.y) end
 
     -- Sink
     if def.sink then
@@ -801,9 +978,13 @@ function EditorScene:_serialize()
     lines[#lines+1] = "    grid_w = 10, grid_h = 10,"
 
     -- source / sink
-    local src = self._source or {x=1, y=1}
+    local src = self._source or self:_default_source()
     local snk = self._sink   or {x=10, y=10}
     lines[#lines+1] = string.format("    source = { x=%d, y=%d },", src.x, src.y)
+    local src2 = self._source2
+    if src2 then
+        lines[#lines+1] = string.format("    source2 = { x=%d, y=%d },", src2.x, src2.y)
+    end
     lines[#lines+1] = string.format("    sink   = { x=%d, y=%d },", snk.x, snk.y)
 
     -- ops (omitted when all ops are offered: none or all toggled on)
@@ -871,6 +1052,11 @@ function EditorScene:_serialize()
     lines[#lines+1] = string.format(
         "    input  = { rows=%d, cols=%d, values=%s },",
         self._input.rows, self._input.cols, fmt_values(self._input.values))
+    if src2 then
+        lines[#lines+1] = string.format(
+            "    input2 = { rows=%d, cols=%d, values=%s },",
+            self._input2.rows, self._input2.cols, fmt_values(self._input2.values))
+    end
     lines[#lines+1] = string.format(
         "    target = { rows=%d, cols=%d, values=%s },",
         self._target.rows, self._target.cols, fmt_values(self._target.values))
@@ -881,7 +1067,7 @@ end
 
 -- ── Draw helpers ───────────────────────────────────────────────────────────
 
-local function draw_tile(tile, cx, cy, font_cell, font_ui)
+local function draw_tile(tile, cx, cy, font_cell, font_ui, index)
     if not tile then return end
     local sx, sy = cell_top_left(cx, cy)
     local cs     = CELL_SIZE
@@ -895,7 +1081,8 @@ local function draw_tile(tile, cx, cy, font_cell, font_ui)
         love.graphics.rectangle("fill", sx, sy, span_w, span_h)
         love.graphics.setColor(0.4, 1.0, 0.5, 1)
         love.graphics.setFont(font_cell)
-        love.graphics.printf("SRC", sx, sy + span_h/2 - 7, span_w, "center")
+        local text = index and ("SRC " .. index) or "SRC"
+        love.graphics.printf(text, sx, sy + span_h/2 - 7, span_w, "center")
     elseif tile.kind == "sink" then
         love.graphics.setColor(0.09, 0.19, 0.42, 1)
         love.graphics.rectangle("fill", sx, sy, cs, cs)
@@ -928,6 +1115,19 @@ local function draw_tile(tile, cx, cy, font_cell, font_ui)
             love.graphics.rectangle("fill", sx+cs-10, sy+7, 4, 5)
         end
     end
+end
+
+-- A two-cell tool's button: its name, then a triangle towards the right operand.
+-- The arrow is a shape, not a character, so it never reads as an edge tile's arrow.
+local function draw_tool_label(op, facing, r)
+    love.graphics.printf(Ops.label(op), r.x, r.y+10, r.w, "center")
+    local offset = Ops.OFFSETS[facing]
+    local dx, dy = offset.dx, offset.dy
+    local x, y   = r.x + r.w/2, r.y + 33
+    love.graphics.polygon("fill",
+        x + 6*dx,          y + 6*dy,
+        x - 4*dx - 5*dy,   y - 4*dy + 5*dx,
+        x - 4*dx + 5*dy,   y - 4*dy - 5*dx)
 end
 
 function EditorScene:_draw_hud()
@@ -971,7 +1171,7 @@ function EditorScene:_draw_hud()
             love.graphics.printf("-", r.x, r.y+r.h-14, r.w/3, "center")
             love.graphics.printf("+", r.x+r.w*2/3, r.y+r.h-14, r.w/3, "center")
 
-        elseif e.id:find("^editor:allow:") then
+        elseif e.id:find("^editor:allow") or e.id:find("^editor:input_sel:") then
             love.graphics.setColor(e.selected and {0.20,0.30,0.50,1} or {0.10,0.10,0.18,1})
             love.graphics.rectangle("fill", r.x, r.y, r.w, r.h, 2, 2)
             love.graphics.setColor(e.selected and {0.5,0.75,1.0,1} or {0.22,0.22,0.36,1})
@@ -985,8 +1185,9 @@ function EditorScene:_draw_hud()
     -- Section labels (text only, not UI elements)
     love.graphics.setFont(fu)
     -- INPUT / TARGET labels
+    local input = self:_input_of(self._input_sel)
     love.graphics.setColor(0.60, 0.75, 1.0, 1)
-    love.graphics.printf("INPUT",  HUD_X, self._hud_inp_lbl_y+4, W-HUD_X, "center")
+    love.graphics.printf("INPUT " .. self._input_sel, HUD_X, self._hud_inp_lbl_y+4, W-HUD_X, "center")
     love.graphics.printf("TARGET", HUD_X, self._hud_tgt_lbl_y+4, W-HUD_X, "center")
     -- Spinner labels
     local spin_off = 22 + 4  -- spin_y offset within section + small nudge
@@ -997,8 +1198,8 @@ function EditorScene:_draw_hud()
     love.graphics.printf("cols:", hx+118, self._hud_tgt_lbl_y+spin_off, 40, "right")
     -- Spinner values
     love.graphics.setColor(0.9, 0.9, 1.0, 1)
-    love.graphics.printf(tostring(self._input.rows),  hx+90,  self._hud_inp_lbl_y+spin_off, 20, "center")
-    love.graphics.printf(tostring(self._input.cols),  hx+206, self._hud_inp_lbl_y+spin_off, 20, "center")
+    love.graphics.printf(tostring(input.rows),  hx+90,  self._hud_inp_lbl_y+spin_off, 20, "center")
+    love.graphics.printf(tostring(input.cols),  hx+206, self._hud_inp_lbl_y+spin_off, 20, "center")
     love.graphics.printf(tostring(self._target.rows), hx+90,  self._hud_tgt_lbl_y+spin_off, 20, "center")
     love.graphics.printf(tostring(self._target.cols), hx+206, self._hud_tgt_lbl_y+spin_off, 20, "center")
     -- OPS label
@@ -1006,7 +1207,7 @@ function EditorScene:_draw_hud()
     love.graphics.printf("OPS:", hx, self._hud_ops_lbl_y - 2, 50, "left")
     -- Dividers
     love.graphics.setColor(0.2, 0.2, 0.3, 1)
-    local d1 = self._hud_inp_cell_y + self._input.rows * MAT_CS + 4
+    local d1 = self._hud_inp_cell_y + input.rows * MAT_CS + 4
     love.graphics.rectangle("fill", HUD_X+20, d1, W-HUD_X-40, 1)
     local d2 = self._hud_tgt_cell_y + self._target.rows * MAT_CS + 4
     love.graphics.rectangle("fill", HUD_X+20, d2, W-HUD_X-40, 1)
@@ -1040,7 +1241,10 @@ function EditorScene:draw()
         for cx = 1, 10 do
             if not self._grid:is_ref(cx, cy) then
                 local tile = self._grid:get(cx, cy)
-                if tile then draw_tile(tile, cx, cy, self._font_cell, self._font_ui) end
+                if tile then
+                    draw_tile(tile, cx, cy, self._font_cell, self._font_ui,
+                        self:_source_index(tile))
+                end
             end
         end
     end
@@ -1072,7 +1276,12 @@ function EditorScene:draw()
             love.graphics.setLineWidth(1)
             love.graphics.setColor(0.85, 0.85, 0.9, 1)
             love.graphics.setFont(self._font_ui)
-            love.graphics.printf(e.label, r.x, r.y+17, r.w, "center")
+            local op = e.id:match("^editor:pal:(.+)$")
+            if op and Ops.is_two_cell(op) then
+                draw_tool_label(op, self._tool_facing[op], r)
+            else
+                love.graphics.printf(e.label, r.x, r.y+17, r.w, "center")
+            end
         end
     end
 

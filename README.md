@@ -1,10 +1,10 @@
 # Matrix Circuit
 
-A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to transform an input matrix into a target matrix using elementary matrix operations. Choose from 21 puzzles, grouped into five worlds, on the level-select screen; completing a puzzle shows a solution recap screen then proceeds to the next puzzle.
+A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to transform an input matrix into a target matrix using elementary matrix operations. Choose from 25 puzzles, grouped into six worlds, on the level-select screen; completing a puzzle shows a solution recap screen then proceeds to the next puzzle.
 
 ## How to play
 
-The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue) fixed by each puzzle. The Source tile spans the same number of cells as the input matrix (rows × cols), showing exactly where the matrix will sit at the start of a run. The matrix does not move on its own — you place **pushers** and program them on the **timeline** along the bottom of the screen. Pushers walk around the board and shove the matrix when they walk into it. Op tiles in its path transform it; any matrix cell touching the Sink ends the run.
+The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue) fixed by each puzzle. The Source tile spans the same number of cells as the input matrix (rows × cols), showing exactly where the matrix will sit at the start of a run. The matrix does not move on its own — you place **pushers** and program them on the **timeline** along the bottom of the screen. Pushers walk around the board and shove the matrix when they walk into it. Op tiles in its path transform it; any matrix cell touching the Sink ends the run. Some puzzles have a [second source](#two-sources-and-matrix-ops), so two matrices travel the board and are merged by a matrix op.
 
 **Level select:**
 
@@ -16,14 +16,15 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 | `Esc` | Open settings |
 | Click a row | Play that puzzle |
 
-The shipped puzzles are grouped into five worlds (**Basics**, **Combos**, **Advanced**, **Transforms** and **Fixed Pieces**), shown as tabs in a top bar. Click a tab or press Left/Right to switch worlds. A world is open if it is the first one, if every puzzle in all earlier worlds is solved, or if any puzzle in it or in a later world is solved, so a level added to an early world does not lock you out of where you have been. One limit: a world you had opened but solved nothing in (and nothing after it) locks again until the new level is solved. Locked worlds are skipped when cycling. Click a puzzle row to play it. Hovering highlights a row only when the mouse actually moves, so a resting cursor never overrides Up/Down navigation. On the start screen, press `D` or click **(D) Unlock All** to mark every puzzle solved (useful for testing or jumping ahead).
+The shipped puzzles are grouped into six worlds (**Basics**, **Combos**, **Advanced**, **Transforms**, **Fixed Pieces** and **Two Sources**), shown as tabs in a top bar. Click a tab or press Left/Right to switch worlds. A world is open if it is the first one, if every puzzle in all earlier worlds is solved, or if any puzzle in it or in a later world is solved, so a level added to an early world does not lock you out of where you have been. One limit: a world you had opened but solved nothing in (and nothing after it) locks again until the new level is solved. Locked worlds are skipped when cycling. Click a puzzle row to play it. Hovering highlights a row only when the mouse actually moves, so a resting cursor never overrides Up/Down navigation. On the start screen, press `D` or click **(D) Unlock All** to mark every puzzle solved (useful for testing or jumping ahead).
 
 **In-game controls:**
 
 | Key / Button | Action |
 |-------------|--------|
 | `R` or **Run** button | Run — one timeline tick at a time, animated (not available while running or after a win). The matrix slides into an op tile with its old values; the result shows once it has arrived, exactly as in the solution recap |
-| `Backspace` or **Reset** button | Reset — return the matrix to the source (no-op when there is nothing to reset) |
+| `Backspace` or **Reset** button | Reset — return each matrix to its source (no-op when there is nothing to reset). A tile being moved with **[Mv]** goes back where it was |
+| `T` | Turn a two-cell matrix op: the tile being dragged, else the editable one under the cursor, else the selected **M+** / **Mx** tool |
 | `Esc` or **Menu** button | Open settings overlay (SFX / music volume, Resume, Exit to Menu) |
 | Left-click grid | Place selected tile, edit a placed op tile (see below), erase with **[X]**, or pick up a tile in **[Mv]** mode |
 | Right-click grid | Erase tile (or cancel an in-progress drag) |
@@ -40,7 +41,7 @@ The **left column** holds the op tiles (drag them onto the grid). The **bottom b
 - **P** (Pusher) — a 1×1 mobile unit labelled A–H (up to 8). The tile you place is its start cell. A timeline command (`^ v < >`) sets its direction and it keeps walking that way, one cell per tick, until another command changes it; `.` (stop) halts it. Walking into a matrix cell shoves the whole matrix one cell the same way (a pusher starting under the matrix rides along inside it). Any moving pusher whose step cannot be executed — hitting the grid edge, a gap, another pusher, or trying to shove the matrix when it has nowhere to go — immediately ends the run as **FAIL**. If a transform (e.g. transpose) produces a footprint that extends off the grid, overlaps a gap, or overlaps a pusher, the run also ends as **FAIL**. A stopped pusher never causes a fail. Pushers act in letter order each tick, so A moves before B.
 - **×** (Gap) — dark impassable cells placed by the puzzle. Neither pushers nor any part of the matrix can enter them. Some puzzles require reshaping the matrix (e.g. transposing a 2×3 into a 3×2) to fit through a narrow gap corridor.
 
-**Op tiles** are all one cell and have at most one number, *k*. An op acts either on the **whole matrix** or on **one edge** of it. The palette label is on the left; a placed tile shows its operation and value (`x2`, `+1`, `-3`).
+**Op tiles** have at most one number, *k*, and all are one cell except the two [matrix ops](#two-sources-and-matrix-ops). A one-cell op acts either on the **whole matrix** or on **one edge** of it. The palette label is on the left; a placed tile shows its operation and value (`x2`, `+1`, `-3`).
 
 | Palette | Op | Acts on | *k* (default) |
 |---------|----|---------|---------------|
@@ -59,19 +60,35 @@ An **edge** is the top row, right column, bottom row or left column of the matri
 
 **Editing a placed tile:** click the left third for *k* − 1 and the right third for *k* + 1 (it stops at the limits). Click the middle third of an edge tile to turn it clockwise (top, right, bottom, left); the middle does nothing on other tiles. With **[X]** selected, a click on any third erases the tile.
 
-An op fires once when the matrix first covers its cell, and re-arms after the matrix leaves it.
+A one-cell op fires once when a matrix first covers its cell, and re-arms after that matrix leaves it. With two matrices each one fires and re-arms tiles independently.
 
-Each puzzle only offers the op tiles it needs in the palette (the pusher, **[Mv]** move tool, and eraser are always there).
+Each puzzle only offers the op tiles it needs in the palette (the pusher, **[Mv]** move tool, and eraser are always there). A puzzle with no `ops` list offers the ten ops above; **M+** and **Mx** appear only when a puzzle lists them.
 
-**Moving tiles:** select **[Mv]** in the palette, then click any unlocked tile to pick it up. A ghost preview follows the cursor — green means the drop is valid, red means the target is occupied or out of bounds. Release the mouse to drop, or right-click to cancel (the tile snaps back to its original position). A moved op tile keeps its *k* and edge.
+### Two sources and matrix ops
+
+Some puzzles have two sources, **SRC 1** and **SRC 2**, each with its own input matrix (shown as **INPUT 1** and **INPUT 2** in the side panel, with different border colours on the board; before a run each source's preview is also tagged with its name). Pushers shove either matrix. There is still only one Sink.
+
+| Palette | Op | Valid when | Result |
+|---------|----|------------|--------|
+| `M+` | Matrix add | L and R have the same shape | L + R, cell by cell |
+| `Mx` | Matrix multiply | columns of L = rows of R | matrix product L x R |
+
+- A matrix op is one tile over two adjacent cells: a left-operand cell **L** and a right-operand cell **R**. The names refer to the operand, not a screen side, so R may sit right of, below, left of or above L. A matrix covering one of the cells shows a small L or R badge, in the game and in the solution recap.
+- It fires once each cell is covered by a different matrix, in either order of arrival. A single waiting matrix does nothing. The result appears at the left matrix's top-left position and the right matrix is consumed. If the result does not fit there, the run fails as blocked.
+- A matrix op the result covers stays inactive until the result has left both of its cells.
+- Both matrices move at the same time and never push each other. One may move into cells the other leaves on the same tick, and they may touch.
+- The run fails with a red banner if the matrices overlap, swap places or clip each other diagonally (**matrices collided**), if one matrix covers both cells of a matrix op (**one matrix on both inputs**, even when only passing over), if the shapes do not fit (e.g. **can't multiply 2x3 by 2x2**), or if a matrix reaches the Sink while there are still two (**matrices not combined**).
+- **Placing and turning:** the L cell goes where you click or drop, and both cells must be empty. The button's arrow (`> v < ^`) points from L to R; click the selected button again, or press `T`, to turn the tool. Click either cell of a placed editable tile, or press `T` over it, to turn it clockwise around L, skipping sides that are off the grid or occupied. Dragging a palette tool onto it does nothing, except the eraser. Erasing either cell removes the whole tile. **[Mv]** moves it whole, keeping its orientation, and the cell you grabbed stays under the cursor. Fixed (`!`) matrix ops can be placed, moved and erased but not turned.
+
+**Moving tiles:** select **[Mv]** in the palette, then click any unlocked tile to pick it up. A ghost preview follows the cursor — green means the drop is valid, red means the target is occupied or out of bounds. Release the mouse to drop, or right-click to cancel (the tile snaps back to its original position). A moved op tile keeps its *k*, edge or orientation.
 
 **Fixed and locked ops:** some puzzles offer fixed ops, labelled with a `!` suffix in the palette (e.g. `x-1!`, `FLv!`; a fixed edge op also shows its arrow). Their value and edge are preset: they can be placed, moved and erased but not edited, and are marked `=`. Locked tiles (lock icon) are pre-positioned by the puzzle and cannot be moved, erased, or edited.
 
 **Timeline:** 4 lanes by 60 ticks along the bottom bar, so up to 4 commands can happen on one tick. Each command is stamped with the pusher it targets (pick it with the `A`/`B`/... selector before dragging a chip). A pusher that already has a command on a tick gets it replaced. The timeline does not loop: after the last command every pusher keeps its direction. Edit it while stopped; use `<` / `>` to scroll, and during a run the view follows the current tick.
 
-**Winning:** when any matrix cell touches the Sink and the transformed matrix equals the target, you win. Click the **Continue** button (or press `Enter`) to open the **solution recap screen**, which shows the number of ticks your solution took, the number of pieces you placed, and a looping animated playback of your solution — matrix ball and pushers moving in sync — on the board. Click the **Next puzzle**, **Replay**, or **Menu** button (or press `Enter`, `R`, or `Esc`) to advance to the next puzzle, replay the animation, or return to the level-select screen. Clicks outside the three buttons do nothing. A run in which nothing moves after the last command ends as **STUCK**.
+**Winning:** when any matrix cell touches the Sink, only one matrix is left and it equals the target, you win. Click the **Continue** button (or press `Enter`) to open the **solution recap screen**, which shows the number of ticks your solution took, the number of pieces you placed, and a looping animated playback of your solution — matrices and pushers moving in sync (including any merge) — on the board. Click the **Next puzzle**, **Replay**, or **Menu** button (or press `Enter`, `R`, or `Esc`) to advance to the next puzzle, replay the animation, or return to the level-select screen. Clicks outside the three buttons do nothing. A run in which nothing moves after the last command ends as **STUCK**.
 
-**21 puzzles** ship with the game: a simple identity check (puzzle 1), then single ops and short routes in **Basics** and **Combos** (several of which chain two ops), two- and three-op chains with edge ops in **Advanced**, column edits, flips and a rotation in **Transforms**, and fixed tools and locked tiles in **Fixed Pieces** (puzzle 19 offers only its fixed `!` ops, no editable ones). Puzzles can use non-square (n×m) matrices.
+**25 puzzles** ship with the game: a simple identity check (puzzle 1), then single ops and short routes in **Basics** and **Combos** (several of which chain two ops), two- and three-op chains with edge ops in **Advanced**, column edits, flips and a rotation in **Transforms**, fixed tools and locked tiles in **Fixed Pieces** (puzzle 19 offers only its fixed `!` ops, no editable ones), and matrix add and multiply with two sources in **Two Sources**. Puzzles can use non-square (n×m) matrices.
 
 Progress is saved by puzzle and world id (the file or folder name without its number prefix), so inserting or renumbering levels keeps solved marks. Saves from older versions, including the earlier 23-puzzle numbering, are converted when loaded and rewritten in the new format the next time progress changes. A game version from before this format shows such a save as empty and overwrites it the next time progress changes.
 
@@ -79,15 +96,15 @@ Progress is saved by puzzle and world id (the file or folder name without its nu
 
 A built-in puzzle editor is accessible from the title screen — press **E** or click **(E) Editor**.
 
-The editor has the same 10×10 grid as the game and a bottom palette with **SRC** (Source), **SNK** (Sink), **GAP**, the pusher **P**, all ten op tiles and **Erase**. Every tile you place is exported as locked, but stays editable inside the editor: click the thirds of an op tile to change *k* or turn its edge, as in the game. Select **Erase** and click a tile to remove it (any cell of the source works), or right-click it. Placing a tool, including the Sink, never replaces an occupied cell. Up to 8 pushers can be placed; each gets the lowest free letter (A–H), which is saved with the puzzle. The right-hand HUD lets you:
+The editor has the same 10×10 grid as the game and a bottom palette with **SRC** (Source), **SRC2** (second source), **SNK** (Sink), **GAP**, the pusher **P**, all twelve op tiles and **Erase**; **Back**, **Test**, **Copy** and **Paste** sit at the right end of the palette. Every tile you place is exported as locked, but stays editable inside the editor: click the thirds of an op tile to change *k* or turn its edge, as in the game. Select **Erase** and click a tile to remove it (any cell of a source or matrix op works), or right-click it. **M+** and **Mx** are turned as in the game: click either cell of a placed tile, click the selected palette button again, or press `T` (not while typing the name). The puzzle has two sources only while **SRC2** is on the grid; if **SRC2** is placed without **SRC**, **Copy** and **Test** put Source 1 on a spot that does not overlap it. Placing a tool, including the Sink, never replaces an occupied cell. Up to 8 pushers can be placed; each gets the lowest free letter (A–H), which is saved with the puzzle. The right-hand HUD lets you:
 
 - Set the **puzzle name** (click the name field to type)
-- Edit the **INPUT** and **TARGET** matrices (rows/cols spinners and click-to-edit value cells)
-- Choose which ops the player can freely use (**op allowlist** toggles; with none or all selected, every op is offered, except after pasting a puzzle with `ops = {}`, which offers none until a toggle is clicked)
+- Edit the **INPUT 1**, **INPUT 2** (switch with **#1** / **#2**) and **TARGET** matrices (rows/cols spinners and click-to-edit value cells). A source that no longer fits after a resize is removed
+- Choose which ops the player can freely use (**op allowlist** toggles; with nothing selected, or exactly the ten one-cell ops, those ten are offered; **M+** / **Mx** are offered only when toggled on. After pasting a puzzle with `ops = {}`, none are offered until a toggle is clicked)
 
 The editor has no controls for fixed palette ops (`fixed_ops`) and does not display them, but it keeps a pasted list, and an empty `ops = {}`, through **Paste**, **Test** and **Copy**. The list stays until you paste another puzzle or leave the editor for the title screen.
 
-**Copy** serialises the current puzzle to a Lua string and copies it to the clipboard in the puzzle file format. **Paste** reads from the clipboard and loads a previously copied puzzle back into the editor. The text is read as data and never run: only plain table literals (strings, numbers, booleans, nested tables, comments) are accepted. A definition that names an unsupported op or has an invalid *k* or edge is rejected with a message, and unreadable text shows `Parse error`; the editor is left unchanged. **Test** opens the puzzle directly in the game for play-testing; pressing Menu there returns to the editor. **Back** returns to the title screen.
+**Copy** serialises the current puzzle to a Lua string and copies it to the clipboard in the puzzle file format. **Paste** reads from the clipboard and loads a previously copied puzzle back into the editor. The text is read as data and never run: only plain table literals (strings, numbers, booleans, nested tables, comments) are accepted. A definition that names an unsupported op, has an invalid *k*, edge or facing, has only one of `source2` / `input2`, or has a malformed second source is rejected with a message, and unreadable text shows `Parse error`; the editor is left unchanged. **Test** opens the puzzle directly in the game for play-testing; pressing Menu there returns to the editor. **Back** returns to the title screen.
 
 ## Adding levels
 
@@ -114,6 +131,8 @@ data/puzzles/
 - Moving or renumbering a puzzle keeps its solved mark; renaming its id resets it. Renaming a world folder's id makes its cutscene play again.
 - A world's cutscene is `cutscene.lua` in its folder (same format as the shipped ones). It plays the first time the player switches to that world; the first world's never plays. The game intro is `data/cutscenes/world_0.lua`.
 - A world fits at most **10 puzzles** on the level select screen (a test enforces this). World tabs share the screen width, so long names get tight beyond about 8 worlds.
+
+A second source is the optional pair `source2 = { x, y }` and `input2 = { rows, cols, values }`. For `matrix_add` / `matrix_mul` tiles, `x, y` is the L cell and `params.facing` (`"right"` by default, `"bottom"`, `"left"`, `"top"`) is the side the R cell is on.
 
 Run `love . --headless` after adding a level.
 

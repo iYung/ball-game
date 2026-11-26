@@ -118,13 +118,13 @@ function MatrixScene.new(puzzle_index, scene_manager, settings_state, back_scene
     return self
 end
 
-function MatrixScene.new_from_def(puzzle_def, scene_manager, back_scene)
+function MatrixScene.new_from_def(puzzle_def, scene_manager, back_scene, settings_state)
     local base = Scene.new(1280, 720)
     local self  = setmetatable(base, MatrixScene)
     self._start_puzzle    = nil
     self._custom_puzzle   = puzzle_def
     self._scene_manager   = scene_manager
-    self._settings_state  = nil
+    self._settings_state  = settings_state
     self._back_scene      = back_scene
     return self
 end

@@ -1,5 +1,5 @@
 -- Going through the editor keeps the player's volume settings, and the menu music
--- comes back after a Test. Driven through real input from the title screen; a unit
+-- comes back after leaving a puzzle (editor Test or level select). Driven through real input from the title screen; a unit
 -- test because it needs a loaded settings state, the settings file and audio sources.
 
 local UIRunner      = require("lua/headless/ui_runner")
@@ -82,7 +82,7 @@ do
     end
     local function check(label, steps)
         run(steps, with_audio)
-        assert(Sound.is_music_playing("menu"), label .. ": menu music plays in the editor")
+        assert(Sound.is_music_playing("menu"), label .. ": menu music plays afterwards")
         Sound.stop_music("menu")
     end
 
@@ -94,10 +94,21 @@ do
         check("Menu during the fade-out", steps_after_open(tick(10),
             { click_button = { id = "cmd:menu" } }, tick(180)))
         check("Exit to Menu", steps_after_open(tick(180), { press = "escape" }, EXIT, tick(180)))
+
+        -- Level select has the same fade to cancel when a puzzle is left quickly.
+        local function from_level_select(...)
+            local steps = { { click_button = "Play" }, { click_button = { id = "puzzle:1" } }, tick(10) }
+            for _, s in ipairs({ ... }) do steps[#steps + 1] = s end
+            return steps
+        end
+        check("level select Menu during the fade-out",
+            from_level_select({ click_button = { id = "cmd:menu" } }, tick(180)))
+        check("level select Exit to Menu during the fade-out",
+            from_level_select({ press = "escape" }, EXIT, tick(180)))
     end)
     love.audio.newSource = real_new_source
     assert(ok, tostring(err))
-    print("PASS: menu music returns with the editor")
+    print("PASS: menu music returns after leaving a puzzle")
 end
 
 print("ALL EDITOR SETTINGS AND MUSIC TESTS PASSED")

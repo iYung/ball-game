@@ -58,7 +58,8 @@ function LevelSelectScene:on_enter()
     self._font_hint     = love.graphics.newFont(14)
     self._settings_menu = SettingsMenu.new(self._settings_state, self.scene_manager)
     local Sound = require("lua/core/sound")
-    if not Sound.is_music_playing("menu") then Sound.play_music("menu") end
+    -- A puzzle left quickly is still fading the menu music out; fading in cancels that.
+    Sound.fade_music("menu", 1, 1)
 
     self:_rebuild_world_data()
 end

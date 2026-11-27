@@ -80,6 +80,180 @@ function Sim.footprint_clear(x, y, rows, cols, w, h, gaps, pushers)
     return true
 end
 
+-- True if pusher p may step into (tx, ty) as far as the grid, gaps and other pushers go.
+-- Matrices are judged by the caller.
+local function can_step(st, p, tx, ty)
+    return tx >= 1 and tx <= st.w and ty >= 1 and ty <= st.h
+           and not pusher_at(st.pushers, tx, ty, p)
+           and not (st.gaps and st.gaps[ty] and st.gaps[ty][tx])
+end
+
+-- Combined move of one matrix from its contacts: the same direction counts once and
+-- perpendicular ones add up to a diagonal. Returns dx, dy, or nil when two oppose.
+local function net_push(contacts)
+    local pos_dx, neg_dx, pos_dy, neg_dy = false, false, false, false
+    for _, c in ipairs(contacts) do
+        local d = c.d
+        if d.dx > 0 then pos_dx = true elseif d.dx < 0 then neg_dx = true end
+        if d.dy > 0 then pos_dy = true elseif d.dy < 0 then neg_dy = true end
+    end
+    if (pos_dx and neg_dx) or (pos_dy and neg_dy) then return nil end
+    return (pos_dx and 1 or 0) - (neg_dx and 1 or 0),
+           (pos_dy and 1 or 0) - (neg_dy and 1 or 0)
+end
+
+-- The two corner cells of the bounding box of a diagonal move (outside both the start and
+-- end footprints) of matrix m = { x, y, rows, cols }.
+local function corner_cells(m, dx, dy)
+    return {
+        { x = m.x + (dx > 0 and m.cols or -1), y = m.y + (dy > 0 and 0 or m.rows - 1) },
+        { x = m.x + (dx > 0 and 0 or m.cols - 1), y = m.y + (dy > 0 and m.rows or -1) },
+    }
+end
+
+-- True if the grid and gaps allow matrix m to move by (dx, dy). A diagonal move also needs
+-- both corner cells in bounds and gap-free.
+local function move_fits(st, m, dx, dy)
+    if Sim.blocked(m.x + dx, m.y + dy, m.rows, m.cols, st.w, st.h, st.gaps) then
+        return false
+    end
+    if dx ~= 0 and dy ~= 0 then
+        for _, c in ipairs(corner_cells(m, dx, dy)) do
+            if Sim.blocked(c.x, c.y, 1, 1, st.w, st.h, st.gaps) then return false end
+        end
+    end
+    return true
+end
+
+-- True if no two contact pushers land on the same cell.
+local function distinct_landings(contacts)
+    local seen = {}
+    for _, c in ipairs(contacts) do
+        local k = c.tx .. "," .. c.ty
+        if seen[k] then return false end
+        seen[k] = true
+    end
+    return true
+end
+
+-- True if the footprints of matrices a and b share a cell.
+local function overlaps(a, b)
+    return a.x <= b.x + b.cols - 1 and b.x <= a.x + a.cols - 1
+       and a.y <= b.y + b.rows - 1 and b.y <= a.y + a.rows - 1
+end
+
+-- True if the two moves make the matrices collide: they end overlapping, they exchange
+-- places, or one moving diagonally has a corner cell where the other ends up.
+local function matrices_collide(a, b)
+    if overlaps(a.to, b.to) then return true end
+    if a.moved and b.moved and overlaps(a.to, b.from) and overlaps(b.to, a.from) then
+        return true
+    end
+    for _, pair in ipairs({ { a, b }, { b, a } }) do
+        local m, other = pair[1], pair[2].to
+        if m.dx ~= 0 and m.dy ~= 0 then
+            for _, c in ipairs(corner_cells(m.from, m.dx, m.dy)) do
+                if covers(other.x, other.y, other.rows, other.cols, c.x, c.y) then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Physics of one tick with two matrices. Pushers only change when the whole tick succeeds;
+-- the matrices are written to st and st.second at the end. Returns moved, blocked, collided.
+local function advance_two(st)
+    local second = st.second
+    local bodies = {
+        { from = { x = st.x, y = st.y, rows = st.rows, cols = st.cols }, contacts = {} },
+        { from = { x = second.x, y = second.y, rows = second.rows, cols = second.cols },
+          contacts = {} },
+    }
+
+    -- Classify from start positions: a contact pushes the matrix it steps into.
+    local all_contacts, non_contacts = {}, {}
+    local pushes = {}   -- contact pusher -> the body it pushes
+    for _, p in ipairs(st.pushers) do
+        local d = Sim.DIRS[p.dir or "stop"]
+        if d then
+            local tx, ty = p.x + d.dx, p.y + d.dy
+            local target
+            if can_step(st, p, tx, ty) then
+                for _, body in ipairs(bodies) do
+                    local m = body.from
+                    if covers(m.x, m.y, m.rows, m.cols, tx, ty) then target = body end
+                end
+            end
+            if target then
+                local c = { p=p, d=d, tx=tx, ty=ty }
+                target.contacts[#target.contacts+1] = c
+                all_contacts[#all_contacts+1] = c
+                pushes[p] = target
+            else
+                non_contacts[#non_contacts+1] = { p=p, tx=tx, ty=ty }
+            end
+        end
+    end
+
+    -- Where each matrix wants to go. Nothing has changed yet, so failures just return.
+    for _, body in ipairs(bodies) do
+        local m = body.from
+        local dx, dy = net_push(body.contacts)
+        if not dx then return false, true, false end
+        body.moved = #body.contacts > 0
+        if body.moved and not move_fits(st, m, dx, dy) then return false, true, false end
+        body.dx, body.dy = dx, dy
+        body.to = { x = m.x + dx, y = m.y + dy, rows = m.rows, cols = m.cols }
+    end
+    if not distinct_landings(all_contacts) then return false, true, false end
+
+    local snap = {}
+    for i, p in ipairs(st.pushers) do snap[i] = { p.x, p.y } end
+    local function rollback(collided)
+        for i, p in ipairs(st.pushers) do p.x, p.y = snap[i][1], snap[i][2] end
+        return false, true, collided
+    end
+
+    local moved = #all_contacts > 0
+    for _, c in ipairs(all_contacts) do c.p.x, c.p.y = c.tx, c.ty end
+
+    -- The other pushers act in array order and may not step into either final footprint.
+    for _, nc in ipairs(non_contacts) do
+        local tx, ty = nc.tx, nc.ty
+        local free = can_step(st, nc.p, tx, ty)
+        for _, body in ipairs(bodies) do
+            local m = body.to
+            if covers(m.x, m.y, m.rows, m.cols, tx, ty) then free = false end
+        end
+        if not free then return rollback(false) end
+        nc.p.x, nc.p.y = tx, ty
+        moved = true
+    end
+
+    -- No pusher may end inside a matrix that moved unless it pushed that matrix. When the
+    -- matrices collide, the other matrix's contacts do not count: they ride into the overlap.
+    local collided = matrices_collide(bodies[1], bodies[2])
+    for _, body in ipairs(bodies) do
+        if body.moved then
+            local m = body.to
+            for _, q in ipairs(st.pushers) do
+                local by = pushes[q]
+                if by ~= body and not (collided and by)
+                   and covers(m.x, m.y, m.rows, m.cols, q.x, q.y) then
+                    return rollback(false)
+                end
+            end
+        end
+    end
+    if collided then return rollback(true) end
+
+    st.x, st.y         = bodies[1].to.x, bodies[1].to.y
+    second.x, second.y = bodies[2].to.x, bodies[2].to.y
+    return moved, false, false
+end
+
 -- Run one tick. st: { x, y, rows, cols, w, h, pushers, tick } where x,y is the matrix
 -- anchor and pushers is an array of { id, x, y, dir }; dir is the pusher's persistent
 -- direction ("up"|"down"|"left"|"right"|"stop"|nil; nil/"stop" = not moving).
@@ -90,7 +264,13 @@ end
 --   * off the grid, or into another pusher's cell: the pusher stays put
 --   * into a matrix cell: the matrix is shoved one cell the same way; if that would take it
 --     off the grid or onto another pusher, nothing moves
--- Mutates st.tick, st.x/st.y and each pusher's x/y. Returns moved (bool): anything moved.
+-- Mutates st.tick, st.x/st.y and each pusher's x/y. Returns moved (bool: anything moved),
+-- blocked (bool: something could not act) and collided (bool; implies blocked).
+-- Optional st.second = { x, y, rows, cols } is a second matrix (its x/y are mutated too).
+-- Each contact pushes only the matrix it steps into, both matrices move at once and never
+-- push each other, and any blocked or collided tick leaves both matrices and all pushers
+-- where they were. collided means the matrices would overlap, exchange places or clip each
+-- other diagonally; wall, gap, edge, opposing and pusher problems are reported first.
 function Sim.advance(st, commands)
     st.tick = st.tick + 1
     for _, c in ipairs(commands or {}) do
@@ -98,6 +278,7 @@ function Sim.advance(st, commands)
             if p.id == c.pusher then p.dir = c.cmd end
         end
     end
+    if st.second then return advance_two(st) end
     local moved   = false
     local blocked = false
     local pushed  = false   -- the matrix + contact pushers were moved this tick
@@ -116,10 +297,7 @@ function Sim.advance(st, commands)
         local d = Sim.DIRS[p.dir or "stop"]
         if d then
             local tx, ty  = p.x + d.dx, p.y + d.dy
-            local can_step = tx >= 1 and tx <= st.w and ty >= 1 and ty <= st.h
-                             and not pusher_at(st.pushers, tx, ty, p)
-                             and not (st.gaps and st.gaps[ty] and st.gaps[ty][tx])
-            if can_step and covers(st.x, st.y, st.rows, st.cols, tx, ty) then
+            if can_step(st, p, tx, ty) and covers(st.x, st.y, st.rows, st.cols, tx, ty) then
                 contacts[#contacts+1] = { p=p, d=d, tx=tx, ty=ty }
             else
                 non_contacts[#non_contacts+1] = { p=p, tx=tx, ty=ty }
@@ -129,60 +307,14 @@ function Sim.advance(st, commands)
 
     -- Pass 2: aggregate contact forces (deduplicate same direction), attempt one combined move.
     if #contacts > 0 then
-        -- Collect unique direction vectors.
-        local unique_dirs = {}
-        local seen_dir = {}
-        for _, c in ipairs(contacts) do
-            local key = c.d.dx .. "," .. c.d.dy
-            if not seen_dir[key] then
-                seen_dir[key] = true
-                unique_dirs[#unique_dirs+1] = c.d
-            end
-        end
-
         -- Opposing forces on the same axis (right vs left, up vs down) → conflict.
-        local pos_dx, neg_dx, pos_dy, neg_dy = false, false, false, false
-        for _, d in ipairs(unique_dirs) do
-            if d.dx > 0 then pos_dx = true elseif d.dx < 0 then neg_dx = true end
-            if d.dy > 0 then pos_dy = true elseif d.dy < 0 then neg_dy = true end
-        end
-        if (pos_dx and neg_dx) or (pos_dy and neg_dy) then
+        local net_dx, net_dy = net_push(contacts)
+        if not net_dx then
             blocked = true
         else
 
-        local net_dx, net_dy = 0, 0
-        for _, d in ipairs(unique_dirs) do
-            net_dx = net_dx + d.dx
-            net_dy = net_dy + d.dy
-        end
-
         local nx, ny = st.x + net_dx, st.y + net_dy
-        local ok = not Sim.blocked(nx, ny, st.rows, st.cols, st.w, st.h, st.gaps)
-
-        -- Diagonal moves: the two corner cells of the bounding box (outside both
-        -- start and end footprints) must also be within bounds and gap-free.
-        if ok and net_dx ~= 0 and net_dy ~= 0 then
-            local cx1 = st.x + (net_dx > 0 and st.cols or -1)
-            local cy1 = st.y + (net_dy > 0 and 0 or st.rows - 1)
-            local cx2 = st.x + (net_dx > 0 and 0 or st.cols - 1)
-            local cy2 = st.y + (net_dy > 0 and st.rows or -1)
-            if cx1 < 1 or cx1 > st.w or cy1 < 1 or cy1 > st.h
-               or cx2 < 1 or cx2 > st.w or cy2 < 1 or cy2 > st.h
-               or (st.gaps and st.gaps[cy1] and st.gaps[cy1][cx1])
-               or (st.gaps and st.gaps[cy2] and st.gaps[cy2][cx2]) then
-                ok = false
-            end
-        end
-
-        -- Contact pushers must not land on the same cell as each other.
-        if ok and #contacts > 1 then
-            local seen_landing = {}
-            for _, c in ipairs(contacts) do
-                local k = c.tx .. "," .. c.ty
-                if seen_landing[k] then ok = false; break end
-                seen_landing[k] = true
-            end
-        end
+        local ok = move_fits(st, st, net_dx, net_dy) and distinct_landings(contacts)
 
         if ok then
             st.x, st.y = nx, ny
@@ -201,11 +333,8 @@ function Sim.advance(st, commands)
     -- They may not step into the matrix.
     for _, nc in ipairs(non_contacts) do
         local tx, ty = nc.tx, nc.ty
-        local can_step = tx >= 1 and tx <= st.w and ty >= 1 and ty <= st.h
-                         and not pusher_at(st.pushers, tx, ty, nc.p)
-                         and not (st.gaps and st.gaps[ty] and st.gaps[ty][tx])
-                         and not covers(st.x, st.y, st.rows, st.cols, tx, ty)
-        if can_step then
+        if can_step(st, nc.p, tx, ty)
+           and not covers(st.x, st.y, st.rows, st.cols, tx, ty) then
             nc.p.x, nc.p.y = tx, ty
             moved = true
         else
@@ -234,7 +363,7 @@ function Sim.advance(st, commands)
         moved = false
     end
 
-    return moved, blocked
+    return moved, blocked, false
 end
 
 -- Applies an op tile to a matrix. Missing params take the op's defaults; non-op tiles and

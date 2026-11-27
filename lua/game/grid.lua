@@ -1,5 +1,15 @@
+local Ops = require("lua/game/ops")
+
 local Grid = {}
 Grid.__index = Grid
+
+local function is_two_cell(tile)
+    return tile ~= nil and tile.kind == "op" and Ops.is_two_cell(tile.op)
+end
+
+local function facing_of(tile)
+    return tile.params and tile.params.facing or "right"
+end
 
 function Grid.new(w, h)
     local self = setmetatable({}, Grid)
@@ -76,6 +86,69 @@ function Grid:set_multi(ax, ay, tile, width)
     end
 end
 
+-- True when every cell the tile would occupy with its anchor at (x,y) is in
+-- bounds and empty: one cell, or two for a two-cell tile.
+function Grid:fits(x, y, tile)
+    if not (self:in_bounds(x, y) and self.cells[y][x] == nil) then return false end
+    if not is_two_cell(tile) then return true end
+    local px, py = Ops.partner(x, y, facing_of(tile))
+    return self:in_bounds(px, py) and self.cells[py][px] == nil
+end
+
+-- Writes a one- or two-cell tile with its anchor at (x,y). A two-cell tile's
+-- partner cell becomes a ref cell. Callers check fits first.
+function Grid:put(x, y, tile)
+    if not is_two_cell(tile) then
+        self:set(x, y, tile)
+        return
+    end
+    local px, py = Ops.partner(x, y, facing_of(tile))
+    assert(self:in_bounds(px, py), string.format("Grid.put: (%d,%d) out of bounds", px, py))
+    self:set(x, y, tile)
+    self.cells[py][px] = { ref = true, ax = x, ay = y }
+end
+
+-- Turns the two-cell tile covering (x,y) to the next clockwise facing whose
+-- partner cell is in bounds and empty. Returns false, changing nothing, when
+-- there is no such tile or facing. Locked and fixed are the caller's concern.
+function Grid:rotate(x, y)
+    if not self:in_bounds(x, y) then return false end
+    local ax, ay = self:get_anchor(x, y)
+    local tile = self.cells[ay][ax]
+    if not is_two_cell(tile) then return false end
+    local old = facing_of(tile)
+    local facing = Ops.next_facing(old)
+    while facing ~= old do
+        local px, py = Ops.partner(ax, ay, facing)
+        if self:in_bounds(px, py) and self.cells[py][px] == nil then
+            local ox, oy = Ops.partner(ax, ay, old)
+            self.cells[oy][ox] = nil
+            self.cells[py][px] = { ref = true, ax = ax, ay = ay }
+            tile.params = tile.params or {}
+            tile.params.facing = facing
+            return true
+        end
+        facing = Ops.next_facing(facing)
+    end
+    return false
+end
+
+-- Every two-cell tile as { x, y, rx, ry, tile } (left-operand cell, then
+-- right-operand cell), in reading order of the left-operand cell.
+function Grid:two_cell_tiles()
+    local list = {}
+    for y = 1, self.h do
+        for x = 1, self.w do
+            local tile = self.cells[y][x]
+            if is_two_cell(tile) then
+                local rx, ry = Ops.partner(x, y, facing_of(tile))
+                list[#list + 1] = { x = x, y = y, rx = rx, ry = ry, tile = tile }
+            end
+        end
+    end
+    return list
+end
+
 -- Transparently resolves ref cells so callers always receive the anchor tile.
 function Grid:get(x, y)
     assert(self:in_bounds(x, y), string.format("Grid.get: (%d,%d) out of bounds", x, y))
@@ -102,6 +175,14 @@ function Grid:clear(x, y)
 
     local tile = self.cells[ay][ax]
     if tile == nil or tile.locked then return end
+
+    -- A two-cell tile's partner can be on any side of the anchor.
+    if is_two_cell(tile) then
+        local px, py = Ops.partner(ax, ay, facing_of(tile))
+        self.cells[ay][ax] = nil
+        self.cells[py][px] = nil
+        return
+    end
 
     -- Determine width from the tile's stored width, or scan right for refs
     local width = tile.width or 1

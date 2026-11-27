@@ -11,6 +11,7 @@ local GRID_X    = GEOM.GRID_X
 local GRID_Y    = GEOM.GRID_Y
 local CELL_SIZE = GEOM.CELL_SIZE
 local HUD_X     = GEOM.HUD_X
+local MATRIX_BORDER = GEOM.MATRIX_BORDER
 
 local PAUSE_AT_END = 0.6  -- seconds to hold at the last frame before looping
 
@@ -154,7 +155,8 @@ function SolutionRecapScene:_draw_tile(tile, cx, cy)
         love.graphics.rectangle("fill", sx, sy, span_w, span_h)
         love.graphics.setColor(0.4, 1.0, 0.5, 1)
         love.graphics.setFont(self._font_cell)
-        love.graphics.printf("SRC", sx, sy + span_h / 2 - 7, span_w, "center")
+        local label = tile.index and ("SRC " .. tile.index) or "SRC"
+        love.graphics.printf(label, sx, sy + span_h / 2 - 7, span_w, "center")
 
     elseif tile.kind == "sink" then
         love.graphics.setColor(0.09, 0.19, 0.42, 1)
@@ -185,27 +187,42 @@ function SolutionRecapScene:_draw_tile(tile, cx, cy)
     end
 end
 
-function SolutionRecapScene:_draw_matrix()
-    local frames = self._frames
-    if #frames == 0 then return end
+-- The matrices of the current frame as { matrix, px, py, tag }: the primary, then
+-- the second one if the tick started with two. Once a merge tick has arrived, only
+-- the merged result.
+function SolutionRecapScene:_shown_matrices()
+    local frame  = self._frames[self._frame_idx]
+    local merged = frame.merged
+    if merged and self._anim_t >= 1 then
+        return { { matrix = merged.matrix, px = merged.x, py = merged.y, tag = merged.tag or 1 } }
+    end
 
-    local frame = frames[self._frame_idx]
     local t  = self._anim_t
     local et = t * t * (3 - 2 * t)  -- smooth-step
-    local px = lerp(frame.from_x, frame.to_x, et)
-    local py = lerp(frame.from_y, frame.to_y, et)
-    local mat = frame.matrix
+    local function sliding(body)
+        return { matrix = body.matrix, tag = body.tag or 1,
+                 px = lerp(body.from_x, body.to_x, et),
+                 py = lerp(body.from_y, body.to_y, et) }
+    end
+
+    local out = { sliding(frame) }
+    if frame.second then out[2] = sliding(frame.second) end
+    return out
+end
+
+function SolutionRecapScene:_draw_matrix_cells(body)
+    local mat, border = body.matrix, MATRIX_BORDER[body.tag]
 
     for r = 1, mat.rows do
         for c = 1, mat.cols do
-            local cx = px + (c - 1) * CELL_SIZE
-            local cy = py + (r - 1) * CELL_SIZE
+            local cx = body.px + (c - 1) * CELL_SIZE
+            local cy = body.py + (r - 1) * CELL_SIZE
             local v  = mat.values[r][c]
 
             love.graphics.setColor(0.08, 0.08, 0.15, 1)
             love.graphics.rectangle("fill", cx, cy, CELL_SIZE, CELL_SIZE)
 
-            love.graphics.setColor(0.91, 0.73, 0.15, 1)
+            love.graphics.setColor(border[1], border[2], border[3], 1)
             love.graphics.setLineWidth(2)
             love.graphics.rectangle("line", cx+1, cy+1, CELL_SIZE-2, CELL_SIZE-2)
             love.graphics.setLineWidth(1)
@@ -218,6 +235,16 @@ function SolutionRecapScene:_draw_matrix()
             love.graphics.printf(s, cx, cy + CELL_SIZE / 2 - 9, CELL_SIZE, "center")
         end
     end
+end
+
+function SolutionRecapScene:_draw_matrix()
+    if #self._frames == 0 then return end
+
+    local shown = self:_shown_matrices()
+    for _, body in ipairs(shown) do self:_draw_matrix_cells(body) end
+    local grid = self._board.grid
+    local tiles = grid.two_cell_tiles and grid:two_cell_tiles() or {}
+    OpTile.draw_covered_badges(tiles, shown, cell_top_left, CELL_SIZE, self._font_ui)
 
     love.graphics.setColor(1, 1, 1, 1)
 end

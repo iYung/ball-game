@@ -21,7 +21,7 @@ local STEP_KEYS = {
     "click_cell", "right_click_cell",
     "drag", "wheel", "move_mouse", "hover_button", "wait", "wait_until", "assert_text",
     "assert_no_text", "assert_button", "assert_matrix", "assert_tile", "assert_slot",
-    "text_input", "set_clipboard",
+    "text_input", "set_clipboard", "assert_matrices", "mouse_down", "mouse_up",
 }
 local STEP_KEY_SET = {}
 for _, k in ipairs(STEP_KEYS) do STEP_KEY_SET[k] = true end
@@ -246,6 +246,25 @@ local function matrix_equal(a, b)
     return true
 end
 
+local function current_matrices(ctx)
+    local scene = ctx.sm.current
+    if not (scene and scene.ui_matrices) then fail("scene has no matrices") end
+    return scene:ui_matrices()
+end
+
+-- Compares by count and order. `values` must match; `x` and `y` are compared
+-- only when the expected entry gives them.
+local function matrices_match(got, expected)
+    if type(got) ~= "table" or #got ~= #expected then return false end
+    for i, want in ipairs(expected) do
+        local m = got[i]
+        if not matrix_equal(m.values, want.values) then return false end
+        if want.x ~= nil and m.x ~= want.x then return false end
+        if want.y ~= nil and m.y ~= want.y then return false end
+    end
+    return true
+end
+
 local handlers = {}
 
 function handlers.press(ctx, key)
@@ -325,6 +344,21 @@ function handlers.drag(ctx, arg)
     run_frame(ctx)
 end
 
+-- mouse_down / mouse_up = <selector>: the two halves of a drag, so that other
+-- steps (a key press, a right-click) can run while the button is held.
+local function button_edge(method)
+    return function(ctx, sel)
+        settle(ctx)
+        local e = require_element(ctx, sel, true)
+        local x, y = UI.centre(e.rect)
+        do_move(ctx, x, y)
+        ctx.sm[method](ctx.sm, x, y, 1)
+        run_frame(ctx)
+    end
+end
+handlers.mouse_down = button_edge("mouse_pressed")
+handlers.mouse_up   = button_edge("mouse_released")
+
 -- wheel = { over = <selector>, dx = n, dy = n }: move the mouse to the centre of
 -- `over` and send a mouse-wheel event there.
 function handlers.wheel(ctx, arg)
@@ -359,6 +393,9 @@ function handlers.wait_until(ctx, arg)
     local function holds()
         if arg.text ~= nil and not text_contains(arg.text) then return false end
         if arg.matrix ~= nil and not matrix_equal(current_matrix(ctx), arg.matrix) then
+            return false
+        end
+        if arg.matrices ~= nil and not matrices_match(current_matrices(ctx), arg.matrices) then
             return false
         end
         return true
@@ -405,6 +442,14 @@ function handlers.assert_matrix(ctx, expected)
     end
 end
 
+function handlers.assert_matrices(ctx, expected)
+    settle(ctx)
+    local got = current_matrices(ctx)
+    if not matrices_match(got, expected) then
+        fail("matrices are " .. serialise(got) .. ", expected " .. serialise(expected))
+    end
+end
+
 function handlers.assert_tile(ctx, arg)
     settle(ctx)
     local scene = ctx.sm.current
@@ -417,7 +462,7 @@ function handlers.assert_tile(ctx, arg)
         return
     end
     if tile == nil then fail(where .. " is empty") end
-    for _, f in ipairs({ "kind", "op", "dir", "edge", "scalar" }) do
+    for _, f in ipairs({ "kind", "op", "dir", "edge", "scalar", "facing", "index" }) do
         if arg[f] ~= nil and tile[f] ~= arg[f] then
             fail(where .. " " .. f .. " is " .. tostring(tile[f]) .. ", expected " .. tostring(arg[f]))
         end

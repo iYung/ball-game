@@ -66,7 +66,7 @@ end
 
 function StartScene:_open_editor()
     local EditorScene = require("lua/game/scenes/editor_scene")
-    self._scene_manager:switch(EditorScene.new(self._scene_manager))
+    self._scene_manager:switch(EditorScene.new(self._scene_manager, self._settings_state))
 end
 
 function StartScene:key_pressed(key)

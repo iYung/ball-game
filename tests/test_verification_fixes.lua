@@ -228,12 +228,12 @@ do
     scene.palette:select({ kind = "drag" })
     local x, y = cell(2, 2)
     scene:mouse_pressed(x + 5, y + 5, 1)
-    assert(scene._drag_tile and scene.sel_pusher == nil, "the pusher is held")
-    scene:key_pressed("r")                 -- sets a status, so Reset is enabled
+    assert(scene._drag_tile and scene.sel_pusher == 1, "the pusher is held and stays selected")
+    scene.status = "fail"                  -- Reset is enabled; Run would drop the pusher first
     scene:key_pressed("backspace")
     assert(scene:ui_tile(2, 2).kind == "pusher", "the pusher is back")
     assert(scene.sel_pusher == 1, "and selected again")
-    print("PASS: Reset resyncs the pusher selection")
+    print("PASS: Reset returns a held pusher, still selected")
 end
 
 print("ALL VERIFICATION FIX TESTS PASSED")

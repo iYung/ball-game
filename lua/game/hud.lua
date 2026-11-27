@@ -96,10 +96,10 @@ function HUD:draw(input_mat, target_mat, puzzle_name, input2_mat)
         end
     end
 
-    -- Arrow separator
-    love.graphics.setFont(self.font_label)
+    -- Arrow separator, drawn as a shape: the default font has no arrow glyph
     love.graphics.setColor(0.5, 0.5, 0.6, 1)
-    love.graphics.printf("↓", x, cursor_y, w, "center")
+    love.graphics.polygon("fill",
+        cx - 8, cursor_y + 4, cx + 8, cursor_y + 4, cx, cursor_y + 16)
     cursor_y = cursor_y + 24
 
     -- TARGET

@@ -1,6 +1,6 @@
 # Matrix Circuit
 
-A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to transform an input matrix into a target matrix using elementary matrix operations. Choose from 25 puzzles, grouped into six worlds, on the level-select screen; completing a puzzle shows a solution recap screen then proceeds to the next puzzle.
+A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to transform an input matrix into a target matrix using elementary matrix operations. Choose from 26 puzzles, grouped into six worlds, on the level-select screen; completing a puzzle shows a solution recap screen then proceeds to the next puzzle.
 
 ## How to play
 
@@ -88,7 +88,7 @@ Some puzzles have two sources, **SRC 1** and **SRC 2**, each with its own input 
 
 **Winning:** when any matrix cell touches the Sink, only one matrix is left and it equals the target, you win. Click the **Continue** button (or press `Enter`) to open the **solution recap screen**, which shows the number of ticks your solution took, the number of pieces you placed, and a looping animated playback of your solution — matrices and pushers moving in sync (including any merge) — on the board. Click the **Next puzzle**, **Replay**, or **Menu** button (or press `Enter`, `R`, or `Esc`) to advance to the next puzzle, replay the animation, or return to the level-select screen. Clicks outside the three buttons do nothing. A run in which nothing moves after the last command ends as **STUCK**.
 
-**25 puzzles** ship with the game: a simple identity check (puzzle 1), then single ops and short routes in **Basics** and **Combos** (several of which chain two ops), two- and three-op chains with edge ops in **Advanced**, column edits, flips and a rotation in **Transforms**, fixed tools and locked tiles in **Fixed Pieces** (puzzle 19 offers only its fixed `!` ops, no editable ones), and matrix add and multiply with two sources in **Two Sources**. Puzzles can use non-square (n×m) matrices.
+**26 puzzles** ship with the game: a simple identity check (puzzle 1), then single ops and short routes in **Basics** and **Combos** (several of which chain two ops), two- and three-op chains with edge ops in **Advanced**, column edits, flips and a rotation in **Transforms**, fixed tools and locked tiles in **Fixed Pieces** (puzzle 19 offers only its fixed `!` ops, no editable ones; the last, **Rotato**, bounces the matrix across a locked tile and your own rotation), and matrix add and multiply with two sources in **Two Sources**. Puzzles can use non-square (n×m) matrices.
 
 Progress is saved by puzzle and world id (the file or folder name without its number prefix), so inserting or renumbering levels keeps solved marks. Saves from older versions, including the earlier 23-puzzle numbering, are converted when loaded and rewritten in the new format the next time progress changes. A game version from before this format shows such a save as empty and overwrites it the next time progress changes.
 

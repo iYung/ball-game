@@ -183,10 +183,11 @@ end
 local EditorScene = setmetatable({}, { __index = Scene })
 EditorScene.__index = EditorScene
 
-function EditorScene.new(scene_manager)
+function EditorScene.new(scene_manager, settings_state)
     local self = Scene.new(W, H)
     setmetatable(self, EditorScene)
     self._scene_manager  = scene_manager
+    self._settings_state = settings_state
     self._grid           = Grid.new(10, 10)
     self._name           = "Untitled"
     self._name_focus     = false
@@ -218,6 +219,9 @@ function EditorScene:on_enter()
     self._font_title = love.graphics.newFont(16)
     self:_layout_palette()
     self:_rebuild_hud()
+    -- Test fades the menu music out; fading it in also cancels a fade-out still running.
+    local Sound = require("lua/core/sound")
+    Sound.fade_music("menu", 1, 1)
 end
 
 -- ── Palette layout ─────────────────────────────────────────────────────────
@@ -541,7 +545,7 @@ function EditorScene:key_pressed(key)
     end
     if key == "escape" then
         local StartScene = require("lua/game/scenes/start_scene")
-        self._scene_manager:switch(StartScene.new(self._scene_manager))
+        self._scene_manager:switch(StartScene.new(self._scene_manager, self._settings_state))
     end
 end
 
@@ -575,7 +579,7 @@ function EditorScene:mouse_pressed(mx, my, btn)
         if btn == 1 then
             if e.id == "editor:back" then
                 local StartScene = require("lua/game/scenes/start_scene")
-                self._scene_manager:switch(StartScene.new(self._scene_manager))
+                self._scene_manager:switch(StartScene.new(self._scene_manager, self._settings_state))
             elseif e.id == "editor:name" then
                 self._name_focus = true
             elseif e.id == "editor:copy" then
@@ -586,7 +590,7 @@ function EditorScene:mouse_pressed(mx, my, btn)
             elseif e.id == "editor:test" then
                 local def = self:_build_def()
                 local ms  = require("lua/game/scenes/matrix_scene")
-                self._scene_manager:switch(ms.new_from_def(def, self._scene_manager, self))
+                self._scene_manager:switch(ms.new_from_def(def, self._scene_manager, self, self._settings_state))
             elseif e.id == "editor:input_rows_dec" then
                 self:_adjust_matrix(self._input, self._input.rows-1, self._input.cols)
                 self:_refit_source()

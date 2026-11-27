@@ -543,6 +543,7 @@ function MatrixScene:_snap_anim_to_matrix()
 end
 
 function MatrixScene:start_run()
+    self:_clear_drag()   -- a held tile goes back to the board and takes part
     local p             = self.puzzle
     self.current_matrix = self.input_matrix:copy()
     self._anim_display_matrix = nil
@@ -1359,10 +1360,13 @@ local function rect_el(id, label, kind, x, y, w, h, enabled, selected)
 end
 
 -- Keeps the selected pusher valid and drops commands of pushers no longer on the board.
+-- A pusher held by Mv is only being moved, so it still counts.
 function MatrixScene:_sync_pushers()
     local on_board = {}
     local list = self:_pusher_list()
     for _, p in ipairs(list) do on_board[p.id] = true end
+    local held = self._drag_tile
+    if held and held.kind == "pusher" then on_board[held.id] = true end
     for lane = 1, Timeline.LANES do
         for _, c in pairs(self.timeline[lane]) do
             if not on_board[c.pusher] then Timeline.remove_pusher(self.timeline, c.pusher) end
@@ -1850,7 +1854,8 @@ function MatrixScene:_mouse_pressed_inner(mx, my, btn)
         end
 
         -- Empty or non-op cell: apply the palette tool (locked tiles refuse it)
-        if spec then self:_place_tile_at(cx, cy, spec) end
+        -- Mv is not a tile: during a run, when nothing can be lifted, it places nothing.
+        if spec and not self.palette:is_drag() then self:_place_tile_at(cx, cy, spec) end
     end
 end
 

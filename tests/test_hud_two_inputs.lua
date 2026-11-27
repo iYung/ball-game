@@ -19,6 +19,9 @@ local function record(...)
     local hud = HUD.new(PX, PY, PW, PH)
     local texts, cells = {}, {}
     local orig_printf, orig_rect = love.graphics.printf, love.graphics.rectangle
+    local orig_polygon = love.graphics.polygon
+    local arrow
+    love.graphics.polygon = function(_, x1, y1) arrow = { x = x1, y = y1 } end
     love.graphics.printf = function(t, x, y, w)
         texts[#texts + 1] = { text = t, x = x, y = y, w = w }
     end
@@ -27,8 +30,9 @@ local function record(...)
     end
     local ok, ret = pcall(hud.draw, hud, ...)
     love.graphics.printf, love.graphics.rectangle = orig_printf, orig_rect
+    love.graphics.polygon = orig_polygon
     assert(ok, tostring(ret))
-    return { y = ret, texts = texts, cells = cells }
+    return { y = ret, texts = texts, cells = cells, arrow = arrow }
 end
 
 local function find(out, text)
@@ -55,7 +59,7 @@ do
     assert(not find(out, "INPUT 1") and not find(out, "INPUT 2"), "no numbered labels")
     local x1, y1, x2, y2 = bounds(out.cells, 1, 4)
     assert(x1 == 885 and y1 == 52 and x2 == 1065 and y2 == 232, "input grid centred in panel")
-    assert(find(out, "↓").y == 246, "arrow below input")
+    assert(out.arrow.y == 250, "arrow below input")
     assert(find(out, "TARGET").y == 270, "TARGET below arrow")
     assert(out.y == 292 + 120 + 20 + 10, "returned y")
     print("PASS: HUD single input unchanged")
@@ -88,7 +92,7 @@ do
 
     local tx1, ty1, tx2, ty2 = bounds(out.cells, 33, 48)
     assert(tx1 + tx2 == 2 * PX + PW, "target centred in panel")
-    assert(find(out, "↓").y >= ay2, "arrow below inputs")
+    assert(out.arrow.y >= ay2, "arrow below inputs")
     assert(ty1 > find(out, "TARGET").y, "target below its label")
     assert(ty2 < out.y and out.y < 540, "4x4 pair ends above the bottom bar")
 
@@ -104,8 +108,8 @@ do
     local target = filled(2, 2, 30)
     local a = record(short, target, "A", tall)
     local b = record(tall, target, "B", short)
-    assert(find(a, "↓").y == 52 + 180 + 14, "taller on the right")
-    assert(find(b, "↓").y == 52 + 180 + 14, "taller on the left")
+    assert(a.arrow.y == 52 + 180 + 14 + 4, "taller on the right")
+    assert(b.arrow.y == 52 + 180 + 14 + 4, "taller on the left")
     assert(a.y == b.y, "same total height")
     print("PASS: HUD arrow below the taller input")
 end

@@ -179,13 +179,13 @@ function MatrixScene.new(puzzle_index, scene_manager, settings_state, back_scene
     return self
 end
 
-function MatrixScene.new_from_def(puzzle_def, scene_manager, back_scene)
+function MatrixScene.new_from_def(puzzle_def, scene_manager, back_scene, settings_state)
     local base = Scene.new(1280, 720)
     local self  = setmetatable(base, MatrixScene)
     self._start_puzzle    = nil
     self._custom_puzzle   = puzzle_def
     self._scene_manager   = scene_manager
-    self._settings_state  = nil
+    self._settings_state  = settings_state
     self._back_scene      = back_scene
     return self
 end
@@ -194,8 +194,7 @@ end
 
 function MatrixScene:on_enter()
     self._settings_menu = SettingsMenu.new(self._settings_state, self._scene_manager, function()
-        local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-        self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
+        self:_leave()
     end)
     self.palette      = Palette.new()
     self.hud          = HUD.new(HUD_X, 0, HUD_W, BAR_Y)
@@ -230,6 +229,16 @@ function MatrixScene:on_exit()
     local Sound = require("lua/core/sound")
     for _, n in ipairs({"bg1","bg2","bg3","bg4"}) do
         Sound.stop_music(n)
+    end
+end
+
+-- Leaves the puzzle: back to the scene that opened it (editor Test), else level select.
+function MatrixScene:_leave()
+    if self._back_scene then
+        self._scene_manager:switch(self._back_scene)
+    else
+        local LevelSelectScene = require("lua/game/scenes/level_select_scene")
+        self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
     end
 end
 
@@ -1201,6 +1210,11 @@ function MatrixScene:_cmd_activate(id)
         end
     elseif id == "continue" then
         if self._scene_manager then
+            -- Editor Test: no replay, so a test win records no progress.
+            if self._back_scene then
+                self:_leave()
+                return
+            end
             local SolutionRecapScene = require("lua/game/scenes/solution_recap_scene")
             local stats = {
                 ticks        = self.sim.tick,
@@ -1221,12 +1235,7 @@ function MatrixScene:_cmd_activate(id)
         self:do_reset()
     elseif id == "menu" then
         if self._scene_manager then
-            if self._back_scene then
-                self._scene_manager:switch(self._back_scene)
-            else
-                local LevelSelectScene = require("lua/game/scenes/level_select_scene")
-                self._scene_manager:switch(LevelSelectScene.new(self._scene_manager, self._settings_state))
-            end
+            self:_leave()
         end
     end
 end

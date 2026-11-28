@@ -79,109 +79,149 @@ local function range(last)
     return table.concat(out, ",")
 end
 
--- ── every remapped and dropped index ─────────────────────────────────────────
+-- ── old folder listing ───────────────────────────────────────────────────────
+-- Loaded saves are read back through puzzle ids, and some old puzzles no longer
+-- ship. So the loader sees the five folders those saves were made with. Only the
+-- listing is faked: nothing here loads a puzzle file.
 
-local REMAP = {
-    [1] = 1,   [2] = 2,   [3] = 3,   [4] = 4,   [5] = 5,   [6] = 6,   [7] = 7,
-    [8] = 8,   [9] = 9,   [10] = 10, [11] = 11, [12] = 12, [13] = 13, [14] = 14,
-    [16] = 15, [18] = 16, [19] = 17, [20] = 18, [21] = 19, [22] = 20, [23] = 21,
+local OLD_FOLDERS = {
+    { name = "01_basics",       first = 1,  last = 5 },
+    { name = "02_combos",       first = 6,  last = 11 },
+    { name = "03_advanced",     first = 12, last = 15 },
+    { name = "04_transforms",   first = 16, last = 18 },
+    { name = "05_fixed_pieces", first = 19, last = 21 },
 }
-local DROPPED = { -1, 0, 15, 17, 24, 99 }
 
-local FORMATS = {
-    { name = "solved table", make = function(list) return "return {solved={" .. list .. "},cutscenes={}}\n" end },
-    { name = "plain array",  make = function(list) return "return {" .. list .. "}\n" end },
-}
-
-for _, format in ipairs(FORMATS) do
-    for old, new in pairs(REMAP) do
-        with_save(format.make(tostring(old)), function(P)
-            assert(solved_list(P) == tostring(new), string.format(
-                "%s: old %d must load as %d, got '%s'", format.name, old, new, solved_list(P)))
-        end)
+local OLD_LISTING = { ["data/puzzles"] = {} }
+for _, folder in ipairs(OLD_FOLDERS) do
+    table.insert(OLD_LISTING["data/puzzles"], folder.name)
+    local files = {}
+    for number = folder.first, folder.last do
+        files[#files + 1] = string.format("%02d_%s.lua", number, V2_IDS[number])
     end
-    for _, old in ipairs(DROPPED) do
-        with_save(format.make(tostring(old)), function(P)
-            assert(solved_list(P) == "", string.format(
-                "%s: old %d must be dropped, got '%s'", format.name, old, solved_list(P)))
-        end)
-    end
-
-    -- The whole old range at once: remapping must not cascade or collide.
-    local all = {}
-    for n = 1, 23 do all[#all + 1] = tostring(n) end
-    with_save(format.make(table.concat(all, ",")), function(P, writes)
-        assert(solved_list(P) == range(21),
-            format.name .. ": all 23 old puzzles load as 1..21, got " .. solved_list(P))
-        assert(#writes == 0, format.name .. ": load must not write the save file")
-    end)
-    print("PASS: migration from " .. format.name)
+    OLD_LISTING["data/puzzles/" .. folder.name] = files
 end
 
--- Non-number entries are ignored.
-with_save('return {"16",true,16}\n', function(P)
-    assert(solved_list(P) == "15", "non-number entries ignored, got " .. solved_list(P))
-end)
-print("PASS: migration ignores non-number entries")
+-- Run fn against the old listing, then restore the real one even if fn fails.
+local function with_old_listing(fn)
+    local orig = love.filesystem.getDirectoryItems
+    love.filesystem.getDirectoryItems = function(path)
+        return OLD_LISTING[path] or orig(path)
+    end
+    PuzzleLoader.rescan()
+    local ok, err = pcall(fn)
+    love.filesystem.getDirectoryItems = orig
+    PuzzleLoader.rescan()
+    assert(ok, err)
+end
 
--- ── cutscene flags ───────────────────────────────────────────────────────────
+with_old_listing(function()
 
-with_save("return {solved={18},cutscenes={2,3}}\n", function(P)
-    assert(solved_list(P) == "16", "solved index remapped")
-    assert(P.is_cutscene_seen(S.world("combos")) and P.is_cutscene_seen(S.world("advanced")),
-        "cutscene flags copied")
-    assert(not P.is_cutscene_seen(S.world("basics")), "unseen cutscene stays unseen")
-    assert(not P.is_cutscene_seen(16), "cutscene flags are not solved indices")
-end)
-print("PASS: migration copies cutscene flags")
+    -- ── every remapped and dropped index ─────────────────────────────────────────
 
--- ── versioned save ───────────────────────────────────────────────────────────
+    local REMAP = {
+        [1] = 1,   [2] = 2,   [3] = 3,   [4] = 4,   [5] = 5,   [6] = 6,   [7] = 7,
+        [8] = 8,   [9] = 9,   [10] = 10, [11] = 11, [12] = 12, [13] = 13, [14] = 14,
+        [16] = 15, [18] = 16, [19] = 17, [20] = 18, [21] = 19, [22] = 20, [23] = 21,
+    }
+    local DROPPED = { -1, 0, 15, 17, 24, 99 }
 
-with_save("return {version=2,solved={15,16,17,18,21},cutscenes={2}}\n", function(P, writes)
-    assert(solved_list(P) == "15,16,17,18,21",
-        "versioned save must not be remapped, got " .. solved_list(P))
-    assert(P.is_cutscene_seen(S.world("combos")), "versioned save: cutscene loaded")
-    assert(#writes == 0, "versioned save: load must not write the save file")
-end)
-print("PASS: versioned save left untouched")
+    local FORMATS = {
+        { name = "solved table", make = function(list) return "return {solved={" .. list .. "},cutscenes={}}\n" end },
+        { name = "plain array",  make = function(list) return "return {" .. list .. "}\n" end },
+    }
 
--- ── written format ───────────────────────────────────────────────────────────
-
-with_save("return {solved={16,23},cutscenes={2}}\n", function(P, writes)
-    P.mark_solved(S.puzzle("negate"))
-    assert(#writes == 1, "mark_solved writes once")
-    assert(writes[1].path == "progress.lua", "writes the save file")
-    assert(writes[1].data ==
-        'return {version=3,solved={"locked_scale","negate","triple"},cutscenes={"combos"}}\n',
-        "unexpected save data: " .. writes[1].data)
-
-    -- Loading what was written must not remap it a second time.
-    with_save(writes[1].data, function(P2)
-        assert(solved_list(P2) == "3,15,21", "round trip, got " .. solved_list(P2))
-        assert(P2.is_cutscene_seen(S.world("combos")), "round trip keeps cutscenes")
-    end)
-end)
-print("PASS: save is written with version=3 and round trips")
-
--- ── unlocked worlds are kept ─────────────────────────────────────────────────
--- Last puzzle index of worlds 1..5 in the old and new numbering. World N+1 is
--- unlocked when every puzzle up to the end of world N is solved.
-
-local OLD_LAST = { 5, 11, 16, 20, 23 }
-local NEW_LAST = { 5, 11, 15, 18, 21 }
-
-for world = 1, #OLD_LAST do
-    local list = range(OLD_LAST[world])
     for _, format in ipairs(FORMATS) do
-        with_save(format.make(list), function(P)
-            assert(solved_list(P) == range(NEW_LAST[world]), string.format(
-                "%s: old worlds 1..%d must solve new 1..%d, got '%s'",
-                format.name, world, NEW_LAST[world], solved_list(P)))
-        end)
-    end
-end
-print("PASS: solved worlds stay solved after migration")
+        for old, new in pairs(REMAP) do
+            with_save(format.make(tostring(old)), function(P)
+                assert(solved_list(P) == tostring(new), string.format(
+                    "%s: old %d must load as %d, got '%s'", format.name, old, new, solved_list(P)))
+            end)
+        end
+        for _, old in ipairs(DROPPED) do
+            with_save(format.make(tostring(old)), function(P)
+                assert(solved_list(P) == "", string.format(
+                    "%s: old %d must be dropped, got '%s'", format.name, old, solved_list(P)))
+            end)
+        end
 
-assert(package.loaded["lua/game/progress"] == ORIG_MODULE, "original module restored")
+        -- The whole old range at once: remapping must not cascade or collide.
+        local all = {}
+        for n = 1, 23 do all[#all + 1] = tostring(n) end
+        with_save(format.make(table.concat(all, ",")), function(P, writes)
+            assert(solved_list(P) == range(21),
+                format.name .. ": all 23 old puzzles load as 1..21, got " .. solved_list(P))
+            assert(#writes == 0, format.name .. ": load must not write the save file")
+        end)
+        print("PASS: migration from " .. format.name)
+    end
+
+    -- Non-number entries are ignored.
+    with_save('return {"16",true,16}\n', function(P)
+        assert(solved_list(P) == "15", "non-number entries ignored, got " .. solved_list(P))
+    end)
+    print("PASS: migration ignores non-number entries")
+
+    -- ── cutscene flags ───────────────────────────────────────────────────────────
+
+    with_save("return {solved={18},cutscenes={2,3}}\n", function(P)
+        assert(solved_list(P) == "16", "solved index remapped")
+        assert(P.is_cutscene_seen(S.world("combos")) and P.is_cutscene_seen(S.world("advanced")),
+            "cutscene flags copied")
+        assert(not P.is_cutscene_seen(S.world("basics")), "unseen cutscene stays unseen")
+        assert(not P.is_cutscene_seen(16), "cutscene flags are not solved indices")
+    end)
+    print("PASS: migration copies cutscene flags")
+
+    -- ── versioned save ───────────────────────────────────────────────────────────
+
+    with_save("return {version=2,solved={15,16,17,18,21},cutscenes={2}}\n", function(P, writes)
+        assert(solved_list(P) == "15,16,17,18,21",
+            "versioned save must not be remapped, got " .. solved_list(P))
+        assert(P.is_cutscene_seen(S.world("combos")), "versioned save: cutscene loaded")
+        assert(#writes == 0, "versioned save: load must not write the save file")
+    end)
+    print("PASS: versioned save left untouched")
+
+    -- ── written format ───────────────────────────────────────────────────────────
+
+    with_save("return {solved={16,23},cutscenes={2}}\n", function(P, writes)
+        P.mark_solved(S.puzzle("negate"))
+        assert(#writes == 1, "mark_solved writes once")
+        assert(writes[1].path == "progress.lua", "writes the save file")
+        assert(writes[1].data ==
+            'return {version=3,solved={"locked_scale","negate","triple"},cutscenes={"combos"}}\n',
+            "unexpected save data: " .. writes[1].data)
+
+        -- Loading what was written must not remap it a second time.
+        with_save(writes[1].data, function(P2)
+            assert(solved_list(P2) == "3,15,21", "round trip, got " .. solved_list(P2))
+            assert(P2.is_cutscene_seen(S.world("combos")), "round trip keeps cutscenes")
+        end)
+    end)
+    print("PASS: save is written with version=3 and round trips")
+
+    -- ── unlocked worlds are kept ─────────────────────────────────────────────────
+    -- Last puzzle index of worlds 1..5 in the old and new numbering. World N+1 is
+    -- unlocked when every puzzle up to the end of world N is solved.
+
+    local OLD_LAST = { 5, 11, 16, 20, 23 }
+    local NEW_LAST = { 5, 11, 15, 18, 21 }
+
+    for world = 1, #OLD_LAST do
+        local list = range(OLD_LAST[world])
+        for _, format in ipairs(FORMATS) do
+            with_save(format.make(list), function(P)
+                assert(solved_list(P) == range(NEW_LAST[world]), string.format(
+                    "%s: old worlds 1..%d must solve new 1..%d, got '%s'",
+                    format.name, world, NEW_LAST[world], solved_list(P)))
+            end)
+        end
+    end
+    print("PASS: solved worlds stay solved after migration")
+
+    assert(package.loaded["lua/game/progress"] == ORIG_MODULE, "original module restored")
+
+end)
 
 print("ALL PROGRESS MIGRATION TESTS PASSED")

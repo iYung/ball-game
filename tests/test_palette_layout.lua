@@ -175,29 +175,30 @@ do
     print("PASS: overflow scrolling")
 end
 
--- Puzzle 19: only fixed ops plus tools.
+-- Add Only: only fixed ops plus tools.
 do
-    local scene = new_scene(S.puzzle("fixed_player"))
+    local scene = new_scene(S.puzzle("add_only"))
     local seen = {}
     for _, id in ipairs(item_ids(scene)) do
         seen[id] = true
         if id ~= "palette:pusher" and id ~= "palette:drag" and id ~= "palette:erase" then
-            assert(id:sub(1, 14) == "palette:fixed:", "puzzle 19 offers no editable op, got " .. id)
+            assert(id:sub(1, 14) == "palette:fixed:", "Add Only offers no editable op, got " .. id)
         end
     end
-    assert(seen["palette:fixed:flip_v"] and seen["palette:fixed:scalar_mul"], "puzzle 19 fixed ops")
-    print("PASS: puzzle 19 fixed-only palette")
+    assert(seen["palette:fixed:rotate_90"] and seen["palette:fixed:edge_add"] and seen["palette:fixed:scalar_mul"],
+        "Add Only fixed ops")
+    print("PASS: Add Only fixed-only palette")
 end
 
 -- The puzzle hint is drawn in the HUD, without "[Esc] Menu".
 do
     local Stubs = require("lua/headless/stubs")
-    local scene = new_scene(S.puzzle("negate"))
+    local scene = new_scene(S.puzzle("scale_shift"))
     Stubs.clear_text()
     scene:draw()
     local found = false
     for _, t in ipairs(Stubs.drawn_text()) do
-        if t == string.format("Puzzle %d/%d", S.puzzle("negate"), PuzzleLoader.count()) then found = true end
+        if t == string.format("Puzzle %d/%d", S.puzzle("scale_shift"), PuzzleLoader.count()) then found = true end
         assert(not t:find("%[Esc%] Menu"), "old hint text still drawn")
     end
     assert(found, "Puzzle N/M hint drawn")

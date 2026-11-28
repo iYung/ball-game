@@ -70,7 +70,8 @@ print("PASS: two-source layouts are sound")
 
 -- ── The world ────────────────────────────────────────────────────────────────
 
-local IDS = { "first_sum", "turned_sum", "operand_order", "merge_maze" }
+local IDS = { "first_sum", "take_away", "turned_sum", "operand_order", "two_preps",
+    "merge_maze" }
 local world = S.world("two_sources")
 local indices = PuzzleLoader.world_indices(world)
 assert(PuzzleLoader.world(world).name == "Two Sources", "tab name")
@@ -94,7 +95,7 @@ for i, id in ipairs(IDS) do
     assert(parsed, id .. " parses as pasted text: " .. tostring(err))
     assert(parsed.name == def.name, id .. " parses to the same puzzle")
 end
-print("PASS: the Two Sources world opens with the four introductory puzzles")
+print("PASS: the Two Sources world opens with its puzzles in order")
 
 Progress.reset()
 local before = S.before(world)

@@ -1,6 +1,6 @@
 # Matrix Circuit
 
-A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to transform an input matrix into a target matrix using elementary matrix operations. Choose from 29 puzzles, grouped into six worlds, on the level-select screen; completing a puzzle shows a solution recap screen then proceeds to the next puzzle.
+A SpaceChem-style puzzle game built in Love2D. Program a 2D circuit grid to transform an input matrix into a target matrix using elementary matrix operations. Choose from 19 puzzles, grouped into four worlds, on the level-select screen; completing a puzzle shows a solution recap screen then proceeds to the next puzzle.
 
 ## How to play
 
@@ -16,7 +16,7 @@ The play area is a **10×10 grid** with a **Source** (green) and **Sink** (blue)
 | `Esc` | Open settings |
 | Click a row | Play that puzzle |
 
-The shipped puzzles are grouped into six worlds (**Basics**, **Combos**, **Advanced**, **Transforms**, **Fixed Pieces** and **Two Sources**), shown as tabs in a top bar. Click a tab or press Left/Right to switch worlds. A world is open if it is the first one, if every puzzle in all earlier worlds is solved, or if any puzzle in it or in a later world is solved, so a level added to an early world does not lock you out of where you have been. One limit: a world you had opened but solved nothing in (and nothing after it) locks again until the new level is solved. Locked worlds are skipped when cycling. Click a puzzle row to play it. Hovering highlights a row only when the mouse actually moves, so a resting cursor never overrides Up/Down navigation. On the start screen, press `D` or click **(D) Unlock All** to mark every puzzle solved (useful for testing or jumping ahead).
+The shipped puzzles are grouped into four worlds (**Basics**, **Combos**, **Advanced** and **Two Sources**), shown as tabs in a top bar. Click a tab or press Left/Right to switch worlds. A world is open if it is the first one, if every puzzle in all earlier worlds is solved, or if any puzzle in it or in a later world is solved, so a level added to an early world does not lock you out of where you have been. One limit: a world you had opened but solved nothing in (and nothing after it) locks again until the new level is solved. Locked worlds are skipped when cycling. Click a puzzle row to play it. Hovering highlights a row only when the mouse actually moves, so a resting cursor never overrides Up/Down navigation. On the start screen, press `D` or click **(D) Unlock All** to mark every puzzle solved (useful for testing or jumping ahead).
 
 **In-game controls:**
 
@@ -88,7 +88,7 @@ Some puzzles have two sources, **SRC 1** and **SRC 2**, each with its own input 
 
 **Winning:** when any matrix cell touches the Sink, only one matrix is left and it equals the target, you win. Click the **Continue** button (or press `Enter`) to open the **solution recap screen**, which shows the number of ticks your solution took, the number of pieces you placed, and a looping animated playback of your solution — matrices and pushers moving in sync (including any merge) — on the board. Click the **Next puzzle**, **Replay**, or **Menu** button (or press `Enter`, `R`, or `Esc`) to advance to the next puzzle, replay the animation, or return to the level-select screen. Clicks outside the three buttons do nothing. A run in which nothing moves after the last command ends as **STUCK**.
 
-**29 puzzles** ship with the game: a simple identity check (puzzle 1), then single ops and short routes in **Basics** and **Combos** (several of which chain two ops), two- and three-op chains with edge ops in **Advanced**, column edits, flips and a rotation in **Transforms**, fixed tools and locked tiles in **Fixed Pieces** (puzzle 19 offers only its fixed `!` ops, no editable ones; the last, **Rotato**, bounces the matrix across a locked tile and your own rotation), and matrix add and multiply with two sources in **Two Sources** (the later ones need an op on one or both matrices before they are combined). Puzzles can use non-square (n×m) matrices.
+**19 puzzles** ship with the game. **Basics** opens with two easy puzzles (an identity check and a single transpose), then **Scale and Shift**, which already needs two ops in the right order. **Combos** is corridor routing and chains of edge ops; fixed tools first appear there, in **Top Only**. **Advanced** adds locked tiles: **Add Only** offers nothing but fixed `!` tools, and the last, **Rotato**, bounces the matrix across a locked tile and your own rotation. **Two Sources** covers matrix add and multiply with two sources (several need an op on one or both matrices before they are combined). Puzzles can use non-square (n×m) matrices.
 
 Progress is saved by puzzle and world id (the file or folder name without its number prefix), so inserting or renumbering levels keeps solved marks. Saves from older versions, including the earlier 23-puzzle numbering, are converted when loaded and rewritten in the new format the next time progress changes. A game version from before this format shows such a save as empty and overwrites it the next time progress changes.
 
@@ -117,14 +117,14 @@ data/puzzles/
     02_flip.lua
   02_combos/
     cutscene.lua        optional
-    06_row_swap.lua
+    01_rotate_gap.lua
 ```
 
 1. In the editor, set the puzzle name, build the level, check it with **Test**, then click **Copy**.
 2. Create `data/puzzles/<NN>_<world>/<NN>_<id>.lua` and paste the text into it unchanged.
 3. Restart the game (the web version needs a rebuild).
 
-- Each folder in `data/puzzles/` with at least one puzzle is a world. Its tab name is the folder name without the number, with `_` as a space and each word capitalised (`05_fixed_pieces` is "Fixed Pieces"). A new world is just a new folder.
+- Each folder in `data/puzzles/` with at least one puzzle is a world. Its tab name is the folder name without the number, with `_` as a space and each word capitalised (`04_two_sources` is "Two Sources"). A new world is just a new folder.
 - Every `.lua` file in a world folder is a puzzle, except `cutscene.lua`. Other files are ignored. A puzzle placed directly in `data/puzzles/` is not shown, and a test fails on it.
 - The `NN_` prefix sets the order, compared as a number; gaps are allowed. Equal numbers are ordered by name, and entries without a prefix come last, alphabetically. The level number shown in game is the position in the whole list, not the prefix.
 - The id (`<id>` or `<world>`) must be unique among all puzzles or all worlds, even across folders; a duplicate stops the game with an error naming both paths.

@@ -115,7 +115,7 @@ do
     local orig_module  = package.loaded["lua/game/progress"]
 
     -- Simulate a save file in new format.
-    love.filesystem.read    = function() return "return {solved={3,4},cutscenes={2}}\n" end
+    love.filesystem.read    = function() return "return {solved={10,11},cutscenes={2}}\n" end
     love.filesystem.getInfo = function(path)
         if path == "progress.lua" then return { type = "file", size = 0 } end
         return orig_getInfo(path)
@@ -125,8 +125,8 @@ do
     package.loaded["lua/game/progress"] = nil
     local P2 = require("lua/game/progress")
 
-    assert(P2.is_solved(S.puzzle("negate")), "_load new fmt: puzzle 3 solved")
-    assert(P2.is_solved(S.puzzle("swap")), "_load new fmt: puzzle 4 solved")
+    assert(P2.is_solved(S.puzzle("set_row")), "_load new fmt: puzzle 10 solved")
+    assert(P2.is_solved(S.puzzle("rotate_gap")), "_load new fmt: puzzle 11 solved")
     assert(not P2.is_solved(S.puzzle("identity")), "_load new fmt: puzzle 1 not solved")
     assert(P2.is_cutscene_seen(S.world("combos")), "_load new fmt: cutscene 2 seen")
     assert(not P2.is_cutscene_seen(S.world("basics")), "_load new fmt: cutscene 1 not seen")
@@ -145,7 +145,7 @@ do
     local orig_getInfo = love.filesystem.getInfo
     local orig_module  = package.loaded["lua/game/progress"]
 
-    love.filesystem.read    = function() return "return {5,6}\n" end
+    love.filesystem.read    = function() return "return {2,13}\n" end
     love.filesystem.getInfo = function(path)
         if path == "progress.lua" then return { type = "file", size = 0 } end
         return orig_getInfo(path)
@@ -154,8 +154,8 @@ do
     package.loaded["lua/game/progress"] = nil
     local P2 = require("lua/game/progress")
 
-    assert(P2.is_solved(S.puzzle("scale")), "_load old fmt: puzzle 5 solved")
-    assert(P2.is_solved(S.puzzle("row_swap")), "_load old fmt: puzzle 6 solved")
+    assert(P2.is_solved(S.puzzle("flip")), "_load old fmt: puzzle 2 solved")
+    assert(P2.is_solved(S.puzzle("flip_scale")), "_load old fmt: puzzle 13 solved")
     assert(not P2.is_solved(S.puzzle("identity")), "_load old fmt: puzzle 1 not solved")
     assert(not P2.is_cutscene_seen(S.world("basics")), "_load old fmt: no cutscene data")
 
@@ -198,7 +198,7 @@ do
     end
     love.filesystem.read = function(path)
         if path == "progress.lua" then
-            return "return {solved={1,3},cutscenes={2}}\n"
+            return "return {solved={1,10},cutscenes={2}}\n"
         end
         return orig_read(path)
     end
@@ -209,7 +209,7 @@ do
 
     assert(P.is_solved(S.puzzle("identity")), "_load new-format: puzzle 1 loaded")
     assert(not P.is_solved(S.puzzle("flip")), "_load new-format: puzzle 2 not in save")
-    assert(P.is_solved(S.puzzle("negate")), "_load new-format: puzzle 3 loaded")
+    assert(P.is_solved(S.puzzle("set_row")), "_load new-format: puzzle 10 loaded")
     assert(P.is_cutscene_seen(S.world("combos")), "_load new-format: world 2 cutscene loaded")
     assert(not P.is_cutscene_seen(S.world("basics")), "_load new-format: world 1 cutscene not in save")
     print("PASS: _load() new-format save")
@@ -232,7 +232,7 @@ do
     end
     love.filesystem.read = function(path)
         if path == "progress.lua" then
-            return "return {5,7}\n"
+            return "return {11,13}\n"
         end
         return orig_read(path)
     end
@@ -240,8 +240,8 @@ do
     package.loaded["lua/game/progress"] = nil
     local P = require("lua/game/progress")
 
-    assert(P.is_solved(S.puzzle("scale")), "_load old-format: puzzle 5 loaded")
-    assert(P.is_solved(S.puzzle("double_flip")), "_load old-format: puzzle 7 loaded")
+    assert(P.is_solved(S.puzzle("rotate_gap")), "_load old-format: puzzle 11 loaded")
+    assert(P.is_solved(S.puzzle("flip_scale")), "_load old-format: puzzle 13 loaded")
     assert(not P.is_solved(S.puzzle("identity")), "_load old-format: puzzle 1 not in save")
     print("PASS: _load() old-format save")
 

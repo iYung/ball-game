@@ -5,20 +5,20 @@ local S = require("tests/support/shipped")
 return {
     {
         name  = "level select keyboard nav with cursor parked on a row",
-        given = { solved = S.before("basics") },
+        given = { solved = S.before("combos") },
         steps = S.steps({
             { press = "return" },
-            S.arrows("basics"),
-            { hover_button = S.row("negate") },                     -- "Sharp Left"
+            S.arrows("combos"),
+            { hover_button = S.row("corner_case") },                -- "Corner Case"
             { press = "down" },
-            { assert_button = { id = "puzzle:" .. (S.puzzle("negate") + 1), selected = true } },
+            { assert_button = { id = "puzzle:" .. (S.puzzle("corner_case") + 1), selected = true } },
             { wait = 30 },
-            { assert_button = { id = "puzzle:" .. (S.puzzle("negate") + 1), selected = true } },
+            { assert_button = { id = "puzzle:" .. (S.puzzle("corner_case") + 1), selected = true } },
             { press = "up" },
             { press = "up" },
-            { assert_button = { id = "puzzle:" .. (S.puzzle("negate") - 1), selected = true } },
+            { assert_button = { id = "puzzle:" .. (S.puzzle("corner_case") - 1), selected = true } },
             { press = "return" },
-            { assert_text = S.name_after("negate", -1) },
+            { assert_text = S.name_after("corner_case", -1) },
         }),
     },
     {

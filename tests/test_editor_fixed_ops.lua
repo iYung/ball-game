@@ -74,13 +74,14 @@ do
     print("PASS: new editor omits ops and fixed_ops")
 end
 
-for _, id in ipairs({ "fixed_player", "fixed_puzzle" }) do
+for _, case in ipairs({ { id = "add_only", ops = {} }, { id = "top_only", ops = { "flip_v" } } }) do
+    local id = case.id
     local path = PuzzleLoader.path(index_of(id))
     local file = assert(io.open(path, "r"))   -- the headless stubs cannot read files
     local source = file:read("*a")
     file:close()
     local shipped = assert(DefParser.parse(source))
-    assert(shipped.ops and #shipped.ops == 0, id .. " is expected to ship ops = {}")
+    assert(same(shipped.ops, case.ops), id .. " does not ship the expected ops list")
 
     local editor, sm = new_editor()
     paste(editor, source)
@@ -98,7 +99,7 @@ for _, id in ipairs({ "fixed_player", "fixed_puzzle" }) do
     assert(same(scene._custom_puzzle.ops, shipped.ops), id .. " ops not passed to Test")
     assert(same(scene._custom_puzzle.fixed_ops, shipped.fixed_ops), id .. " fixed_ops not passed to Test")
     local els = scene:ui_elements()
-    assert(not UI.find(els, "palette:transpose"), id .. " offers an editable op in Test")
+    assert(not UI.find(els, "palette:transpose"), id .. " offers an unlisted op in Test")
     for _, entry in ipairs(shipped.fixed_ops or {}) do
         local op = type(entry) == "table" and entry.op or entry
         assert(UI.find(els, "palette:fixed:" .. op), id .. " has no fixed button for " .. op)

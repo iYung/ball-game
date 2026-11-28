@@ -20,8 +20,8 @@ return {
             { press = "return" },
             S.arrows("combos"),
             { assert_button = { id = S.tab("combos").id, selected = true } },
-            { click_button = S.row("row_swap") },
-            { assert_text = "Z-Bend" },
+            { click_button = S.row("rotate_gap") },
+            { assert_text = "Corridor Cross" },
         }),
     },
 }

@@ -74,9 +74,11 @@ local STATUS_LABELS = {
 -- Bottom bar (x 0..CMD_BTN_X-10): pusher selector + instruction chips, then 4 lanes x 60 ticks.
 local CMD_GLYPH   = { up="^", down="v", left="<", right=">", stop=".", clear="CLR" }
 local CHIP_ORDER  = { "up", "down", "left", "right", "stop", "clear" }
+-- Zero-based {col, row} in a 3x2 arrow-key grid sharing the command buttons' metrics.
+local CHIP_CELLS  = { stop = {0,0}, up   = {1,0}, clear = {2,0},
+                      left = {0,1}, down = {1,1}, right = {2,1} }
 local BAR = {
-    PANEL_X = 8,  PSEL_Y = BAR_Y + 10, PSEL_W = 28, PSEL_H = 28, PSEL_STEP = 30,
-    CHIP_Y  = BAR_Y + 60, CHIP_W = 38, CHIP_H = 38, CHIP_STEP = 42,
+    PANEL_X = 10, PSEL_Y = BAR_Y + 34, PSEL_W = 28, PSEL_H = 28, PSEL_STEP = 30,
     TL_X    = 260, TL_RIGHT = CMD_BTN_X - 10,
     ARROW_W = 16,
     HEAD_Y  = BAR_Y + 6,  HEAD_H = 16,
@@ -1417,9 +1419,11 @@ function MatrixScene:_bar_elements(out)
             BAR.PANEL_X + (i - 1) * BAR.PSEL_STEP, BAR.PSEL_Y, BAR.PSEL_W, BAR.PSEL_H,
             idle, self.sel_pusher == p.id)
     end
-    for i, cmd in ipairs(CHIP_ORDER) do
+    for _, cmd in ipairs(CHIP_ORDER) do
+        local col, row = CHIP_CELLS[cmd][1], CHIP_CELLS[cmd][2]
         out[#out + 1] = rect_el("chip:" .. cmd, CMD_GLYPH[cmd], "button",
-            BAR.PANEL_X + (i - 1) * BAR.CHIP_STEP, BAR.CHIP_Y, BAR.CHIP_W, BAR.CHIP_H,
+            BAR.PANEL_X + col * (CMD_BTN_W + CMD_BTN_GAP),
+            CMD_BTN_Y + row * (CMD_BTN_H + CMD_BTN_GAP), CMD_BTN_W, CMD_BTN_H,
             idle, self.armed_chip == cmd)
     end
     local scroll = self.timeline_scroll or 0
@@ -1502,7 +1506,7 @@ function MatrixScene:_draw_bar()
     for col = 1, BAR.VIS do
         love.graphics.printf(tostring(scroll + col), BAR.SLOT_X + (col - 1) * BAR.SLOT_STEP, BAR.HEAD_Y, BAR.SLOT_W, "center")
     end
-    love.graphics.print("INSTRUCTIONS", BAR.PANEL_X, BAR_Y + 44)
+    love.graphics.print("INSTRUCTIONS", BAR.PANEL_X, BAR_Y + 66)
     love.graphics.setColor(1, 1, 1, 1)
 end
 

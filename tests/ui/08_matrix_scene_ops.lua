@@ -3,7 +3,7 @@
 --      nothing on a whole-matrix tile
 --   2. the middle third turns an edge tile clockwise and keeps k
 --   3. a turned edge tile changes exactly that edge during a run
---   4. fixed (puzzle 19) and locked (puzzle 21) tiles cannot be edited
+--   4. fixed (Add Only) and locked (Locked Scale) tiles cannot be edited
 --   5. Mv keeps k and edge; the eraser removes a tile from any third
 --
 -- Puzzle 1 has no `ops` restriction, so every op button is shown.
@@ -25,12 +25,12 @@ local function open_puzzle_1()
     })
 end
 
--- The Fixed Pieces world, reached with the world keys.
-local function open_fixed_pieces(id, name)
+-- The Advanced world, reached with the world keys.
+local function open_advanced(id, name)
     return S.steps({
         { press = "return" },
-        S.arrows("fixed_pieces"),
-        { assert_button = { id = S.tab("fixed_pieces").id, selected = true } },
+        S.arrows("advanced"),
+        { assert_button = { id = S.tab("advanced").id, selected = true } },
         { click_button = S.row(id) },
         { assert_text = name },
     })
@@ -180,47 +180,52 @@ end
 -- 4. Fixed and locked tiles ---------------------------------------------------
 
 do
-    local steps = open_fixed_pieces("fixed_player", "Fixed Tools, Bent Path")
-    pick(steps, "fixed:scalar_mul")
-    click(steps, 5, 2)
-    pick(steps, "fixed:flip_v")
-    click(steps, 7, 2)
-    expect(steps, 5, 2, "scalar_mul", -1)
-    expect(steps, 7, 2, "flip_v")
-    add(steps, { assert_text = "x-1" })
+    local steps = open_advanced("add_only", "Add Only")
+    -- Each fixed tool, the cell it is tested on and its preset.
+    local fixed = {
+        { tool = "fixed:scalar_mul", x = 5, op = "scalar_mul", scalar = -1 },
+        { tool = "fixed:rotate_90",  x = 7, op = "rotate_90" },
+        { tool = "fixed:edge_add",   x = 9, op = "edge_add",   scalar = 3, edge = "top" },
+    }
+    local function expect_preset(f)
+        expect(steps, f.x, 2, f.op, f.scalar, f.edge)
+    end
+    for _, f in ipairs(fixed) do
+        pick(steps, f.tool)
+        click(steps, f.x, 2)
+    end
+    for _, f in ipairs(fixed) do expect_preset(f) end
+    add(steps, { assert_text = "x-1" }, { assert_text = "+3" })
 
-    -- With each non-eraser tool, no third edits or replaces either tile.
-    for _, tool in ipairs({ "fixed:flip_v", "fixed:scalar_mul", "pusher", "drag" }) do
+    -- With each non-eraser tool, no third edits, turns or replaces any tile.
+    for _, tool in ipairs({ "fixed:rotate_90", "fixed:edge_add", "fixed:scalar_mul", "pusher", "drag" }) do
         pick(steps, tool)
         for _, part in ipairs({ "left", "centre", "right" }) do
-            click(steps, 5, 2, part)
-            expect(steps, 5, 2, "scalar_mul", -1)
-            click(steps, 7, 2, part)
-            expect(steps, 7, 2, "flip_v")
-            add(steps, { assert_no_text = "x-2" }, { assert_no_text = "x0" })
+            for _, f in ipairs(fixed) do
+                click(steps, f.x, 2, part)
+                expect_preset(f)
+                add(steps, { assert_no_text = "x-2" }, { assert_no_text = "x0" },
+                    { assert_no_text = "+2" }, { assert_no_text = "+4" })
+            end
         end
     end
 
     -- The eraser removes an unlocked fixed tile from any third.
     for _, part in ipairs({ "left", "centre", "right" }) do
-        pick(steps, "fixed:scalar_mul")
-        click(steps, 5, 2)          -- places it, or clicks the tile already there
-        expect(steps, 5, 2, "scalar_mul", -1)
-        pick(steps, "erase")
-        click(steps, 5, 2, part)
-        empty(steps, 5, 2)
-        pick(steps, "fixed:flip_v")
-        click(steps, 7, 2)
-        expect(steps, 7, 2, "flip_v")
-        pick(steps, "erase")
-        click(steps, 7, 2, part)
-        empty(steps, 7, 2)
+        for _, f in ipairs(fixed) do
+            pick(steps, f.tool)
+            click(steps, f.x, 2)    -- places it, or clicks the tile already there
+            expect_preset(f)
+            pick(steps, "erase")
+            click(steps, f.x, 2, part)
+            empty(steps, f.x, 2)
+        end
     end
     spec("fixed tiles ignore all three thirds; the eraser removes them", steps, { solved = "all" })
 end
 
 do
-    local steps = open_fixed_pieces("locked_scale", "Locked Scale, Full Maze")
+    local steps = open_advanced("locked_scale", "Locked Scale, Full Maze")
     expect(steps, 5, 3, "edge_scale", 3, "top")
     add(steps, { assert_text = "x3" })
     for _, tool in ipairs({ "scalar_mul", "transpose", "pusher", "drag", "erase" }) do

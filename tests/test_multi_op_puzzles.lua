@@ -1,5 +1,5 @@
--- Reference solutions of the converted puzzles: the shipped puzzle data, run through
--- the op chain from docs/archive/design/simplified-ops.md (section 7), must reach the target.
+-- Reference solutions of the single-source puzzles: the shipped puzzle data, run through
+-- the op chain of its solution, must reach the target.
 
 local S = require("tests/support/shipped")
 local Matrix       = require("lua/game/matrix_math")
@@ -71,25 +71,20 @@ local function check(id, name, chain)
     print("PASS: puzzle " .. n .. " - " .. name)
 end
 
-check("negate",          "Sharp Left",   { neg() })
-check("swap",            "Drop First",   { player("flip_v") })
-check("row_swap",        "Z-Bend",       { neg(), player("flip_v") })
--- Both orders work, scaling whichever edge holds the first input row at that moment.
-check("double_flip",     "Ordered Ops",  { edge("edge_scale", "top", 2), player("flip_v") })
-check("double_flip",     "Ordered Ops",  { player("flip_v"), edge("edge_scale", "bottom", 2) })
-check("combo",           "Corner Scale", { edge("edge_scale", "top", -1) })
-check("combo",           "Corner Scale", { edge("edge_scale", "left", -1) })
-check("uturn",           "Arch",         { neg(), player("flip_v") })
+check("scale_shift",     "Scale and Shift",
+    { player("scalar_mul", { scalar = 3 }), player("scalar_add", { scalar = 4 }) })
 check("set_row",         "Staircase",    { edge("edge_scale", "bottom", 4), edge("edge_sub", "right", 8) })
-check("negate_swap",     "Deep Arch",    { neg(), player("flip_v") })
+check("corner_case",     "Corner Case",
+    { edge("edge_add", "top", 3), edge("edge_scale", "left", 2), edge("edge_add", "bottom", 1) })
+check("top_only",        "Top Only",
+    { fixed("edge_add"), fixed("edge_scale"), player("flip_v"), fixed("edge_scale") })
+check("fold_through",    "Fold Through",
+    { player("scalar_sub", { scalar = 3 }), edge("edge_scale", "left", -2),
+      player("scalar_sub", { scalar = 1 }), player("transpose") })
 check("flip_scale",      "Flip Scale Arch", { locked(5, 3), player("transpose") })
-check("elimination",     "Three-Step Elimination",
-    { edge("edge_scale", "top", 4), edge("edge_sub", "left", 4) })
-check("triple",          "Triple Bend",
-    { neg(), edge("edge_scale", "top", 2), player("transpose") })
-check("col_ops",         "Column Work Maze", { player("flip_h"), edge("edge_scale", "right", 2) })
+check("locked_scale",    "Locked Scale, Full Maze", { locked(5, 3), player("transpose"), neg() })
 check("double_negative", "Double Negative",
     { locked(5, 3), edge("edge_scale", "right", -1), edge("edge_scale", "bottom", -1) })
-check("fixed_player",    "Fixed Tools, Bent Path", { fixed("scalar_mul"), fixed("flip_v") })
-check("fixed_puzzle",    "Mandatory Negate, Arch Path", { locked(6, 6) })
-check("locked_scale",    "Locked Scale, Full Maze", { locked(5, 3), player("transpose"), neg() })
+check("add_only",        "Add Only",
+    { fixed("rotate_90"), fixed("scalar_mul"), fixed("edge_add"), fixed("scalar_mul"),
+      fixed("rotate_90"), fixed("rotate_90"), fixed("rotate_90") })

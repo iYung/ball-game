@@ -139,9 +139,9 @@ do
     l = labels(scene)
     assert(l["T"] and not l["xk"] and not l["+k^"], "puzzle 2 offers only transpose")
     scene.palette:select({ kind = "op", op = "transpose" })
-    scene:load_puzzle(S.puzzle("swap"))
+    scene:load_puzzle(S.puzzle("top_only"))
     assert(scene.palette:selected() == nil, "selection of a now-hidden op is cleared")
-    assert(labels(scene)["FLv"], "puzzle 4 offers flip vertical")
+    assert(labels(scene)["FLv"], "Top Only offers flip vertical")
     print("PASS: per-puzzle palette")
 end
 

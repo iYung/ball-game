@@ -12,12 +12,13 @@ return {
             { press = "return" },                       -- title → level select (world 1)
             S.arrows("combos"),                         -- cycle to Combos → cutscene loads
             { assert_text = "SYSTEM" },                 -- first beat speaker is drawn
+            { assert_text = "Warm-up complete. The patterns here will not yield to a straight push." },
             { press = "return" },                       -- advance to beat 2
             { assert_text = "SYSTEM" },
             { press = "return" },                       -- advance to beat 3
             { assert_text = "WORLD 2: COMBOS" },        -- beat 3 text
             { press = "return" },                       -- advance past final beat → level select (Combos)
-            { assert_text = "Ordered Ops" },            -- unique to Combos (double_flip)
+            { assert_text = "Top Only" },            -- unique to Combos (top_only)
         }),
     },
     {
@@ -28,7 +29,7 @@ return {
             S.arrows("combos"),                         -- cycle to Combos → cutscene loads
             { assert_text = "SYSTEM" },
             { press = "escape" },                       -- skip → level select (Combos)
-            { assert_text = "Ordered Ops" },
+            { assert_text = "Top Only" },
         }),
     },
     {
@@ -39,7 +40,7 @@ return {
             { click_button = S.tab("combos") },        -- click tab → cutscene (mouse path)
             { assert_text = "SYSTEM" },                 -- first beat speaker is drawn
             { press = "escape" },                       -- skip → level select (world 2)
-            { assert_text = "Ordered Ops" },            -- unique to world 2
+            { assert_text = "Top Only" },            -- unique to world 2
         },
     },
     {
@@ -56,7 +57,7 @@ return {
             { click_button = S.tab("combos") },         -- tab now enabled; cutscene should fire
             { assert_text = "SYSTEM" },
             { press = "escape" },
-            { assert_text = "Ordered Ops" },
+            { assert_text = "Top Only" },
         }),
     },
 }

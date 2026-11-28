@@ -3,7 +3,7 @@ return {
         bg      = { 0.05, 0.03, 0.14 },
         speaker = "SYSTEM",
         portrait = "system",
-        text    = "Single operations are no longer sufficient. The patterns here demand more.",
+        text    = "Warm-up complete. The patterns here will not yield to a straight push.",
     },
     {
         bg      = { 0.06, 0.04, 0.16 },

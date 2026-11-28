@@ -1,5 +1,6 @@
 -- The Two Sources puzzles built around preparing a matrix before the merge: the
 -- intended preparation reaches the target, and doing it elsewhere or not at all misses.
+-- Merge Maze's transpose before the merge is checked in test_two_source_data.lua.
 
 local PuzzleLoader = require("lua/game/puzzle_loader")
 local Matrix       = require("lua/game/matrix_math")
@@ -30,14 +31,6 @@ do
         assert(not scaled(add(a, b), k):equals(target), "scaling the sum misses, k = " .. k)
     end
     print("PASS: Take Away needs INPUT 2 negated before the sum")
-end
-
-do
-    local _, a, b, target = load("stand_to_add")
-    assert(Ops.merge_error("matrix_add", a, b), "the raw inputs cannot be added")
-    assert(add(a, b:transpose()):equals(target), "target is INPUT 1 + T(INPUT 2)")
-    assert(not add(a:transpose(), b):transpose():equals(a), "sanity: a merge changes INPUT 1")
-    print("PASS: Stand to Add needs a transpose before the sum")
 end
 
 do

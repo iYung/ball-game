@@ -16,13 +16,13 @@ local function setup()
     return ctx.sm, ctx.sm.current
 end
 
--- Level select showing the Basics world, which has the rows hovered below.
-local function setup_basics()
+-- Level select showing the Combos world, which has the rows hovered below.
+local function setup_combos()
     local sm, scene = setup()
-    for _, n in ipairs(S.before("basics")) do Progress.mark_solved(n) end
-    for w = 1, S.world("basics") do Progress.mark_cutscene_seen(w) end
-    for _ = 2, S.world("basics") do sm:key_pressed("right") end
-    assert(scene._world == S.world("basics"), "on the Basics world, got " .. scene._world)
+    for _, n in ipairs(S.before("combos")) do Progress.mark_solved(n) end
+    for w = 1, S.world("combos") do Progress.mark_cutscene_seen(w) end
+    for _ = 2, S.world("combos") do sm:key_pressed("right") end
+    assert(scene._world == S.world("combos"), "on the Combos world, got " .. scene._world)
     return sm, scene
 end
 
@@ -47,7 +47,7 @@ end
 
 -- A resting cursor never overrides keyboard navigation -----------------------
 do
-    local sm, scene = setup_basics()
+    local sm, scene = setup_combos()
     local x, y = row_centre(scene, 3)
     Stubs.set_mouse(x, y)
     sm:mouse_moved(x, y)
@@ -60,7 +60,7 @@ end
 
 -- mouse_moved onto row 2 selects 2 ------------------------------------------
 do
-    local sm, scene = setup_basics()
+    local sm, scene = setup_combos()
     local x, y = row_centre(scene, 2)
     sm:mouse_moved(x, y)
     assert(scene.selected == 2, "mouse_moved selects row 2")

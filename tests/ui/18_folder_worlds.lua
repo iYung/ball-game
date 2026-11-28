@@ -27,36 +27,33 @@ local function row_visible(id)
 end
 
 local WORLDS = {
-    { id = "basics",        name = "Basics",       puzzle = "identity",     title = "Identity Check" },
-    { id = "combos",        name = "Combos",       puzzle = "row_swap",     title = "Z-Bend" },
-    { id = "advanced",      name = "Advanced",     puzzle = "negate_swap",  title = "Deep Arch" },
-    { id = "transforms",    name = "Transforms",   puzzle = "col_ops",      title = "Column Work Maze" },
-    { id = "fixed_pieces",  name = "Fixed Pieces", puzzle = "fixed_player", title = "Fixed Tools, Bent Path" },
+    { id = "basics",      name = "Basics",      puzzle = "identity",        title = "Identity Check" },
+    { id = "combos",      name = "Combos",      puzzle = "top_only",        title = "Top Only" },
+    { id = "advanced",    name = "Advanced",    puzzle = "double_negative", title = "Double Negative" },
+    { id = "two_sources", name = "Two Sources", puzzle = "merge_maze",      title = "Merge Maze" },
 }
 
 -- Spec 1: one solve in Advanced opens every world up to it and no further.
 local partly_open = {
     name  = "a solve in a later world opens the worlds up to it",
-    given = { solved = { puzzle("negate_swap") } },
+    given = { solved = { puzzle("double_negative") } },
     steps = {
         { press = "return" },                       -- title -> level select
         { assert_text = "Basics" },
         { assert_text = "Combos" },
         { assert_text = "Advanced" },
-        { assert_no_text = "Transforms" },          -- locked tabs hide their names
-        { assert_no_text = "Fixed Pieces" },
+        { assert_no_text = "Two Sources" },         -- locked tabs hide their names
         { assert_button = { id = "world:" .. world("advanced"), enabled = true } },
-        { assert_button = { id = "world:" .. world("transforms"), enabled = false } },
-        { assert_button = { id = "world:" .. world("fixed_pieces"), enabled = false } },
+        { assert_button = { id = "world:" .. world("two_sources"), enabled = false } },
         { click_button = tab("combos") },
-        row_visible("row_swap"),
-        { assert_text = "Z-Bend" },
+        row_visible("top_only"),
+        { assert_text = "Top Only" },
         { click_button = tab("advanced") },
-        row_visible("negate_swap"),
-        { click_button = row("negate_swap") },
+        row_visible("double_negative"),
+        { click_button = row("double_negative") },
         { assert_no_text = "SELECT PUZZLE" },       -- left level select
         { assert_button = { id = "cmd:run", visible = true } },
-        { assert_text = "Deep Arch" },
+        { assert_text = "Double Negative" },
     },
 }
 
@@ -85,7 +82,7 @@ end
 
 -- Spec 3: a world's cutscene is read from its folder and plays once.
 local solved = PuzzleLoader.world_indices(world("basics"))
-solved[#solved + 1] = puzzle("negate_swap")
+solved[#solved + 1] = puzzle("double_negative")
 
 local cutscene = {
     name  = "advanced cutscene comes from its folder and plays once",
@@ -105,11 +102,11 @@ for _, step in ipairs({
     { assert_text = "WORLD 3: ADVANCED" },          -- third beat
     { press = "return" },                           -- past the last beat -> level select
     { assert_button = { id = "world:" .. world("advanced"), selected = true } },
-    row_visible("negate_swap"),
+    row_visible("double_negative"),
     { press = "left" },
     { assert_button = { id = "world:" .. previous, selected = true } },
     { press = "right" },
-    row_visible("negate_swap"),
+    row_visible("double_negative"),
     { assert_no_text = "SYSTEM" },                  -- no replay
 }) do
     cutscene.steps[#cutscene.steps + 1] = step

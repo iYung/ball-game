@@ -1,5 +1,6 @@
 -- The Two Sources puzzles that need an op on a matrix before the merge, opened through
 -- level select and won with their reference solutions by real input.
+-- Merge Maze, which also does, is solved in 23_two_source_world.lua.
 
 local S = require("tests/support/shipped")
 
@@ -58,19 +59,6 @@ return {
         commands = {
             { 1, { "A", "right" }, { "B", "left" } },
             { 3, { "A", "stop" }, { "B", "stop" }, { "C", "down" } },
-        },
-    }),
-
-    solve("stand_to_add", "Stand to Add", {
-        tiles    = {
-            { op = "transpose", x = 7, y = 4 },
-            { op = "matrix_add", x = 5, y = 4, facing = "right" },
-        },
-        pushers  = { { 1, 4 }, { 10, 6 }, { 10, 4 }, { 3, 3 } },
-        commands = {
-            { 1, { "A", "right" }, { "B", "left" } },
-            { 2, { "A", "stop" }, { "B", "stop" }, { "C", "left" } },
-            { 3, { "C", "stop" }, { "D", "down" } },
         },
     }),
 

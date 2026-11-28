@@ -3,7 +3,7 @@
 
 local S = require("tests/support/shipped")
 
-local steps = S.steps({ { press = "return" }, S.arrows("fixed_pieces") })
+local steps = S.steps({ { press = "return" }, S.arrows("advanced") })
 local function add(step) steps[#steps + 1] = step end
 
 add({ click_button = S.row("rotato") })

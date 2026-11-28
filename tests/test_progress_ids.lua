@@ -78,7 +78,7 @@ local V3 = 'return {version=3,solved={"flip","identity"},cutscenes={0,"combos"}}
 with_save(V3, function(P, writes)
     assert(P.is_solved(position("identity")), "identity loaded")
     assert(P.is_solved(position("flip")), "flip loaded")
-    assert(not P.is_solved(position("negate")), "negate not in save")
+    assert(not P.is_solved(position("scale_shift")), "scale_shift not in save")
     assert(P.is_cutscene_seen(0), "intro loaded")
     assert(P.is_cutscene_seen(world_number("combos")), "combos cutscene loaded")
     assert(not P.is_cutscene_seen(world_number("advanced")), "advanced cutscene unseen")
@@ -90,17 +90,17 @@ with_save(V3, function(P, writes)
     P.mark_cutscene_seen(world_number("combos"))
     assert(#writes == 0, "no change, no write")
 
-    P.mark_solved(position("negate"))
+    P.mark_solved(position("scale_shift"))
     P.mark_cutscene_seen(world_number("advanced"))
     local data = writes[#writes].data
     assert(writes[#writes].path == "progress.lua", "writes the save file")
-    assert(data == 'return {version=3,solved={"flip","identity","negate"},cutscenes={0,"advanced","combos"}}\n',
+    assert(data == 'return {version=3,solved={"flip","identity","scale_shift"},cutscenes={0,"advanced","combos"}}\n',
         "unexpected save data: " .. data)
 
     with_save(data, function(P2, writes2)
-        P2.mark_solved(position("swap"))
+        P2.mark_solved(position("top_only"))
         assert(writes2[1].data ==
-            'return {version=3,solved={"flip","identity","negate","swap"},cutscenes={0,"advanced","combos"}}\n',
+            'return {version=3,solved={"flip","identity","scale_shift","top_only"},cutscenes={0,"advanced","combos"}}\n',
             "round trip, got " .. writes2[1].data)
     end)
 end)
@@ -172,7 +172,6 @@ print("PASS: version 2 conversion table")
 with_save("return {version=2,solved={},cutscenes={0,2,5,9}}\n", function(P, writes)
     assert(P.is_cutscene_seen(0), "intro stays 0")
     assert(P.is_cutscene_seen(world_number("combos")), "2 is combos")
-    assert(P.is_cutscene_seen(world_number("fixed_pieces")), "5 is fixed_pieces")
     assert(not P.is_cutscene_seen(world_number("basics")), "basics unseen")
     P.mark_solved(position("identity"))
     assert(writes[1].data ==
@@ -243,7 +242,7 @@ with_save(EMPTY, function(P)
 end)
 print("PASS: nothing solved opens only the first world")
 
-with_save('return {version=3,solved={"negate_swap"},cutscenes={}}\n', function(P)
+with_save('return {version=3,solved={"double_negative"},cutscenes={}}\n', function(P)
     local last = world_number("advanced")
     for w = 1, last do
         assert(P.is_world_unlocked(w), "world " .. w .. " open: solve here or later")
@@ -253,7 +252,7 @@ end)
 print("PASS: a solve opens its world and all earlier ones")
 
 with_save(EMPTY, function(P)
-    local target = world_number("transforms")
+    local target = world_number("advanced")
     local last
     for w = 1, target - 1 do
         for _, n in ipairs(PuzzleLoader.world_indices(w)) do
@@ -276,7 +275,7 @@ do
     end
 
     -- A solve in the world itself, or in a later one, keeps it open.
-    for _, solved in ipairs({ "row_swap", "negate_swap" }) do
+    for _, solved in ipairs({ "set_row", "double_negative" }) do
         with_save('return {version=3,solved={"' .. solved .. '"},cutscenes={}}\n', function(P)
             with_listing(add_level, function()
                 assert(not P.is_solved(position("zz_new")), "new level unsolved")

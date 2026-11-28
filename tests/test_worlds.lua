@@ -1,6 +1,6 @@
 -- test_worlds.lua
--- Every puzzle is reachable through exactly one world, fixed_player offers no
--- editable ops, and the transforms/fixed_pieces worlds lock according to the progression rule.
+-- Every puzzle is reachable through exactly one world, add_only offers no
+-- editable ops, and the advanced/two_sources worlds lock according to the progression rule.
 
 local S = require("tests/support/shipped")
 local PuzzleLoader = require("lua/game/puzzle_loader")
@@ -19,26 +19,24 @@ for i = 1, PuzzleLoader.count() do
 end
 print("PASS: every puzzle 1.." .. PuzzleLoader.count() .. " is in exactly one world")
 
--- ── fixed_player has an empty ops list ──────────────────────────────────────────
+-- ── add_only has an empty ops list ──────────────────────────────────────────────
 
-local p19 = PuzzleLoader.load(S.puzzle("fixed_player"))
-assert(type(p19.ops) == "table", "puzzle 19 ops is a table")
-assert(next(p19.ops) == nil, "puzzle 19 ops is empty")
-print("PASS: puzzle 19 ops is empty")
+local add_only = PuzzleLoader.load(S.puzzle("add_only"))
+assert(type(add_only.ops) == "table", "add_only ops is a table")
+assert(next(add_only.ops) == nil, "add_only ops is empty")
+print("PASS: add_only ops is empty")
 
--- ── transforms unlocks after the worlds before it; fixed_pieces stays locked ──────────────────
+-- ── advanced unlocks after the worlds before it; two_sources stays locked ──────────────────
 
-assert(PuzzleLoader.world_count() >= 5, "at least 5 worlds")
+assert(PuzzleLoader.world_count() >= 4, "at least 4 worlds")
 Progress.reset()
-local transforms, fixed_pieces = S.world("transforms"), S.world("fixed_pieces")
-for w = 1, transforms - 1 do
-    for _, p in ipairs(PuzzleLoader.world(w).puzzles) do
-        Progress.mark_solved(p.index)
-    end
+local advanced, two_sources = S.world("advanced"), S.world("two_sources")
+for _, n in ipairs(S.before(advanced)) do
+    Progress.mark_solved(n)
 end
-assert(Progress.is_world_unlocked(transforms), "transforms unlocked after earlier worlds solved")
-assert(not Progress.is_world_unlocked(fixed_pieces), "fixed_pieces locked while transforms unsolved")
-print("PASS: transforms unlocked, fixed_pieces locked after earlier worlds solved")
+assert(Progress.is_world_unlocked(advanced), "advanced unlocked after earlier worlds solved")
+assert(not Progress.is_world_unlocked(two_sources), "two_sources locked while advanced unsolved")
+print("PASS: advanced unlocked, two_sources locked after earlier worlds solved")
 
 Progress.reset()
 print("ALL WORLDS TESTS PASSED")

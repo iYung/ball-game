@@ -121,16 +121,16 @@ return {
     given = { solved = {} },                              -- fresh progress: only World 1 unlocked
     steps = {
         { press = "return" },                             -- title screen -> level select
-        { hover_button = "Sharp Left" },                  -- park the cursor on row 3 (fires mouse_moved)
-        { press = "down" },                               -- keyboard moves the highlight to row 4
-        { assert_button = { id = "puzzle:4", selected = true } },  -- assert by id
+        { hover_button = "Flip It" },                     -- park the cursor on row 2 (fires mouse_moved)
+        { press = "down" },                               -- keyboard moves the highlight to row 3
+        { assert_button = { id = "puzzle:3", selected = true } },  -- assert by id
         { wait = 30 },                                    -- 30 frames with a stationary cursor...
-        { assert_button = { id = "puzzle:4", selected = true } },  -- ...must not steal the highlight back
+        { assert_button = { id = "puzzle:3", selected = true } },  -- ...must not steal the highlight back
         { press = "up" },
         { press = "up" },
-        { assert_button = { id = "puzzle:2", selected = true } },
-        { press = "return" },                             -- open puzzle 2
-        { assert_text = "Flip It" },                      -- its name is drawn in the HUD
+        { assert_button = { id = "puzzle:1", selected = true } },
+        { press = "return" },                             -- open puzzle 1
+        { assert_text = "Identity Check" },               -- its name is drawn in the HUD
     },
 }
 ```
@@ -150,7 +150,7 @@ A full play-through looks like this (puzzle 1: a pusher at (1,5) given one "righ
 { assert_text = "Flip It" },
 ```
 
-See the files in `tests/ui/` for more: `01_solve_puzzle_1.lua`, `02_level_select_keyboard.lua`, `03_world_locking.lua`, `04_sweep_all_puzzles.lua` (generated steps, every puzzle), `05_start_screen.lua`, `06_cutscene.lua` (CutsceneScene end-to-end), `07_drag_drop.lua` (Mv drag tool), and `08_matrix_scene_ops.lua` (op tiles: editing by thirds, fixed and locked tiles, moving and erasing). `13_solve_converted.lua` wins puzzles through real input and `14_editor_ops.lua` covers op tiles in the editor. `11_anim_timing.lua` checks the matrix shows pre-op values while sliding into an op (`assert_matrix` mid-run). `17_editor_fixed_ops.lua` covers `fixed_ops` and `ops = {}` through the editor's Paste, Test and Copy, and `18_folder_worlds.lua` covers world tabs, unlocking and cutscenes read from the world folders. For two sources and matrix ops, see `19_two_sources_run.lua` (merge and failure banners), `20_two_cell_tiles.lua` (placing, turning with `t`, moving and erasing, with `mouse_down` / `mouse_up`), `21_recap_merge.lua`, `22_editor_two_sources.lua` `23_two_source_world.lua` (solves every puzzle of that world) and `24_two_source_fixes.lua` (palette drags onto a two-cell tile; a lone **SRC2** through Copy, Paste and Test). `26_mv_fixes.lua` covers moving a pusher with **Mv** and using **Mv** around a run. `27_two_source_prep.lua` solves the Two Sources puzzles that prepare a matrix before the merge.
+See the files in `tests/ui/` for more: `01_solve_puzzle_1.lua`, `02_level_select_keyboard.lua`, `03_world_locking.lua`, `04_sweep_all_puzzles.lua` (generated steps, every puzzle), `05_start_screen.lua`, `06_cutscene.lua` (CutsceneScene end-to-end), `07_drag_drop.lua` (Mv drag tool), and `08_matrix_scene_ops.lua` (op tiles: editing by thirds, fixed and locked tiles, moving and erasing). `13_solve_converted.lua` wins puzzles through real input and `14_editor_ops.lua` covers op tiles in the editor. `11_anim_timing.lua` checks the matrix shows pre-op values while sliding into an op (`assert_matrix` mid-run). `17_editor_fixed_ops.lua` covers `fixed_ops` and `ops = {}` through the editor's Paste, Test and Copy, and `18_folder_worlds.lua` covers world tabs, unlocking and cutscenes read from the world folders. For two sources and matrix ops, see `19_two_sources_run.lua` (merge and failure banners), `20_two_cell_tiles.lua` (placing, turning with `t`, moving and erasing, with `mouse_down` / `mouse_up`), `21_recap_merge.lua`, `22_editor_two_sources.lua` `23_two_source_world.lua` (solves every puzzle of that world) and `24_two_source_fixes.lua` (palette drags onto a two-cell tile; a lone **SRC2** through Copy, Paste and Test). `26_mv_fixes.lua` covers moving a pusher with **Mv** and using **Mv** around a run. `27_two_source_prep.lua` solves Take Away and Two Preps, which prepare a matrix before the merge.
 
 ---
 
